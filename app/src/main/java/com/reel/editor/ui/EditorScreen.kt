@@ -91,6 +91,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -168,11 +169,11 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
         }
 
         // Preview
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().background(Color.Black), contentAlignment = Alignment.Center) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().clipToBounds().background(Color.Black), contentAlignment = Alignment.Center) {
             val aspect = cw.toFloat() / ch
             val boxAspect = maxWidth.value / maxHeight.value.coerceAtLeast(1f)
             val fit = if (aspect > boxAspect) Modifier.fillMaxWidth().aspectRatio(aspect) else Modifier.fillMaxSize().aspectRatio(aspect, matchHeightConstraintsFirst = true)
-            BoxWithConstraints(fit, contentAlignment = Alignment.Center) {
+            BoxWithConstraints(fit.clipToBounds(), contentAlignment = Alignment.Center) {
                 // The video surface keeps the largest size it has had for this aspect and is scaled
                 // down visually when panels open, so resizing never re-allocates the GL surface.
                 val curW = constraints.maxWidth

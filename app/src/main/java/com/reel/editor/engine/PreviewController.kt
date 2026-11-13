@@ -61,7 +61,10 @@ class PreviewController(context: Context) {
         }
     }
 
-    private fun ensurePlayer(): CompositionPlayer = player ?: CompositionPlayer.Builder(app).build().also {
+    private fun ensurePlayer(): CompositionPlayer = player ?: CompositionPlayer.Builder(app)
+        // Keeps the last decoded frame so look and layer edits redraw instantly while paused.
+        .experimentalSetEnableReplayableCache(true)
+        .build().also {
         it.addListener(listener)
         outSurface?.let { s -> it.setVideoSurface(s, outSize) }
         player = it
@@ -83,12 +86,12 @@ class PreviewController(context: Context) {
         override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, width: Int, height: Int) {
             outSize = Size(width, height)
             // Media3 ignores a new size for the same Surface, so detach and reattach it.
-            outSurface?.let { surf -> player?.let { it.clearVideoSurface(); it.setVideoSurface(surf, outSize) } }
+            outSurface?.let { surf -> player?.let { it.clearVideoSurface(surf); it.setVideoSurface(surf, outSize) } }
             refreshFrame()
         }
 
         override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
-            player?.clearVideoSurface()
+            outSurface?.let { surf -> runCatching { player?.clearVideoSurface(surf) } }
             outSurface?.release()
             outSurface = null
             return true
@@ -108,7 +111,7 @@ class PreviewController(context: Context) {
 
     fun detach(view: TextureView) {
         if (view.surfaceTextureListener === textureListener) view.surfaceTextureListener = null
-        player?.clearVideoSurface()
+        outSurface?.let { surf -> runCatching { player?.clearVideoSurface(surf) } }
         outSurface?.release()
         outSurface = null
     }
@@ -124,7 +127,7 @@ class PreviewController(context: Context) {
         } else {
             val (w, h) = RenderPlans.canvasSize(project, CompositionFactory.PREVIEW_HEIGHT)
             live.set(RenderPlans.build(project, FxCatalog.get(app), w, h))
-            refreshFrame()
+            redraw()
         }
     }
 
@@ -152,7 +155,24 @@ class PreviewController(context: Context) {
         }
     }
 
-    /** While paused, re-seek to the same frame so look changes render immediately. */
+    /** While paused, re-run the effect pipeline on the cached frame; no decoder work needed. */
+    private fun redraw() {
+        val p = player ?: return
+        if (p.isPlaying) return
+        main.removeCallbacks(redrawRunnable)
+        main.postDelayed(redrawRunnable, 16)
+    }
+
+    private val redrawRunnable = Runnable {
+        val p = player ?: return@Runnable
+        try {
+            p.experimentalRedrawLastFrame()
+        } catch (e: Exception) {
+            refreshFrame()
+        }
+    }
+
+    /** While paused, re-seek to the current frame (used when the output surface changes). */
     private fun refreshFrame() {
         val p = player ?: return
         if (!p.isPlaying) {
