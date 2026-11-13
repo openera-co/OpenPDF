@@ -137,7 +137,8 @@ object TimelineMath {
 
     private fun splitCurve(speed: Speed, frac: Double): Pair<List<Float>?, List<Float>?> {
         val c = speed.curve ?: return null to null
-        val n = c.size
+        // Resample densely so each piece keeps the shape of its part of the curve.
+        val n = maxOf(c.size, 49)
         val a = (0 until n).map { i -> SpeedMath.speedAt(speed, frac * i / (n - 1)).toFloat() }
         val b = (0 until n).map { i -> SpeedMath.speedAt(speed, frac + (1 - frac) * i / (n - 1)).toFloat() }
         return a to b

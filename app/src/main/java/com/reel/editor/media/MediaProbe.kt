@@ -31,8 +31,12 @@ object MediaProbe {
             val h = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
             val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
             val hasAudio = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
-            if (dur <= 0 || w <= 0 || h <= 0) return null
-            Clip(uri = uri.toString(), kind = ClipKind.VIDEO, sourceDurationUs = dur, sourceWidth = w, sourceHeight = h, rotationDegrees = rot, hasAudio = hasAudio)
+            // Prefer the video track's own length: containers often report the longer audio track,
+            // and Media3 places clips by video length during export.
+            val videoDur = videoTrackDurationUs(context, uri)
+            val d = if (videoDur != null && videoDur > 0) videoDur else dur
+            if (d <= 0 || w <= 0 || h <= 0) return null
+            Clip(uri = uri.toString(), kind = ClipKind.VIDEO, sourceDurationUs = d, sourceWidth = w, sourceHeight = h, rotationDegrees = rot, hasAudio = hasAudio)
         } catch (e: Exception) {
             null
         } finally {
@@ -69,6 +73,20 @@ object MediaProbe {
             null
         } finally {
             r.release()
+        }
+    }
+
+    private fun videoTrackDurationUs(context: Context, uri: Uri): Long? {
+        val ex = MediaExtractor()
+        return try {
+            ex.setDataSource(context, uri, null)
+            (0 until ex.trackCount).map { ex.getTrackFormat(it) }
+                .firstOrNull { it.getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true }
+                ?.takeIf { it.containsKey(MediaFormat.KEY_DURATION) }?.getLong(MediaFormat.KEY_DURATION)
+        } catch (e: Exception) {
+            null
+        } finally {
+            ex.release()
         }
     }
 

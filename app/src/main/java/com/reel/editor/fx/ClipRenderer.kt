@@ -100,6 +100,7 @@ class ClipRenderer(
     }
 
     private fun draw(inputTexId: Int, pts: Long) {
+        RenderDebug.record(plan.clip.id, pts)
         val fresh = planSource()
         if (fresh.canvasWidth == plan.canvasWidth && fresh.canvasHeight == plan.canvasHeight) plan = fresh
         val local = localTime(pts)
@@ -408,6 +409,21 @@ class ClipRenderer(
     companion object {
         const val LUT_SIZE = 33
     }
+}
+
+/** First and last presentation time each clip renderer saw; used by device tests and diagnostics. */
+object RenderDebug {
+    val firstPts = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    val lastPts = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    val frames = java.util.concurrent.atomic.AtomicInteger()
+
+    fun record(clipId: String, pts: Long) {
+        firstPts.putIfAbsent(clipId, pts)
+        lastPts[clipId] = pts
+        frames.incrementAndGet()
+    }
+
+    fun reset() { firstPts.clear(); lastPts.clear(); frames.set(0) }
 }
 
 /** Tone curves rendered to a 256x2 texture: row 0 holds R, G, B curves, row 1 the master curve. */

@@ -162,7 +162,7 @@ fun TextPanel(vm: EditorViewModel, layer: TextLayer, startTab: Int, onClose: () 
                     }
                     2 -> SwatchRow(layer.style.labelColor ?: 0, allowNone = true) { c -> update { it.copy(style = it.style.copy(labelColor = if (c == 0L) null else c)) } }
                     3 -> {
-                        ValueSlider(Icons.Rounded.FormatSize, "Size", layer.style.sizeSp, 14f..140f, { "${it.roundToInt()}" }, default = 42f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> update(true) { it.copy(style = it.style.copy(sizeSp = v)) } }
+                        ValueSlider(Icons.Rounded.FormatSize, "Size", layer.style.sizeSp, 14f..140f, { "${it.roundToInt()}" }, default = 64f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> update(true) { it.copy(style = it.style.copy(sizeSp = v)) } }
                         ValueSlider(Icons.Rounded.SpaceBar, "Spacing", layer.style.letterSpacing * 100, -5f..40f, { "${it.roundToInt()}" }, default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> update(true) { it.copy(style = it.style.copy(letterSpacing = v / 100f)) } }
                     }
                 }

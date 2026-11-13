@@ -214,7 +214,7 @@ data class TimedFilter(
 @Serializable
 data class TextStyle(
     val font: String = "sans-bold",
-    val sizeSp: Float = 42f,
+    val sizeSp: Float = 64f,
     val color: Long = 0xFFFFFFFF,
     val strokeColor: Long = 0xFF000000,
     val strokeWidth: Float = 0f,

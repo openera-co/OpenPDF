@@ -57,6 +57,8 @@ object CompositionFactory {
             if (clip.kind == ClipKind.PHOTO) {
                 b.setDurationUs(clip.trimmedDurationUs).setFrameRate(30)
             } else {
+                // CompositionPlayer needs the original media duration up front; clipping applies on top.
+                b.setDurationUs(clip.sourceDurationUs)
                 val isDefaultSpeed = clip.speed.curve.isNullOrEmpty() && clip.speed.constant == 1f
                 if (!isDefaultSpeed) {
                     b.setSpeed(SpeedParameters(SegmentSpeed(SpeedMath.segments(clip.speed, clip.trimmedDurationUs)), clip.keepPitch))
@@ -88,7 +90,7 @@ object CompositionFactory {
                     ).build()
                     val dur = end - a.trimStartUs
                     sb.addItem(
-                        EditedMediaItem.Builder(mi).setRemoveVideo(true)
+                        EditedMediaItem.Builder(mi).setRemoveVideo(true).setDurationUs(a.sourceDurationUs)
                             .setEffects(Effects(listOf(VolumeFadeProcessor(a.volume, a.fadeInUs, a.fadeOutUs, dur)), emptyList()))
                             .build(),
                     )
