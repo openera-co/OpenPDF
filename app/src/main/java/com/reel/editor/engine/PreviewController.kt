@@ -152,6 +152,10 @@ class PreviewController(context: Context) {
         player?.seekTo(t / 1000)
     }
 
+    fun setVolumeMuted(muted: Boolean) {
+        player?.volume = if (muted) 0f else 1f
+    }
+
     fun setScrubbing(on: Boolean) {
         if (on) pause()
         player?.setScrubbingModeEnabled(on)
