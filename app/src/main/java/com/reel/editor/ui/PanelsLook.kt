@@ -150,9 +150,11 @@ fun FiltersPanel(vm: EditorViewModel, onClose: () -> Unit) {
                 }
             }
         } else {
-            LazyVerticalGrid(GridCells.Fixed(5), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 200.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val tick = rememberThumbTick()
+            val src = rememberTargetSource(vm, clip)
+            LazyVerticalGrid(GridCells.Fixed(5), Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 200.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item { FxTile("None", currentShader == null, Icons.Rounded.Block) { applyShader(null) } }
-                items(catalog.filters, key = { it.id }) { f -> FxTile(f.name, currentShader == f.id, Icons.Rounded.FilterVintage, brush = fxBrush(f)) { applyShader(f.id) } }
+                items(catalog.filters, key = { it.id }) { f -> ShaderFxTile(catalog, f, com.reel.editor.fx.FxThumbs.Mode.STATIC, src, tick, currentShader == f.id, fxBrush(f), Icons.Rounded.FilterVintage) { applyShader(f.id) } }
             }
             val ref = timed?.shaderFx ?: clip?.filter
             if (ref != null) {
@@ -214,14 +216,16 @@ fun EffectsPanel(vm: EditorViewModel, onClose: () -> Unit) {
     val sel = (selection as? Selection.EffectSel)?.let { s -> project.effects.firstOrNull { it.id == s.id } }
     val cats = remember { catalog.effects.map { it.category }.distinct() }
     var cat by remember { mutableStateOf(cats.firstOrNull() ?: "") }
+    val tick = rememberThumbTick()
+    val src = rememberPlayheadSource(vm)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SheetHeader("Effects", Icons.Rounded.AutoAwesome, iconTint = C.Effect, onClose = onClose, onDone = onClose)
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             cats.forEach { Chip(it, it == cat) { cat = it } }
         }
-        LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 180.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 180.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(catalog.effects.filter { it.category == cat }, key = { it.id }) { e ->
-                FxTile(e.name, sel?.fx?.id == e.id, Icons.Rounded.AutoAwesome, brush = fxBrush(e)) {
+                ShaderFxTile(catalog, e, com.reel.editor.fx.FxThumbs.Mode.LOOP, src, tick, sel?.fx?.id == e.id, fxBrush(e), Icons.Rounded.AutoAwesome) {
                     if (sel != null) vm.edit { p -> p.copy(effects = p.effects.map { if (it.id == sel.id) it.copy(fx = FxRef(e.id)) else it }) }
                     else vm.addTimedEffect(e.id)
                     vm.preview.play()
@@ -254,6 +258,9 @@ fun TransitionPanel(vm: EditorViewModel, clipId: String, onClose: () -> Unit) {
     val cats = remember { listOf("All") + catalog.transitions.map { it.category }.distinct().sorted() }
     var cat by remember { mutableStateOf("All") }
     val maxDur = (minOf(p.durationUs, prev.durationUs) / 2 / 1e6f).coerceIn(0.1f, 2f)
+    val tick = rememberThumbTick()
+    val fromSrc = rememberClipSource(vm, prev.clip, (prev.durationUs - 40_000).coerceAtLeast(0), "a")
+    val toSrc = rememberClipSource(vm, clip, 0L, "b")
     fun preview() {
         vm.preview.seekTo((p.startUs - 1_000_000).coerceAtLeast(0))
         vm.preview.play()
@@ -263,11 +270,11 @@ fun TransitionPanel(vm: EditorViewModel, clipId: String, onClose: () -> Unit) {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             cats.forEach { Chip(it, it == cat) { cat = it } }
         }
-        LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 200.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 200.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { FxTile("None", clip.transitionIn == null, Icons.Rounded.Block) { vm.updateClip(clip.id) { it.copy(transitionIn = null) } } }
             items(catalog.transitions.filter { cat == "All" || it.category == cat }, key = { it.id }) { t ->
                 val h = (t.id.hashCode() and 0xffff) / 65535f * 360f
-                FxTile(t.name, clip.transitionIn?.id == t.id, Icons.Rounded.SwapHoriz, brush = Brush.horizontalGradient(listOf(Color.hsv(h, 0.5f, 0.7f), Color.hsv((h + 180) % 360, 0.5f, 0.3f)))) {
+                TransitionTile(catalog, t, fromSrc, toSrc, tick, clip.transitionIn?.id == t.id, Brush.horizontalGradient(listOf(Color.hsv(h, 0.5f, 0.7f), Color.hsv((h + 180) % 360, 0.5f, 0.3f))), Icons.Rounded.SwapHoriz) {
                     val d = clip.transitionIn?.durationUs ?: 500_000
                     vm.updateClip(clip.id) { it.copy(transitionIn = TransitionRef(t.id, minOf(d, (maxDur * 1e6).toLong()))) }
                     preview()
@@ -275,11 +282,14 @@ fun TransitionPanel(vm: EditorViewModel, clipId: String, onClose: () -> Unit) {
             }
         }
         clip.transitionIn?.let { tr ->
-            ValueSlider(Icons.Rounded.AccessTime, "Duration", tr.durationUs / 1e6f, 0.1f..maxDur, { "%.1fs".format(it) }, onStart = vm::beginGesture, onEnd = { vm.endGesture(); preview() }) { v ->
-                vm.updateClip(clip.id, true) { it.copy(transitionIn = it.transitionIn?.copy(durationUs = (v * 1e6).toLong())) }
-            }
-            Row(Modifier.padding(horizontal = 16.dp)) {
-                PillButton(Icons.Rounded.ContentCopy, "Apply to all") {
+            // Duration and "apply to all" share a row so the preview grid keeps its height.
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 12.dp)) {
+                Box(Modifier.weight(1f)) {
+                    ValueSlider(Icons.Rounded.AccessTime, "Duration", tr.durationUs / 1e6f, 0.1f..maxDur, { "%.1fs".format(it) }, onStart = vm::beginGesture, onEnd = { vm.endGesture(); preview() }) { v ->
+                        vm.updateClip(clip.id, true) { it.copy(transitionIn = it.transitionIn?.copy(durationUs = (v * 1e6).toLong())) }
+                    }
+                }
+                IconBtn(Icons.Rounded.ContentCopy, "Apply to all", background = C.Surface2, size = 40.dp, iconSize = 18.dp) {
                     vm.edit { pr -> pr.copy(clips = pr.clips.mapIndexed { i, c -> if (i == 0) c else c.copy(transitionIn = tr) }) }
                     vm.toast("Applied to every cut")
                 }

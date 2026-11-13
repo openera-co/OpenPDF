@@ -244,12 +244,14 @@ fun AnimationPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
     val catalog = FxCatalog.get(androidx.compose.ui.platform.LocalContext.current)
     var tab by remember { mutableIntStateOf(0) }
     val current = if (tab == 0) clip.animIn else clip.animOut
+    val tick = rememberThumbTick()
+    val src = rememberClipSource(vm, clip, clip.timelineDurationUs / 2)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SheetHeader("Animation", onClose = onClose, onDone = onClose, center = { Segmented(listOf("In", "Out"), tab, { tab = it }) })
-        LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 212.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 212.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { FxTile("None", current == null, Icons.Rounded.Block) { vm.updateClip(clip.id) { if (tab == 0) it.copy(animIn = null) else it.copy(animOut = null) } } }
             items(catalog.anims, key = { it.id }) { a ->
-                FxTile(a.name, current?.id == a.id, animIcon(a.id)) {
+                ShaderFxTile(catalog, a, if (tab == 0) com.reel.editor.fx.FxThumbs.Mode.ANIM_IN else com.reel.editor.fx.FxThumbs.Mode.ANIM_OUT, src, tick, current?.id == a.id, fxBrush(a), animIcon(a.id)) {
                     val d = current?.durationUs ?: 500_000
                     vm.updateClip(clip.id) { if (tab == 0) it.copy(animIn = AnimRef(a.id, d)) else it.copy(animOut = AnimRef(a.id, d)) }
                     // Preview it: jump to where the animation plays.

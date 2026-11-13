@@ -179,7 +179,12 @@ vec4 effect(vec2 uv) {
 //== param: threshold float 0.5 0.1 0.9
 vec4 effect(vec2 uv) {
   vec3 c = getColor(uv).rgb;
-  return vec4(mix(c, 1.0 - c, step(threshold, c)), 1.0);
+  // Tones above the threshold fold back down; both halves are stretched to the full range so the
+  // result stays bright, and a little of the source keeps saturated areas from going black.
+  vec3 low = c / max(threshold, 0.01);
+  vec3 high = (1.0 - c) / max(1.0 - threshold, 0.01);
+  vec3 s = mix(low, high, step(threshold, c));
+  return vec4(mix(s, c, 0.2), 1.0);
 }
 
 //== id: thermal | Thermal | filter | Color

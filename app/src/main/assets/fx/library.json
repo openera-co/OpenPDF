@@ -283,7 +283,7 @@
 "max": 0.9
 }
 ],
-"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  return vec4(mix(c, 1.0 - c, step(threshold, c)), 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  // Tones above the threshold fold back down; both halves are stretched to the full range so the\n  // result stays bright, and a little of the source keeps saturated areas from going black.\n  vec3 low = c / max(threshold, 0.01);\n  vec3 high = (1.0 - c) / max(1.0 - threshold, 0.01);\n  vec3 s = mix(low, high, step(threshold, c));\n  return vec4(mix(s, c, 0.2), 1.0);\n}"
 },
 {
 "id": "thermal",

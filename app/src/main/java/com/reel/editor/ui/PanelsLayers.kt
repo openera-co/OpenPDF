@@ -180,10 +180,11 @@ fun TextPanel(vm: EditorViewModel, layer: TextLayer, startTab: Int, onClose: () 
                 Segmented(listOf("In", "Out", "Loop"), sub, { sub = it }, Modifier.padding(horizontal = 12.dp))
                 val ids = when (sub) { 0 -> TextMotion.inAnims; 1 -> TextMotion.outAnims; else -> TextMotion.loopAnims }
                 val current = when (sub) { 0 -> layer.animIn; 1 -> layer.animOut; else -> layer.loop }
-                LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 170.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val tick = rememberThumbTick()
+                LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 170.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(ids) { id ->
                         val sel = (current?.id ?: "none") == id
-                        FxTile(TextMotion.label(id), sel, if (id == "none") Icons.Rounded.Block else Icons.Rounded.Animation) {
+                        TextAnimTile(id, sub, sel, tick) {
                             val a = if (id == "none") null else TextAnim(id, current?.durationUs ?: if (sub == 2) 0 else 500_000)
                             update { when (sub) { 0 -> it.copy(animIn = a); 1 -> it.copy(animOut = a); else -> it.copy(loop = a) } }
                             vm.preview.seekTo(if (sub == 1) (layer.startUs + layer.durationUs - 900_000).coerceAtLeast(layer.startUs) else layer.startUs)
@@ -243,7 +244,7 @@ fun StickerPanel(vm: EditorViewModel, onClose: () -> Unit) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SheetHeader("Stickers", onClose = onClose)
-        LazyVerticalGrid(GridCells.Fixed(5), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 170.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyVerticalGrid(GridCells.Fixed(5), Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 170.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(C.Surface2).clickable { pick.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.Image, "Image from gallery", tint = C.Text)
