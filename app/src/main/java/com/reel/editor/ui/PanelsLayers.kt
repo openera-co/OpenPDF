@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -179,7 +180,7 @@ fun TextPanel(vm: EditorViewModel, layer: TextLayer, startTab: Int, onClose: () 
                 Segmented(listOf("In", "Out", "Loop"), sub, { sub = it }, Modifier.padding(horizontal = 12.dp))
                 val ids = when (sub) { 0 -> TextMotion.inAnims; 1 -> TextMotion.outAnims; else -> TextMotion.loopAnims }
                 val current = when (sub) { 0 -> layer.animIn; 1 -> layer.animOut; else -> layer.loop }
-                LazyVerticalGrid(GridCells.Fixed(4), Modifier.height(170.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 170.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(ids) { id ->
                         val sel = (current?.id ?: "none") == id
                         FxTile(TextMotion.label(id), sel, if (id == "none") Icons.Rounded.Block else Icons.Rounded.Animation) {
@@ -242,7 +243,7 @@ fun StickerPanel(vm: EditorViewModel, onClose: () -> Unit) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SheetHeader("Stickers", onClose = onClose)
-        LazyVerticalGrid(GridCells.Fixed(5), Modifier.height(170.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyVerticalGrid(GridCells.Fixed(5), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 170.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(C.Surface2).clickable { pick.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.Image, "Image from gallery", tint = C.Text)

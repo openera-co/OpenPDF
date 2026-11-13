@@ -120,10 +120,14 @@ fun Timeline(
     val handleW = with(density) { 14.dp.toPx() }
     val corner = with(density) { 8.dp.toPx() }
 
-    val bars = remember(project) {
+    val catalog = com.reel.editor.fx.FxCatalog.get(androidx.compose.ui.platform.LocalContext.current)
+    val names = remember(catalog) {
+        (catalog.effects + catalog.filters).associate { it.id to it.name } + catalog.looks.associate { it.id to it.name }
+    }
+    val bars = remember(project, names) {
         val list = ArrayList<BarItem>()
-        project.effects.forEach { list += BarItem(Selection.EffectSel(it.id), it.startUs, it.startUs + it.durationUs, it.fx.id, C.Effect, Color(0xFF3B2F66), 0) }
-        project.filters.forEach { list += BarItem(Selection.FilterSel(it.id), it.startUs, it.startUs + it.durationUs, it.lookId ?: it.shaderFx?.id ?: "Filter", C.Music.copy(alpha = 0.9f), Color(0xFF143A3A), 0) }
+        project.effects.forEach { list += BarItem(Selection.EffectSel(it.id), it.startUs, it.startUs + it.durationUs, names[it.fx.id] ?: it.fx.id, C.Effect, Color(0xFF3B2F66), 0) }
+        project.filters.forEach { list += BarItem(Selection.FilterSel(it.id), it.startUs, it.startUs + it.durationUs, (it.lookId ?: it.shaderFx?.id)?.let { id -> names[id] ?: id } ?: "Filter", C.Music.copy(alpha = 0.9f), Color(0xFF143A3A), 0) }
         project.texts.forEach { list += BarItem(Selection.TextSel(it.id), it.startUs, it.startUs + it.durationUs, it.text.replace('\n', ' '), C.TextTrack, Color(0xFF5A2A20), 1) }
         project.stickers.forEach { list += BarItem(Selection.StickerSel(it.id), it.startUs, it.startUs + it.durationUs, "Sticker", C.Overlay, Color(0xFF4A1D38), 1) }
         list

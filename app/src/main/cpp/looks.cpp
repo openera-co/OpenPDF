@@ -107,7 +107,7 @@ const std::vector<Entry>& table() {
         {{"expired", "Expired", "Film"}, [](LookParams& p) { p.hueShift = 8.f; p.lift = 0.08f; tone(p, 0.03f, 0.f, 0.06f, 0.06f, 0.05f, -0.03f); p.saturation = 0.85f; }},
         {{"instant", "Instant", "Film"}, [](LookParams& p) { p.lift = 0.09f; p.temperature = 0.18f; p.tint = -0.06f; p.contrast = -0.05f; p.highlightRolloff = 0.3f; }},
         // Cinematic
-        {{"tealorange", "Teal & Orange", "Cinematic"}, [](LookParams& p) { tone(p, -0.03f, 0.03f, 0.07f, 0.08f, 0.03f, -0.05f); p.contrast = 0.25f; p.saturation = 1.05f; }},
+        {{"tealorange", "Teal Orange", "Cinematic"}, [](LookParams& p) { tone(p, -0.03f, 0.03f, 0.07f, 0.08f, 0.03f, -0.05f); p.contrast = 0.25f; p.saturation = 1.05f; }},
         {{"blockbuster", "Blockbuster", "Cinematic"}, [](LookParams& p) { tone(p, -0.04f, 0.04f, 0.08f, 0.1f, 0.04f, -0.06f); p.contrast = 0.35f; p.lift = -0.02f; }},
         {{"noirgreen", "Matrix", "Cinematic"}, [](LookParams& p) { crossMix(p, {0.85f, 0.1f, 0.f, 0.05f, 1.05f, 0.f, 0.f, 0.15f, 0.8f}); p.contrast = 0.2f; p.saturation = 0.8f; }},
         {{"bleach", "Bleach bypass", "Cinematic"}, [](LookParams& p) { p.saturation = 0.45f; p.contrast = 0.4f; p.highlightRolloff = 0.1f; }},

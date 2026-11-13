@@ -141,6 +141,68 @@ class EngineDeviceTest {
         assertTrue(RenderDebug.frames.get() > 10)
     }
 
+    /** A paused, freshly prepared preview must show the real first frame, and again after a seek. */
+    @Test
+    fun pausedPreviewShowsVideo() {
+        val base = project()
+        val args = InstrumentationRegistry.getArguments()
+        val look = args.getString("look", "glow").takeIf { it != "none" }
+        val fx = args.getString("fx", "flare").takeIf { it != "none" }
+        val p = base.copy(clips = listOf(base.clips[0].copy(lookId = look)), texts = emptyList(), effects = listOfNotNull(fx?.let { TimedFx(fx = FxRef(it), startUs = 0, durationUs = 2_000_000) }))
+        RenderDebug.reset()
+        val reader = android.media.ImageReader.newInstance(360, 640, android.graphics.PixelFormat.RGBA_8888, 3)
+        val ready = CountDownLatch(1)
+        var player: CompositionPlayer? = null
+        main.post {
+            val comp = CompositionFactory.build(ctx, p, CompositionFactory.PREVIEW_HEIGHT, live = com.reel.editor.fx.LivePlans())!!.composition
+            player = CompositionPlayer.Builder(ctx).build().also { pl ->
+                pl.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_READY) ready.countDown() }
+                })
+                pl.setVideoSurface(reader.surface, Size(360, 640))
+                pl.setComposition(comp)
+                pl.prepare()
+            }
+        }
+        assertTrue(ready.await(3, TimeUnit.MINUTES))
+        // Software emulators decode slowly; wait for frames rather than sleeping a fixed time.
+        val first = awaitFrame(reader)
+        main.post { player?.seekTo(1000) }
+        val afterSeek = awaitFrame(reader)
+        main.post { player?.release() }
+        Log.i(TAG, "PAUSED brightness first=$first afterSeek=$afterSeek frames=${RenderDebug.frames.get()} lastPts=${RenderDebug.lastPts}")
+        assertTrue("first frame black ($first)", first > 40)
+        assertTrue("frame after seek black ($afterSeek)", afterSeek > 40)
+    }
+
+    private fun awaitFrame(reader: android.media.ImageReader, timeoutMs: Long = 120_000): Double {
+        val end = System.currentTimeMillis() + timeoutMs
+        var last = -1.0
+        while (System.currentTimeMillis() < end) {
+            val b = brightness(reader)
+            if (b >= 0) last = b
+            // Keep reading briefly after the first image so the settled frame is measured.
+            if (last >= 0) { Thread.sleep(1500); val again = brightness(reader); return if (again >= 0) again else last }
+            Thread.sleep(250)
+        }
+        return last
+    }
+
+    private fun brightness(reader: android.media.ImageReader): Double {
+        val img = reader.acquireLatestImage() ?: return -1.0
+        val plane = img.planes[0]
+        val buf = plane.buffer
+        var sum = 0L
+        var n = 0
+        for (y in 0 until img.height step 8) for (x in 0 until img.width step 8) {
+            val i = y * plane.rowStride + x * plane.pixelStride
+            sum += (buf.get(i).toInt() and 255) + (buf.get(i + 1).toInt() and 255) + (buf.get(i + 2).toInt() and 255)
+            n += 3
+        }
+        img.close()
+        return sum.toDouble() / n
+    }
+
     companion object {
         const val TAG = "ReelDeviceTest"
     }

@@ -2,7 +2,6 @@ package com.reel.editor
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -31,7 +30,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // The app is always dark, so system bars use light icons on a transparent background.
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         handleShare(intent)
         val app = application as ReelApp
         setContent {
@@ -90,16 +93,16 @@ class MainActivity : ComponentActivity() {
 
     private fun handleShare(intent: Intent?) {
         intent ?: return
-        val uris: List<Uri> = when (intent.action) {
-            Intent.ACTION_SEND -> listOfNotNull(
-                if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
-                else @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_STREAM),
-            )
-            Intent.ACTION_SEND_MULTIPLE -> (
-                if (Build.VERSION.SDK_INT >= 33) intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
-                else @Suppress("DEPRECATION") intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
-                ).orEmpty()
-            else -> emptyList()
+        // Other apps can send anything; keep only real Uris and never crash on bad extras.
+        val uris: List<Uri> = try {
+            @Suppress("DEPRECATION")
+            when (intent.action) {
+                Intent.ACTION_SEND -> listOfNotNull(intent.extras?.get(Intent.EXTRA_STREAM) as? Uri)
+                Intent.ACTION_SEND_MULTIPLE -> (intent.extras?.get(Intent.EXTRA_STREAM) as? List<*>).orEmpty().filterIsInstance<Uri>()
+                else -> emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
         if (uris.isNotEmpty()) shared.value = uris
     }

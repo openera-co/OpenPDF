@@ -111,7 +111,19 @@ class Prog(vertexSrc: String, fragmentSrc: String) {
 class GlFxException(msg: String) : RuntimeException(msg)
 
 object GlTex {
-    fun fromBitmap(bitmap: Bitmap, linear: Boolean = true): Int {
+    /**
+     * Creating a texture binds it on the active unit. Callers often create textures lazily while
+     * other samplers are already bound, so creation always restores the previous binding.
+     */
+    private inline fun preservingBinding(block: () -> Int): Int {
+        val prev = IntArray(1)
+        GLES20.glGetIntegerv(GLES20.GL_TEXTURE_BINDING_2D, prev, 0)
+        val id = block()
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, prev[0])
+        return id
+    }
+
+    fun fromBitmap(bitmap: Bitmap, linear: Boolean = true): Int = preservingBinding {
         val ids = IntArray(1)
         GLES20.glGenTextures(1, ids, 0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, ids[0])
@@ -121,10 +133,10 @@ object GlTex {
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
         GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
-        return ids[0]
+        ids[0]
     }
 
-    fun empty(width: Int, height: Int): Int {
+    fun empty(width: Int, height: Int): Int = preservingBinding {
         val ids = IntArray(1)
         GLES20.glGenTextures(1, ids, 0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, ids[0])
@@ -133,7 +145,7 @@ object GlTex {
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
         GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
         GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, width, height, 0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, null)
-        return ids[0]
+        ids[0]
     }
 
     fun delete(id: Int) {

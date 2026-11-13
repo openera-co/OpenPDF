@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -245,7 +246,7 @@ fun AnimationPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
     val current = if (tab == 0) clip.animIn else clip.animOut
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SheetHeader("Animation", onClose = onClose, onDone = onClose, center = { Segmented(listOf("In", "Out"), tab, { tab = it }) })
-        LazyVerticalGrid(GridCells.Fixed(4), Modifier.height(212.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 212.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { FxTile("None", current == null, Icons.Rounded.Block) { vm.updateClip(clip.id) { if (tab == 0) it.copy(animIn = null) else it.copy(animOut = null) } } }
             items(catalog.anims, key = { it.id }) { a ->
                 FxTile(a.name, current?.id == a.id, animIcon(a.id)) {
@@ -285,7 +286,7 @@ fun FxTile(name: String, selected: Boolean, icon: ImageVector?, brush: Brush? = 
                 .then(if (selected) Modifier.border(2.dp, C.Accent, RoundedCornerShape(12.dp)) else Modifier),
             contentAlignment = Alignment.Center,
         ) { if (icon != null) Icon(icon, null, tint = if (selected) C.Accent else C.Text, modifier = Modifier.size(22.dp)) }
-        Text(name, style = Label.copy(color = if (selected) C.Text else C.Muted), maxLines = 1, textAlign = TextAlign.Center)
+        Text(name, style = Label.copy(color = if (selected) C.Text else C.Muted), maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, textAlign = TextAlign.Center)
     }
 }
 

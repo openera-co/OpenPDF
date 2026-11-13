@@ -3,7 +3,10 @@ package com.reel.editor.engine
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.view.SurfaceView
+import android.graphics.SurfaceTexture
+import android.view.Surface
+import android.view.TextureView
+import androidx.media3.common.util.Size
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.transformer.CompositionPlayer
@@ -23,12 +26,12 @@ class PreviewController(context: Context) {
     private val main = Handler(Looper.getMainLooper())
     private val live = LivePlans()
     private var player: CompositionPlayer? = null
-    private var surface: SurfaceView? = null
     private var structure: Any? = null
     private var pending: Project? = null
     private var latest: Project? = null
     private var durationUs = 0L
     private var wantPlay = false
+    private var needsFirstFrame = false
 
     private val _playing = MutableStateFlow(false)
     val playing: StateFlow<Boolean> = _playing
@@ -44,11 +47,11 @@ class PreviewController(context: Context) {
         }
 
         override fun onPlaybackStateChanged(state: Int) {
-            if (state == Player.STATE_ENDED) {
-                _playing.value = false
-                wantPlay = false
-                player?.pause()
-                _positionUs.value = durationUs
+            if (state == Player.STATE_ENDED) finishAtEnd()
+            // Make sure a paused, freshly prepared player shows its first frame.
+            if (state == Player.STATE_READY && needsFirstFrame) {
+                needsFirstFrame = false
+                if (!wantPlay) refreshFrame()
             }
         }
 
@@ -60,20 +63,54 @@ class PreviewController(context: Context) {
 
     private fun ensurePlayer(): CompositionPlayer = player ?: CompositionPlayer.Builder(app).build().also {
         it.addListener(listener)
-        surface?.let { s -> it.setVideoSurfaceView(s) }
+        outSurface?.let { s -> it.setVideoSurface(s, outSize) }
         player = it
     }
 
-    fun attach(view: SurfaceView) {
-        surface = view
-        player?.setVideoSurfaceView(view)
+    private var outSurface: Surface? = null
+    private var outSize = Size(1, 1)
+
+    private val textureListener = object : TextureView.SurfaceTextureListener {
+        override fun onSurfaceTextureAvailable(st: SurfaceTexture, width: Int, height: Int) {
+            outSurface?.release()
+            val surface = Surface(st)
+            outSurface = surface
+            outSize = Size(width, height)
+            player?.setVideoSurface(surface, outSize)
+            refreshFrame()
+        }
+
+        override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, width: Int, height: Int) {
+            outSize = Size(width, height)
+            // Media3 ignores a new size for the same Surface, so detach and reattach it.
+            outSurface?.let { surf -> player?.let { it.clearVideoSurface(); it.setVideoSurface(surf, outSize) } }
+            refreshFrame()
+        }
+
+        override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
+            player?.clearVideoSurface()
+            outSurface?.release()
+            outSurface = null
+            return true
+        }
+
+        override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
     }
 
-    fun detach(view: SurfaceView) {
-        if (surface === view) {
-            player?.clearVideoSurfaceView(view)
-            surface = null
-        }
+    /**
+     * The preview draws into a TextureView: it is composited with the rest of the UI, so it resizes
+     * and animates with panels without the stale buffers a SurfaceView can show.
+     */
+    fun attach(view: TextureView) {
+        view.surfaceTextureListener = textureListener
+        view.surfaceTexture?.let { textureListener.onSurfaceTextureAvailable(it, view.width, view.height) }
+    }
+
+    fun detach(view: TextureView) {
+        if (view.surfaceTextureListener === textureListener) view.surfaceTextureListener = null
+        player?.clearVideoSurface()
+        outSurface?.release()
+        outSurface = null
     }
 
     /** Call on every project change. */
@@ -106,6 +143,7 @@ class PreviewController(context: Context) {
         val pos = _positionUs.value.coerceIn(0, (durationUs - 1).coerceAtLeast(0))
         _error.value = null
         try {
+            needsFirstFrame = true
             pl.setComposition(built.composition, pos / 1000)
             pl.prepare()
             pl.playWhenReady = wantPlay
@@ -119,16 +157,34 @@ class PreviewController(context: Context) {
         val p = player ?: return
         if (!p.isPlaying) {
             main.removeCallbacks(refresh)
-            main.postDelayed(refresh, 30)
+            main.postDelayed(refresh, 40)
         }
     }
 
-    private val refresh = Runnable { player?.let { if (!it.isPlaying) it.seekTo(_positionUs.value / 1000) } }
+    private val refresh = Runnable { player?.let { if (!it.isPlaying) it.seekTo(_positionUs.value.coerceAtMost((durationUs - 34_000).coerceAtLeast(0)) / 1000) } }
+
+    private val tickRunnable = Runnable { tick() }
 
     private fun tick() {
         val p = player ?: return
-        _positionUs.value = p.currentPosition * 1000
-        if (p.isPlaying) main.postDelayed({ tick() }, 16)
+        main.removeCallbacks(tickRunnable)
+        val pos = p.currentPosition * 1000
+        if (durationUs > 0 && pos >= durationUs) {
+            // Some audio sinks keep the clock running past the last frame; stop at the end ourselves.
+            finishAtEnd()
+            return
+        }
+        _positionUs.value = pos.coerceIn(0, durationUs.coerceAtLeast(0))
+        if (p.isPlaying) main.postDelayed(tickRunnable, 16)
+    }
+
+    private fun finishAtEnd() {
+        wantPlay = false
+        player?.pause()
+        _playing.value = false
+        _positionUs.value = durationUs
+        // Show the true last frame even if decoding fell behind the clock.
+        player?.seekTo(((durationUs - 34_000).coerceAtLeast(0)) / 1000)
     }
 
     fun play() {
@@ -141,7 +197,7 @@ class PreviewController(context: Context) {
     fun pause() {
         wantPlay = false
         player?.pause()
-        player?.let { _positionUs.value = it.currentPosition * 1000 }
+        player?.let { _positionUs.value = (it.currentPosition * 1000).coerceIn(0, durationUs.coerceAtLeast(0)) }
     }
 
     fun toggle() = if (_playing.value) pause() else play()
@@ -166,6 +222,8 @@ class PreviewController(context: Context) {
         player?.removeListener(listener)
         player?.release()
         player = null
+        outSurface?.release()
+        outSurface = null
         structure = null
     }
 }

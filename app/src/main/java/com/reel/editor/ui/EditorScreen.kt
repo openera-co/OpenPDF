@@ -2,7 +2,7 @@ package com.reel.editor.ui
 
 import android.media.MediaMetadataRetriever
 import android.net.Uri
-import android.view.SurfaceView
+import android.view.TextureView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -33,6 +33,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -168,11 +172,19 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
             val aspect = cw.toFloat() / ch
             val boxAspect = maxWidth.value / maxHeight.value.coerceAtLeast(1f)
             val fit = if (aspect > boxAspect) Modifier.fillMaxWidth().aspectRatio(aspect) else Modifier.fillMaxSize().aspectRatio(aspect, matchHeightConstraintsFirst = true)
-            Box(fit) {
+            BoxWithConstraints(fit, contentAlignment = Alignment.Center) {
+                // The video surface keeps the largest size it has had for this aspect and is scaled
+                // down visually when panels open, so resizing never re-allocates the GL surface.
+                val curW = constraints.maxWidth
+                var baseW by remember(aspect) { mutableIntStateOf(0) }
+                if (curW > baseW) baseW = curW
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val baseWdp = with(density) { baseW.coerceAtLeast(1).toDp() }
+                val scale = if (baseW > 0) curW.toFloat() / baseW else 1f
                 AndroidView(
-                    factory = { c -> SurfaceView(c).also { vm.preview.attach(it) } },
+                    factory = { c -> TextureView(c).also { it.isOpaque = true; vm.preview.attach(it) } },
                     onRelease = { vm.preview.detach(it) },
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.requiredSize(baseWdp, baseWdp / aspect).graphicsLayer { scaleX = scale; scaleY = scale },
                 )
                 PreviewOverlay(vm, selection, project, pos, aspect, picking) { uv ->
                     picking = false
@@ -214,19 +226,28 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
             }
         }
 
+        // With a panel open the timeline keeps only its main rows so the preview stays large.
+        val compact = (panel != null && panel != Panel.AUDIO) || transitionFor != null
+        val fullTl = timelineHeight(project)
+        val tlHeight by androidx.compose.animation.core.animateDpAsState(
+            if (compact) minOf(fullTl, 150.dp) else fullTl,
+            androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow),
+            label = "tl",
+        )
+        val panelMax = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.4f).dp
         AnimatedVisibility(!fullscreen, enter = fadeIn() + slideInVertically { it / 3 }, exit = fadeOut() + slideOutVertically { it / 3 }) {
             Column {
                 Timeline(
                     project, pos, selection, waveforms, vm.thumbnails,
                     actions = remember(vm) { actionsFor(vm, addClips, { transitionFor = it }) },
-                    modifier = Modifier.fillMaxWidth().height(timelineHeight(project)),
+                    modifier = Modifier.fillMaxWidth().height(tlHeight),
                 )
                 AnimatedContent(
                     targetState = Triple(panel, transitionFor, selection::class),
                     transitionSpec = { (fadeIn() + slideInVertically { it / 4 }) togetherWith (fadeOut() + slideOutVertically { it / 4 }) },
                     label = "bottom",
                 ) { (pnl, trans, _) ->
-                    Box(Modifier.fillMaxWidth().background(if (pnl != null || trans != null) C.Surface else C.Bg)) {
+                    Box(Modifier.fillMaxWidth().heightIn(max = panelMax).background(if (pnl != null || trans != null) C.Surface else C.Bg)) {
                         when {
                             trans != null -> TransitionPanel(vm, trans) { transitionFor = null }
                             pnl != null -> PanelHost(vm, pnl, picking, { picking = !picking }) { vm.openPanel(null) }

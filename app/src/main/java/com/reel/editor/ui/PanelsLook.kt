@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -149,7 +150,7 @@ fun FiltersPanel(vm: EditorViewModel, onClose: () -> Unit) {
                 }
             }
         } else {
-            LazyVerticalGrid(GridCells.Fixed(5), Modifier.height(200.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyVerticalGrid(GridCells.Fixed(5), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 200.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item { FxTile("None", currentShader == null, Icons.Rounded.Block) { applyShader(null) } }
                 items(catalog.filters, key = { it.id }) { f -> FxTile(f.name, currentShader == f.id, Icons.Rounded.FilterVintage, brush = fxBrush(f)) { applyShader(f.id) } }
             }
@@ -218,7 +219,7 @@ fun EffectsPanel(vm: EditorViewModel, onClose: () -> Unit) {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             cats.forEach { Chip(it, it == cat) { cat = it } }
         }
-        LazyVerticalGrid(GridCells.Fixed(4), Modifier.height(180.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 180.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(catalog.effects.filter { it.category == cat }, key = { it.id }) { e ->
                 FxTile(e.name, sel?.fx?.id == e.id, Icons.Rounded.AutoAwesome, brush = fxBrush(e)) {
                     if (sel != null) vm.edit { p -> p.copy(effects = p.effects.map { if (it.id == sel.id) it.copy(fx = FxRef(e.id)) else it }) }
@@ -262,7 +263,7 @@ fun TransitionPanel(vm: EditorViewModel, clipId: String, onClose: () -> Unit) {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             cats.forEach { Chip(it, it == cat) { cat = it } }
         }
-        LazyVerticalGrid(GridCells.Fixed(4), Modifier.height(200.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 96.dp, max = 200.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { FxTile("None", clip.transitionIn == null, Icons.Rounded.Block) { vm.updateClip(clip.id) { it.copy(transitionIn = null) } } }
             items(catalog.transitions.filter { cat == "All" || it.category == cat }, key = { it.id }) { t ->
                 val h = (t.id.hashCode() and 0xffff) / 65535f * 360f
