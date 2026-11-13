@@ -96,12 +96,19 @@ object RenderPlans {
             val c = project.clips.firstOrNull()
             if (c == null) 9 to 16 else displaySize(c)
         } else ratio.w to ratio.h
-        // Even dimensions, long side capped for encoder support.
-        var h = targetHeight
-        var w = (h.toLong() * rw / rh).toInt()
-        if (w > h) { w = targetHeight; h = (w.toLong() * rh / rw).toInt() }
-        return (w / 2 * 2).coerceAtLeast(2) to (h / 2 * 2).coerceAtLeast(2)
+        // The resolution names the short side (1080p 9:16 is 1080x1920). The other side is rounded
+        // to a multiple of 8 for encoders, and the long side is capped at 4096.
+        val short = targetHeight.coerceAtLeast(16)
+        var w: Double
+        var h: Double
+        if (rw <= rh) { w = short.toDouble(); h = short.toDouble() * rh / rw } else { h = short.toDouble(); w = short.toDouble() * rw / rh }
+        val long = maxOf(w, h)
+        if (long > MAX_SIDE) { val k = MAX_SIDE / long; w *= k; h *= k }
+        fun r8(v: Double) = (Math.round(v / 8.0) * 8).toInt().coerceAtLeast(16)
+        return r8(w) to r8(h)
     }
+
+    const val MAX_SIDE = 4096.0
 
     fun displaySize(c: Clip): Pair<Int, Int> =
         if (c.rotationDegrees % 180 != 0) c.sourceHeight to c.sourceWidth else c.sourceWidth to c.sourceHeight

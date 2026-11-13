@@ -22,7 +22,8 @@ import kotlin.math.roundToInt
 
 /** Turns a project into a Media3 [Composition] used identically for preview and export. */
 object CompositionFactory {
-    const val PREVIEW_HEIGHT = 1280
+    /** Short side of the preview canvas; export uses the chosen resolution instead. */
+    const val PREVIEW_HEIGHT = 720
 
     data class Built(val composition: Composition, val canvasWidth: Int, val canvasHeight: Int, val durationUs: Long)
 

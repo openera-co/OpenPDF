@@ -185,6 +185,22 @@ class ModelTest {
         assertEquals(1f, TextMotion.at(null, null, null, 1, 4).opacity, 1e-6f)
     }
 
+    @Test fun canvasSizeUsesShortSideAndEncoderFriendlySizes() {
+        fun size(r: com.reel.editor.model.AspectRatio, res: Int) =
+            com.reel.editor.fx.RenderPlans.canvasSize(Project(canvas = com.reel.editor.model.CanvasSettings(ratio = r)), res)
+        assertEquals(1080 to 1920, size(com.reel.editor.model.AspectRatio.R9_16, 1080))
+        assertEquals(1920 to 1080, size(com.reel.editor.model.AspectRatio.R16_9, 1080))
+        assertEquals(720 to 720, size(com.reel.editor.model.AspectRatio.R1_1, 720))
+        assertEquals(1080 to 1352, size(com.reel.editor.model.AspectRatio.R4_5, 1080))
+        assertEquals(2160 to 3840, size(com.reel.editor.model.AspectRatio.R9_16, 2160))
+        val wide = size(com.reel.editor.model.AspectRatio.R21_9, 2160)
+        assertEquals(4096, wide.first)
+        assertTrue(wide.second % 8 == 0)
+        // Original ratio follows the first clip (1920x1080 landscape here).
+        val orig = com.reel.editor.fx.RenderPlans.canvasSize(Project(canvas = com.reel.editor.model.CanvasSettings(ratio = com.reel.editor.model.AspectRatio.ORIGINAL), clips = listOf(clip())), 720)
+        assertEquals(1280 to 720, orig)
+    }
+
     @Test fun projectJsonRoundTrip() {
         val p = Project(name = "Trip", clips = listOf(clip().copy(transitionIn = TransitionRef("glt_fade", 300_000), keyframes = listOf(Keyframe(0, Transform(scale = 2f))))))
         val text = ProjectStore.json.encodeToString(Project.serializer(), p)

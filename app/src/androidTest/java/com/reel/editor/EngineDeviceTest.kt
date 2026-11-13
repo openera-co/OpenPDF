@@ -107,7 +107,9 @@ class EngineDeviceTest {
         r.release()
         out.copyTo(File(ctx.getExternalFilesDir(null), "out.mp4"), overwrite = true)
         assertTrue("duration $dur", dur in 3800..4300)
-        assertEquals(360, h)
+        // 9:16 canvas at a 640 short side.
+        assertEquals(640, minOf(w, h))
+        assertEquals(1136, maxOf(w, h))
         assertNotNull(RenderDebug.firstPts[second])
     }
 

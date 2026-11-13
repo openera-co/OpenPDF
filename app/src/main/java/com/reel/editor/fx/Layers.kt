@@ -45,9 +45,14 @@ object Fonts {
 
     fun typeface(style: TextStyle): Typeface {
         val f = all.firstOrNull { it.id == style.font } ?: all[0]
-        var s = f.style
-        if (style.bold) s = s or Typeface.BOLD
-        if (style.italic) s = s or Typeface.ITALIC
+        val bold = style.bold || (f.style and Typeface.BOLD) != 0
+        val italic = style.italic || (f.style and Typeface.ITALIC) != 0
+        val s = when {
+            bold && italic -> Typeface.BOLD_ITALIC
+            bold -> Typeface.BOLD
+            italic -> Typeface.ITALIC
+            else -> Typeface.NORMAL
+        }
         return Typeface.create(f.family, s)
     }
 }

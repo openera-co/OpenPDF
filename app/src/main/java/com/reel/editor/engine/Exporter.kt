@@ -35,6 +35,8 @@ object Exporter {
     private val main = Handler(Looper.getMainLooper())
     private val _state = MutableStateFlow<ExportState>(ExportState.Idle)
     val state: StateFlow<ExportState> = _state
+    // Built from the application context and cleared when the export ends, so nothing leaks.
+    @android.annotation.SuppressLint("StaticFieldLeak")
     private var transformer: Transformer? = null
     private var startedAt = 0L
 
