@@ -70,7 +70,9 @@ import kotlinx.coroutines.withContext
 @Composable
 fun HomeScreen(store: ProjectStore, thumbnails: Thumbnails, onNew: () -> Unit, onOpen: (String) -> Unit) {
     var version by remember { mutableStateOf(0) }
-    val drafts by produceState(initialValue = emptyList<Project>(), version) { value = withContext(Dispatchers.IO) { store.list() } }
+    // Null until the first load, so "no drafts" never flashes while drafts are being read.
+    val loaded by produceState<List<Project>?>(initialValue = null, version) { value = withContext(Dispatchers.IO) { store.list() } }
+    val drafts = loaded.orEmpty()
     var menuFor by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<Project?>(null) }
     var confirmDelete by remember { mutableStateOf<Project?>(null) }
@@ -102,7 +104,7 @@ fun HomeScreen(store: ProjectStore, thumbnails: Thumbnails, onNew: () -> Unit, o
             }
         }
         item(span = { GridItemSpan(2) }) {
-            Text(if (drafts.isEmpty()) "No drafts yet" else "Drafts  ${drafts.size}", style = Title.copy(fontSize = 18.sp, color = if (drafts.isEmpty()) C.Muted else C.Text), modifier = Modifier.padding(top = 8.dp))
+            if (loaded != null) Text(if (drafts.isEmpty()) "No drafts yet" else "Drafts  ${drafts.size}", style = Title.copy(fontSize = 18.sp, color = if (drafts.isEmpty()) C.Muted else C.Text), modifier = Modifier.padding(top = 8.dp))
         }
         items(drafts, key = { it.id }) { d ->
             Column(
