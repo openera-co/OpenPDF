@@ -21,16 +21,19 @@ static const int R = 48000;
 static std::vector<float> run(const VoiceSettings& s, const std::vector<float>& in, int ch, int block = 1024) {
     VoiceChain v(R, ch, s);
     std::vector<float> out;
-    std::vector<float> buf;
+    // A deliberately small output buffer: whatever does not fit must come out on later calls.
+    const int cap = block / 2 + 1;
+    std::vector<float> obuf(static_cast<size_t>(cap) * ch);
     const int frames = static_cast<int>(in.size()) / ch;
     for (int i = 0; i < frames; i += block) {
         const int n = std::min(block, frames - i);
-        buf.assign(in.begin() + static_cast<long>(i) * ch, in.begin() + static_cast<long>(i + n) * ch);
-        const int w = v.process(buf.data(), n, buf.data());  // in place
-        out.insert(out.end(), buf.begin(), buf.begin() + static_cast<long>(w) * ch);
+        const int w = v.process(in.data() + static_cast<long>(i) * ch, n, obuf.data(), cap);
+        out.insert(out.end(), obuf.begin(), obuf.begin() + static_cast<long>(w) * ch);
     }
-    std::vector<float> tail(static_cast<size_t>(v.latency() + 4096) * ch);
-    const int t = v.drain(tail.data(), v.latency() + 4096);
+    // Room for whatever is still queued (the small buffer above leaves a backlog) plus the delay.
+    const int room = frames + v.latency() + 4096;
+    std::vector<float> tail(static_cast<size_t>(room) * ch);
+    const int t = v.drain(tail.data(), room);
     out.insert(out.end(), tail.begin(), tail.begin() + static_cast<long>(t) * ch);
     return out;
 }

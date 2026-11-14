@@ -251,6 +251,9 @@ struct VoiceChain::Impl {
     int holdCount = 0;
     int skip = 0;  // output frames still to drop to remove denoiser latency
     std::vector<float> scratch;
+    std::vector<float> outQ;  // processed frames not yet handed out
+    size_t outQPos = 0;
+    long long inCount = 0, outCount = 0;  // frames in and handed out since the last reset
 
     Impl(int r, int c, const VoiceSettings& st) : rate(r), ch(std::max(1, c)), s(st) { build(); }
 
@@ -484,16 +487,15 @@ struct VoiceChain::Impl {
         return s.enhance > 0.001f || !dn.empty() || s.normalize || s.effect != VoiceEffect::None;
     }
 
-    int process(const float* in, int frames, float* out) {
+    // Runs [frames] through the chain and appends the results to outQ.
+    void run(const float* in, int frames) {
         if (scratch.size() < static_cast<size_t>(ch)) scratch.resize(ch);
-        int written = 0;
         for (int i = 0; i < frames; ++i) {
             const float* src = in + static_cast<size_t>(i) * ch;
             if (dn.empty()) {
                 std::memcpy(scratch.data(), src, sizeof(float) * ch);
                 tail(scratch.data());
-                std::memcpy(out + static_cast<size_t>(written) * ch, scratch.data(), sizeof(float) * ch);
-                ++written;
+                outQ.insert(outQ.end(), scratch.begin(), scratch.begin() + ch);
                 continue;
             }
             for (int c = 0; c < ch; ++c) dn[c].push(src[c]);
@@ -504,31 +506,49 @@ struct VoiceChain::Impl {
                 if (!got) break;
                 if (skip > 0) { --skip; continue; }
                 tail(scratch.data());
-                // Out may alias in: writing frame `written` never passes reading frame i.
-                std::memcpy(out + static_cast<size_t>(written) * ch, scratch.data(), sizeof(float) * ch);
-                ++written;
+                outQ.insert(outQ.end(), scratch.begin(), scratch.begin() + ch);
             }
         }
-        return written;
+    }
+
+    int take(float* out, int capacity) {
+        const size_t avail = (outQ.size() - outQPos) / ch;
+        const size_t n = std::min(avail, static_cast<size_t>(std::max(0, capacity)));
+        outCount += static_cast<long long>(n);
+        std::memcpy(out, outQ.data() + outQPos, sizeof(float) * n * ch);
+        outQPos += n * ch;
+        if (outQPos == outQ.size()) { outQ.clear(); outQPos = 0; }
+        else if (outQPos > (1u << 16)) { outQ.erase(outQ.begin(), outQ.begin() + static_cast<long>(outQPos)); outQPos = 0; }
+        return static_cast<int>(n);
+    }
+
+    int process(const float* in, int frames, float* out, int cap) {
+        run(in, frames);
+        inCount += frames;
+        return take(out, cap);
     }
 
     int drain(float* out, int maxFrames) {
-        if (dn.empty()) return 0;
-        const int lat = dn[0].latency();
-        std::vector<float> zeros(static_cast<size_t>(lat) * ch, 0.f);
-        std::vector<float> tmp(static_cast<size_t>(lat + dn[0].hop) * ch);
-        int n = process(zeros.data(), lat, tmp.data());
-        n = std::min(n, maxFrames);
-        std::memcpy(out, tmp.data(), sizeof(float) * static_cast<size_t>(n) * ch);
+        if (!dn.empty()) {
+            // Push silence so every held-back input frame comes out...
+            const int lat = dn[0].latency() + dn[0].hop;
+            std::vector<float> zeros(static_cast<size_t>(lat) * ch, 0.f);
+            run(zeros.data(), lat);
+        }
+        // ...but hand out exactly as many frames as came in.
+        const long long left = std::max<long long>(0, inCount - outCount);
+        const int n = take(out, static_cast<int>(std::min<long long>(maxFrames, left)));
+        outQ.clear();
+        outQPos = 0;
         return n;
     }
 };
 
 VoiceChain::VoiceChain(int sampleRate, int channels, const VoiceSettings& s) : d(std::make_unique<Impl>(sampleRate, channels, s)) {}
 VoiceChain::~VoiceChain() = default;
-int VoiceChain::process(const float* in, int frames, float* out) { return d->process(in, frames, out); }
+int VoiceChain::process(const float* in, int frames, float* out, int outCapacity) { return d->process(in, frames, out, outCapacity); }
 int VoiceChain::drain(float* out, int maxFrames) { return d->drain(out, maxFrames); }
-void VoiceChain::reset() { d->build(); d->comp.clear(); d->levelEnv = 0; d->levelGain = 1; d->limEnv = 1; d->phase = d->lfo = 0; }
+void VoiceChain::reset() { d->build(); d->comp.clear(); d->levelEnv = 0; d->levelGain = 1; d->limEnv = 1; d->phase = d->lfo = 0; d->outQ.clear(); d->outQPos = 0; d->inCount = d->outCount = 0; }
 int VoiceChain::latency() const { return d->dn.empty() ? 0 : d->dn[0].latency(); }
 
 }  // namespace reel

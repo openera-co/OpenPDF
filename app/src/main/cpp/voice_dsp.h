@@ -39,11 +39,12 @@ public:
     VoiceChain(const VoiceChain&) = delete;
     VoiceChain& operator=(const VoiceChain&) = delete;
 
-    // Processes [frames] interleaved frames from [in] and writes the output to [out] (which may
-    // equal [in]). Output is time-aligned with input: any internal delay is removed, so fewer
-    // frames than given may come out at the start. Returns frames written.
-    int process(const float* in, int frames, float* out);
-    // At end of stream: writes the frames still held back by internal delay. Returns frames.
+    // Processes [frames] interleaved frames from [in] and writes up to [outCapacity] frames to
+    // [out] (a separate buffer). Output is time-aligned with input: internal delay is removed, so
+    // a call may return fewer or more frames than it was given; anything that does not fit is
+    // kept for the next call. Returns frames written.
+    int process(const float* in, int frames, float* out, int outCapacity);
+    // At end of stream: writes the frames still held back. Returns frames.
     int drain(float* out, int maxFrames);
     // Clears all state (after a seek).
     void reset();

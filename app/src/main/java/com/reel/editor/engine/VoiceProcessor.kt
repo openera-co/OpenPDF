@@ -17,6 +17,7 @@ import java.nio.ByteOrder
 class VoiceProcessor(private val fx: VoiceFx) : BaseAudioProcessor() {
     private var handle = 0L
     private var work: ByteBuffer = ByteBuffer.allocateDirect(0)
+    private var outWork: ByteBuffer = ByteBuffer.allocateDirect(0)
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT && inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
@@ -45,6 +46,14 @@ class VoiceProcessor(private val fx: VoiceFx) : BaseAudioProcessor() {
         return work
     }
 
+    /** Output room: a call may return more frames than it was given (held-back audio catching up). */
+    private fun outBuffer(frames: Int, ch: Int): ByteBuffer {
+        val bytes = frames * ch * 4
+        if (outWork.capacity() < bytes) outWork = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+        outWork.clear()
+        return outWork
+    }
+
     override fun queueInput(inputBuffer: ByteBuffer) {
         val remaining = inputBuffer.remaining()
         if (remaining == 0) return
@@ -64,8 +73,10 @@ class VoiceProcessor(private val fx: VoiceFx) : BaseAudioProcessor() {
             for (i in 0 until samples) fw.put(src.getShort(src.position() + i * 2) / 32768f)
         }
         inputBuffer.position(inputBuffer.limit())
-        val written = NativeCore.voiceProcess(handle, w, frames)
-        emit(w, written, ch, isFloat)
+        val cap = frames + 4096
+        val o = outBuffer(cap, ch)
+        val written = NativeCore.voiceProcess(handle, w, frames, o, cap)
+        emit(o, written, ch, isFloat)
     }
 
     override fun onQueueEndOfStream() {
@@ -73,9 +84,10 @@ class VoiceProcessor(private val fx: VoiceFx) : BaseAudioProcessor() {
         val f = inputAudioFormat
         val lat = NativeCore.voiceLatency(handle)
         if (lat <= 0) return
-        val w = workBuffer((lat + 4096) * f.channelCount * 4)
-        val n = NativeCore.voiceDrain(handle, w, lat + 4096)
-        if (n > 0) emit(w, n, f.channelCount, f.encoding == C.ENCODING_PCM_FLOAT)
+        val room = lat + 16_384
+        val o = outBuffer(room, f.channelCount)
+        val n = NativeCore.voiceDrain(handle, o, room)
+        if (n > 0) emit(o, n, f.channelCount, f.encoding == C.ENCODING_PCM_FLOAT)
     }
 
     private fun emit(w: ByteBuffer, frames: Int, ch: Int, isFloat: Boolean) {

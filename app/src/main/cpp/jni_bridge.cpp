@@ -228,11 +228,12 @@ JNIEXPORT void JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceReset(J
     reinterpret_cast<reel::VoiceChain*>(h)->reset();
 }
 
-// [io] is a direct buffer of interleaved floats, processed in place. Returns frames written.
-JNIEXPORT jint JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceProcess(JNIEnv* env, jobject, jlong h, jobject io, jint frames) {
-    auto* buf = static_cast<float*>(env->GetDirectBufferAddress(io));
-    if (!buf) return 0;
-    return reinterpret_cast<reel::VoiceChain*>(h)->process(buf, frames, buf);
+// [in] and [out] are separate direct buffers of interleaved floats. Returns frames written to out.
+JNIEXPORT jint JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceProcess(JNIEnv* env, jobject, jlong h, jobject in, jint frames, jobject out, jint outCapacity) {
+    auto* src = static_cast<float*>(env->GetDirectBufferAddress(in));
+    auto* dst = static_cast<float*>(env->GetDirectBufferAddress(out));
+    if (!src || !dst) return 0;
+    return reinterpret_cast<reel::VoiceChain*>(h)->process(src, frames, dst, outCapacity);
 }
 
 JNIEXPORT jint JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceDrain(JNIEnv* env, jobject, jlong h, jobject out, jint maxFrames) {

@@ -57,8 +57,8 @@ object NativeCore {
 
     external fun voiceReset(handle: Long)
 
-    /** Processes interleaved floats in a direct buffer in place; returns frames written. */
-    external fun voiceProcess(handle: Long, io: java.nio.ByteBuffer, frames: Int): Int
+    /** Interleaved floats from [input] to [output] (separate direct buffers); returns frames written. */
+    external fun voiceProcess(handle: Long, input: java.nio.ByteBuffer, frames: Int, output: java.nio.ByteBuffer, outCapacity: Int): Int
 
     /** Writes frames held back by the noise reducer; returns frames. */
     external fun voiceDrain(handle: Long, out: java.nio.ByteBuffer, maxFrames: Int): Int
