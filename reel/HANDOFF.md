@@ -1,0 +1,216 @@
+# Reel — handoff
+
+Reel is a mobile video editor for Android, in the style of CapCut and VN: a timeline with clips,
+text, stickers, shapes, overlays and audio. It has hundreds of effects and transitions, on-device
+captions, background cutout, head tracking and in-app updates. Current version: **1.6.0**
+(versionCode 8).
+
+This document is for whoever picks the project up next: how to build it, where things live, how it
+is tested and released, what is known to be weak, and what is still to do.
+
+---
+
+## 1. Build
+
+| | |
+|---|---|
+| Language | Kotlin 2.2.21, C++17 (NDK 27.2.12479018) |
+| UI | Jetpack Compose (BOM 2025.12.01), Material 3 |
+| Video | Media3 1.11.1 (`CompositionPlayer` for preview, `Transformer` for export) |
+| Gradle | AGP 8.13.2, Gradle 8.14 (`gradle` on PATH; there is no wrapper jar) |
+| SDK | compile/target 36, min 26 |
+| ABIs | arm64-v8a, armeabi-v7a, x86_64 |
+
+```bash
+cd reel
+tools/fetch_model.sh                 # 264 MB speech model, not in git (checksum-verified)
+gradle :app:assembleDebug            # debug build
+gradle :app:testDebugUnitTest        # 78 JVM tests (a few call python3 + Pillow if present)
+gradle :app:assembleRelease          # needs signing.properties + the keystore (see below)
+```
+
+Files that are **not in git** on purpose:
+
+- `app/src/main/assets/models/speech.bin`: the captions model. Run `tools/fetch_model.sh`.
+- `signing.properties` and `reel-release.jks`: the release signing key. Every update must be signed
+  with this same key, or Android refuses it over the installed app. The owner holds the only copies
+  (sent to them directly, never committed). Put both files in `reel/` to build releases. If the key
+  is lost, users must uninstall and reinstall.
+- `local.properties`: points at your Android SDK.
+
+The APK is about 300 MB, mostly the speech model. The model is bundled on purpose: the owner wants
+captions to work offline with no download.
+
+The release build uses R8 with `-dontobfuscate`, so Sentry stack traces are readable. Sentry
+(`io.sentry:sentry-android`) runs only in release builds; its DSN is in `app/build.gradle.kts`.
+
+---
+
+## 2. Product rules (from the owner)
+
+- No explanation text under labels. Icons wherever possible, uncluttered screens.
+- No em dashes in UI text.
+- The UI must never mention "whisper". The speech model is just "captions".
+- Use the bundled small model only; no model picker, no downloads.
+- The design reference is the "Reel Video Editor" canvas artifact the owner made; screens follow it.
+
+---
+
+## 3. Layout of the code
+
+```
+app/src/main/java/com/reel/editor/
+  model/       Project data (Project.kt), timeline maths (Timeline.kt), lanes (TrackLayout.kt),
+               captions grouping + anchoring + line edits (Captions.kt), head path maths (HeadPath.kt),
+               beats, voice presets, media-uri remapping for project files (ProjectUris.kt)
+  edit/        EditorViewModel (all editing actions), History (undo/redo + named steps),
+               ProjectStore (JSON drafts), ProjectArchive (.reelproj share/import)
+  engine/      CompositionFactory (project -> Media3 Composition), PreviewController,
+               Exporter (+ GIF and sound-only), ExportService, audio processors (volume, voice)
+  fx/          GL rendering: ClipRenderer (per-clip pass pipeline), RenderPlan, OverlayRenderer,
+               Layers (text/sticker/shape bitmaps + text animations), FxCatalog (shader library),
+               Segmenter (person mask), UserLuts (.cube import), FxThumbs (effect previews)
+  media/       MediaLibrary (in-app picker data), probe, thumbnails, audio decode/analysis,
+               Reverser, GifWriter, Speech (text to speech)
+  track/       HeadTracker (face detector + person-mask fallback), FrameSampler (one-pass decode)
+  captions/    CaptionEngine (on-device transcription through JNI)
+  update/      Updater (in-app updates with binary patches)
+  ui/          Compose screens and panels (EditorScreen, Timeline, Panels*, MediaPicker, ...)
+app/src/main/cpp/  JNI core: looks (LUT generator), audio analysis, voice DSP, image ops,
+               captions core; third_party/whisper.cpp vendored (v1.9.5, CPU only)
+app/src/main/assets/fx/  GLSL library: 211 transitions (gl-transitions, MIT), 89 filters/effects,
+               internal shaders (canvas, grade, overlay_blend, privacy, ...)
+tools/fx/      shader import/validation (validate_shaders.py uses glslangValidator)
+tools/update/  make_update.py (update patches) + README
+```
+
+### How a frame is drawn
+
+`ClipRenderer` is a Media3 `GlEffect` attached to every clip. For each frame it runs:
+
+1. **Pre-canvas, at working size:** grade (adjustments, HSL, curves, look LUT), the clip's filter
+   and its effects.
+2. **Canvas:** fit or fill, crop, keyframed transform, flip, chroma key, cutout, clip mask and
+   background. Then the hidden region (face blur), in/out animations and the transition.
+3. **Tail capture** for the next clip's transition.
+4. **Global passes:** overlays (with blend, mask and chroma), timed looks and filters, adjustment
+   layers, timed effects.
+5. **Final:** text, stickers and shapes. Captions are drawn last, so they sit on top.
+
+The preview and the export share this path. Only the preview honours "hold to see the original".
+
+### Data model notes
+
+- Everything is an immutable `@Serializable` data class. Edits go through
+  `EditorViewModel.edit/live`, which run `CaptionAnchor.reflow`, then `TrackLayout.clampLayers`,
+  then save.
+- Captions remember the source clip and media time they came from (`anchor*` fields). When clips
+  are trimmed, split or moved, the captions follow; captions whose speech was cut are removed.
+- Track switches (eye / speaker / lock) live in `Project.tracks`. Hidden tracks are left out of both
+  the preview and the export (`RenderPlans.visible`).
+
+---
+
+## 4. Features (all shipped and tested unless noted)
+
+- **Editing:** trim, split, reorder, speed and speed curves, freeze, replace, duplicate, reverse,
+  crop, rotate, flip, extract audio, transitions.
+- **Selection:** multi-select, copy and paste style, undo and redo with a history list.
+- **Layers:** text (61 bundled fonts, gradient, curved text, 30+ animations including
+  letter-by-letter), stickers, 12 shapes, overlays (picture in picture with 9 blend modes, masks
+  and chroma key), adjustment layers.
+- **Look:** 100+ looks, `.cube` LUT import, adjustments, curves, HSL, filters, effects, clip masks,
+  chroma key, background cutout.
+- **Motion:** keyframes on everything, a value graph, a bezier easing editor, head tracking
+  (layers follow a head), auto reframe, and face blur that follows the face.
+- **Audio:** music, voiceover recording, text to speech, voice effects and enhancer, auto-duck,
+  volume keyframes, beat markers (auto and manual).
+- **Captions:** on-device, 99 languages with translate-to-English, line editing (split, merge,
+  nudge), karaoke highlight, safe-area clamping.
+- **Timeline:** per-type lanes, vertical scroll, and a track column with eye, mute and lock per
+  track.
+- **Preview:** drag, pinch and twist with snap guides; two-finger undo; three-finger redo;
+  hold-to-see-original; safe-area overlays for TikTok, Reels and Shorts; save frame.
+- **Export:** 720p to 4K, 24 to 60 fps, HEVC option, platform presets, GIF, sound only.
+- **Projects:** drafts, duplicate, share and import as `.reelproj`, settings.
+- **In-app updates** through small binary patches (see section 6).
+- **Crash reporting** with Sentry, release builds only.
+
+---
+
+## 5. Testing
+
+- **JVM unit tests:** 78, in `app/src/test`. Run with `gradle :app:testDebugUnitTest`. The GIF and
+  update-patch tests shell out to `python3` (and Pillow); they are skipped if those are missing.
+- **Device tests:** 22, in `app/src/androidTest`. They run on an emulator or a phone with
+  `gradle :app:assembleDebugAndroidTest`, then
+  `adb shell am instrument -w com.reel.editor.debug.test/androidx.test.runner.AndroidJUnitRunner`.
+  They export real videos and check pixels: layers, overlays, adjustment layers, crop, face blur,
+  reverse, GIF, sound only, project packing, head tracking on a real interview clip (a public-domain
+  NASA video in `androidTest/assets/talk.mp4`), voice, fonts and captions.
+- **Shaders:** `python3 tools/fx/validate_shaders.py` compiles every GLSL file with
+  glslangValidator.
+
+Notes on the emulator used during development (API 30, x86_64, software GPU, `-accel off`):
+
+- It is very slow. Exports take about 50× real time, and "System UI / Reel isn't responding"
+  dialogs appear. ANR traces taken at those moments showed the app's main thread idle, so they are
+  the emulator, not the app.
+- Files pushed with `adb push` plus a media scan can stay `is_pending=1`, which hides them from
+  every app. Clear it with
+  `adb shell content update --uri content://media/external/<type>/media/<id> --bind is_pending:i:0`.
+- It has no text-to-speech engine, so "Read aloud" is untested on device. The code reports
+  "No text-to-speech voice on this phone".
+
+---
+
+## 6. Releases and in-app updates
+
+1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`.
+2. Run `gradle :app:testDebugUnitTest :app:lintRelease :app:assembleRelease`. Lint must report 0
+   errors.
+3. Run `python3 tools/update/make_update.py --new app-release.apk --old <each earlier release APK> --out site`.
+   This writes `update.json`, the full APK and one `.rpatch` per older version. Patches are about
+   3 MB, against 300 MB for the full APK. The tool re-applies each patch to prove it rebuilds the new
+   APK byte for byte.
+4. Upload everything in `site/` to one HTTPS folder. A GitHub release works; its stable link is
+   `https://github.com/<owner>/<repo>/releases/latest/download/update.json`.
+5. Point the app at that `update.json`, either at build time with `-Preel.updateUrl=...` or in the
+   app under Settings → Updates. **No update source is configured yet.** The owner has to choose a
+   host.
+
+The app checks the manifest on Home, downloads the patch for its own versionCode and rebuilds the
+APK from the installed one. It verifies the SHA-256, then installs through `PackageInstaller`. It
+falls back to the full APK when no patch fits. Updating from 1.3.0 or older needs one manual install
+of 1.4.0 or later, because the updater arrived in 1.4.0.
+
+Release APKs sent to the owner so far: 1.0 through 1.6.0. Patches exist for 1.4.0 → 1.6.0 and
+1.5.0 → 1.6.0.
+
+---
+
+## 7. Known limits and weak spots
+
+- **Reverse** re-encodes the clip. Phones decode in hardware, but no phone timing has been taken.
+  On the emulator, 2 s of video took 45 s.
+- **Head tracking** uses Android's `FaceDetector` (frontal faces). When it finds none, it falls back
+  to the top of the person mask. It is fine for talking heads; it is not a general object tracker.
+- The text panel plus the keyboard leaves a small preview on short phones.
+- Caption translation only goes into English; that is a limit of the model.
+- The `.reelproj` format copies every media file, so packed projects can be large.
+- The GIF palette is a fixed 252 colours with ordered dithering. It is fast and doesn't flicker,
+  but gradients band a little.
+- Not tapped through on the emulator yet: curved and gradient text, the letter animations, caption
+  Merge, and the Share project sheet. Their logic is covered by unit and device tests.
+
+---
+
+## 8. Backlog (agreed, not built)
+
+- Stabilization; smooth slow motion (frame interpolation); proxy editing for 4K.
+- Tracking any object, not just heads; separating voice from music.
+- Sound effects and royalty-free music libraries; title templates; one-tap templates. These need
+  licensed content.
+- A first-run walkthrough of the gestures; tablet and landscape layout.
+- Translating the UI into other languages. All strings are currently hard-coded in Compose and need
+  moving to `strings.xml`.
