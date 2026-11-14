@@ -81,31 +81,47 @@ fun ExportSheet(vm: EditorViewModel, onClose: () -> Unit, onStart: () -> Unit) {
     var s by remember { mutableStateOf(ExportSettings(height = com.reel.editor.Settings.exportHeight(ctx0), fps = com.reel.editor.Settings.exportFps(ctx0))) }
     val (w, h) = RenderPlans.canvasSize(project, s.height)
     val dur = TimelineMath.duration(project)
-    val bytes = Exporter.estimateBytes(project, s, dur)
+    val bytes = when (s.format) {
+        com.reel.editor.model.ExportFormat.VIDEO -> Exporter.estimateBytes(project, s, dur)
+        // About 0.1 byte per pixel per frame with the fixed palette.
+        com.reel.editor.model.ExportFormat.GIF -> RenderPlans.canvasSize(project, minOf(s.height, 360)).let { (w, h) -> (w.toLong() * h * minOf(s.fps, 15) * dur / 1_000_000 / 10) }
+        com.reel.editor.model.ExportFormat.AUDIO -> 192_000L / 8 * dur / 1_000_000
+    }
     Column(Modifier.padding(horizontal = 20.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Export", style = Title.copy(fontSize = 18.sp), modifier = Modifier.weight(1f).padding(top = 12.dp))
             IconBtn(Icons.Rounded.Close, "Close", iconSize = 20.dp, onClick = onClose)
         }
         Segmented(listOf("Video", "GIF", "Sound"), s.format.ordinal, { s = s.copy(format = com.reel.editor.model.ExportFormat.entries[it]) }, Modifier.fillMaxWidth())
-        var preset by remember { mutableStateOf<String?>(null) }
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            PRESETS.forEach { pr -> Chip(pr.name, preset == pr.name) { preset = pr.name; s = pr.settings } }
-        }
-        val needsVertical = PRESETS.firstOrNull { it.name == preset }?.vertical == true && project.canvas.ratio != com.reel.editor.model.AspectRatio.R9_16
-        if (needsVertical) {
-            // These apps fill the phone screen: offer to switch the canvas.
-            Chip("9:16", false, icon = Icons.Rounded.Warning) { vm.edit { p -> p.copy(canvas = p.canvas.copy(ratio = com.reel.editor.model.AspectRatio.R9_16)) } }
-        }
-        Stepper("Resolution", "$w × $h", HEIGHTS.map { it.second }, HEIGHTS.indexOfFirst { it.first == s.height }) { s = s.copy(height = HEIGHTS[it].first) }
-        Stepper("Frame rate", "${s.fps} fps", RATES.map { "$it" }, RATES.indexOf(s.fps)) { s = s.copy(fps = RATES[it]) }
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Bitrate", style = Title.copy(fontSize = 14.sp))
-            Segmented(listOf("Lower", "Recommended", "Higher"), s.bitrate.ordinal, { s = s.copy(bitrate = BitrateLevel.entries[it]) }, Modifier.fillMaxWidth())
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("HEVC (smaller files)", style = Body, modifier = Modifier.weight(1f))
-            Switch(s.hevc, { s = s.copy(hevc = it) }, colors = SwitchDefaults.colors(checkedTrackColor = C.Accent))
+        when (s.format) {
+            com.reel.editor.model.ExportFormat.VIDEO -> {
+            var preset by remember { mutableStateOf<String?>(null) }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PRESETS.forEach { pr -> Chip(pr.name, preset == pr.name) { preset = pr.name; s = pr.settings } }
+            }
+            val needsVertical = PRESETS.firstOrNull { it.name == preset }?.vertical == true && project.canvas.ratio != com.reel.editor.model.AspectRatio.R9_16
+            if (needsVertical) {
+                // These apps fill the phone screen: offer to switch the canvas.
+                Chip("9:16", false, icon = Icons.Rounded.Warning) { vm.edit { p -> p.copy(canvas = p.canvas.copy(ratio = com.reel.editor.model.AspectRatio.R9_16)) } }
+            }
+            Stepper("Resolution", "$w × $h", HEIGHTS.map { it.second }, HEIGHTS.indexOfFirst { it.first == s.height }) { s = s.copy(height = HEIGHTS[it].first) }
+            Stepper("Frame rate", "${s.fps} fps", RATES.map { "$it" }, RATES.indexOf(s.fps)) { s = s.copy(fps = RATES[it]) }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Bitrate", style = Title.copy(fontSize = 14.sp))
+                Segmented(listOf("Lower", "Recommended", "Higher"), s.bitrate.ordinal, { s = s.copy(bitrate = BitrateLevel.entries[it]) }, Modifier.fillMaxWidth())
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("HEVC (smaller files)", style = Body, modifier = Modifier.weight(1f))
+                Switch(s.hevc, { s = s.copy(hevc = it) }, colors = SwitchDefaults.colors(checkedTrackColor = C.Accent))
+            }
+            }
+            com.reel.editor.model.ExportFormat.GIF -> {
+                // GIFs stay small: short side 240 or 360, 10 or 15 frames a second.
+                val (gw, gh) = RenderPlans.canvasSize(project, minOf(s.height, 360))
+                Stepper("Size", "$gw × $gh", listOf("240p", "360p"), if (s.height <= 240) 0 else 1) { s = s.copy(height = if (it == 0) 240 else 360) }
+                Stepper("Frame rate", "${minOf(s.fps, 15)} fps", listOf("10", "15"), if (s.fps <= 10) 0 else 1) { s = s.copy(fps = if (it == 0) 10 else 15) }
+            }
+            com.reel.editor.model.ExportFormat.AUDIO -> Unit
         }
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.Bg).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Folder, null, tint = C.Soft, modifier = Modifier.size(18.dp))
@@ -121,7 +137,7 @@ fun ExportSheet(vm: EditorViewModel, onClose: () -> Unit, onStart: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
         ) {
             Icon(Icons.Rounded.FileUpload, null, tint = C.Bg)
-            Text("Export video", style = Title.copy(fontSize = 16.sp, color = C.Bg), modifier = Modifier.padding(start = 10.dp))
+            Text(when (s.format) { com.reel.editor.model.ExportFormat.GIF -> "Export GIF"; com.reel.editor.model.ExportFormat.AUDIO -> "Export sound"; else -> "Export video" }, style = Title.copy(fontSize = 16.sp, color = C.Bg), modifier = Modifier.padding(start = 10.dp))
         }
         Spacer(Modifier.height(8.dp))
     }

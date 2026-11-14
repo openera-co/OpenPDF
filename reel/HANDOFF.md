@@ -200,8 +200,10 @@ Release APKs sent to the owner so far: 1.0 through 1.6.0. Patches exist for 1.4.
 - The `.reelproj` format copies every media file, so packed projects can be large.
 - The GIF palette is a fixed 252 colours with ordered dithering. It is fast and doesn't flicker,
   but gradients band a little.
-- Not tapped through on the emulator yet: curved and gradient text, the letter animations, caption
-  Merge, and the Share project sheet. Their logic is covered by unit and device tests.
+- Save frame captures the preview's own resolution (the screen width, about 600 to 1080 px wide), not
+  the export resolution.
+- Not tapped through on the emulator yet: caption Merge and the Share project send sheet. Their
+  logic is covered by unit and device tests.
 
 ---
 

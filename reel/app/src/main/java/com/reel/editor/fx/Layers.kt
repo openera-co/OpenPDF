@@ -309,17 +309,27 @@ object LayerBitmaps {
         val cy = size / 2f
         val path = android.graphics.Path()
         val oval = RectF(cx - r, cy - r, cx + r, cy + r)
-        // Smile (curve > 0): text along the bottom of the circle, read left to right.
-        if (st.curve > 0) path.addArc(oval, 90f + angle / 2, -angle) else path.addArc(oval, 270f - angle / 2, angle)
+        // Smile (curve > 0): the text runs left to right along the bottom of a circle, letters
+        // pointing at its centre. Arch: along the top, letters pointing away. (Checked on a device.)
+        val smile = st.curve > 0
+        if (smile) path.addArc(oval, 90f + angle / 2, -angle) else path.addArc(oval, 270f - angle / 2, angle)
         val full = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(full)
-        val vOffset = if (st.curve > 0) -paint.textSize * 0.25f else paint.textSize * 0.35f
+        val vOffset = if (smile) paint.textSize * 0.35f else -paint.textSize * 0.25f
         if (st.strokeWidth > 0f) {
             val sp = Paint(paint).apply { style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND; strokeWidth = st.strokeWidth * unit * 2; color = st.strokeColor.toInt() }
             c.drawTextOnPath(layer.text, path, 0f, vOffset, sp)
         }
         if (st.shadow) paint.setShadowLayer(8 * unit, 0f, 3 * unit, Color.argb(140, 0, 0, 0))
-        st.gradient?.let { g -> paint.shader = android.graphics.LinearGradient(0f, cy - r - pad, 0f, cy + r + pad, st.color.toInt(), g.toInt(), android.graphics.Shader.TileMode.CLAMP) }
+        // The fade runs across the letters (top of each letter to its foot), so it follows the curve.
+        st.gradient?.let { g ->
+            val outer = r + paint.textSize * 1.1f
+            val inner = (r - paint.textSize * 1.1f).coerceAtLeast(1f)
+            val p0 = inner / outer
+            // Arch: letter tops point away from the centre; smile: towards it. Text colour at the tops.
+            val colors = if (smile) intArrayOf(st.color.toInt(), g.toInt()) else intArrayOf(g.toInt(), st.color.toInt())
+            paint.shader = android.graphics.RadialGradient(cx, cy, outer, colors, floatArrayOf(p0, 1f), android.graphics.Shader.TileMode.CLAMP)
+        }
         c.drawTextOnPath(layer.text, path, 0f, vOffset, paint)
         // Trim to what was drawn.
         val px = IntArray(size * size); full.getPixels(px, 0, size, 0, 0, size, size)
