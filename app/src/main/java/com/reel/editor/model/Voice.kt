@@ -76,9 +76,11 @@ object Ducking {
     /** Speech on the timeline from clips (with speed and trim) and voiceovers. */
     fun speechOnTimeline(project: Project, levels: (String) -> FloatArray?, perSec: Int): List<LongRange> {
         val ranges = ArrayList<LongRange>()
+        // Sound switched off on the timeline doesn't count as someone speaking.
+        val videoMuted = project.tracks.isMuted(TrackFlags.VIDEO)
         for (pc in TimelineMath.place(project.clips)) {
             val c = pc.clip
-            if (c.kind != ClipKind.VIDEO || !c.hasAudio || c.muted || c.volume <= 0f) continue
+            if (videoMuted || c.kind != ClipKind.VIDEO || !c.hasAudio || c.muted || c.volume <= 0f) continue
             val lv = levels(c.uri) ?: continue
             for (r in activeInSource(lv, perSec)) {
                 val a = max(r.first, c.trimStartUs)
@@ -90,7 +92,7 @@ object Ducking {
             }
         }
         for (a in project.audio) {
-            if (a.kind != AudioKind.VOICEOVER || a.volume <= 0f) continue
+            if (a.kind != AudioKind.VOICEOVER || a.muted || a.volume <= 0f) continue
             val lv = levels(a.uri) ?: continue
             for (r in activeInSource(lv, perSec)) {
                 val x = max(r.first, a.trimStartUs)

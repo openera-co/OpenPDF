@@ -1,2 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<network-security-config />
+<!-- Release: encrypted connections only, on every Android version (8.x allowed plain HTTP by default). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

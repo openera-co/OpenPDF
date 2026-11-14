@@ -81,7 +81,17 @@ fun HomeScreen(store: ProjectStore, thumbnails: Thumbnails, onNew: () -> Unit, o
     if (updates) UpdateSourceDialog { updates = false }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Quiet check on launch: the card only appears when there is an update.
-    androidx.compose.runtime.LaunchedEffect(Unit) { com.reel.editor.update.Updater.check(ctx, quiet = true) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        com.reel.editor.update.Updater.cleanUp(ctx)
+        com.reel.editor.update.Updater.check(ctx, quiet = true)
+    }
+    // Back from the "install unknown apps" screen: continue the update.
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) com.reel.editor.update.Updater.resume(ctx) }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),

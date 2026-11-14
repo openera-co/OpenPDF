@@ -15,6 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.AlertDialog
@@ -27,7 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,7 +36,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.reel.editor.update.Updater
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private fun mb(bytes: Long) = if (bytes < 1_000_000) "${(bytes / 1000).coerceAtLeast(1)} KB" else "%.1f MB".format(bytes / 1e6)
@@ -44,7 +44,6 @@ private fun mb(bytes: Long) = if (bytes < 1_000_000) "${(bytes / 1000).coerceAtL
 @Composable
 fun UpdateCard() {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     val state by Updater.state.collectAsStateCompat()
     val s = state
     AnimatedVisibility(s !is Updater.State.Idle) {
@@ -58,7 +57,9 @@ fun UpdateCard() {
                     is Updater.State.Available -> {
                         Text("Reel ${s.info.versionName}", style = Title)
                         Text(mb(s.downloadBytes), style = Body.copy(color = C.Muted))
+                        if (s.info.notes.isNotBlank()) Text(s.info.notes, style = Body.copy(color = C.Soft), maxLines = 4)
                     }
+                    Updater.State.NeedsPermission -> Icon(Icons.Rounded.Lock, "Allow installs from Reel", tint = C.Key)
                     is Updater.State.Downloading -> {
                         Text("Reel ${s.info.versionName}", style = Title)
                         LinearProgressIndicator(progress = { s.fraction }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape), color = C.Accent, trackColor = C.Surface2)
@@ -71,12 +72,13 @@ fun UpdateCard() {
                 }
             }
             when (s) {
-                is Updater.State.Available -> PillButton(Icons.Rounded.SystemUpdate, "Update", accent = true) { scope.launch { Updater.install(ctx) } }
+                is Updater.State.Available -> PillButton(Icons.Rounded.SystemUpdate, "Update", accent = true) { Updater.installAsync(ctx) }
                 is Updater.State.Downloading -> Text("${(s.fraction * 100).roundToInt()}%", style = Mono)
-                is Updater.State.Failed -> IconBtn(Icons.Rounded.Refresh, "Try again", background = C.Surface2, size = 36.dp) { scope.launch { Updater.check(ctx) } }
+                Updater.State.NeedsPermission -> PillButton(Icons.Rounded.Settings, "Allow", accent = true) { Updater.installAsync(ctx) }
+                is Updater.State.Failed -> IconBtn(Icons.Rounded.Refresh, "Try again", background = C.Surface2, size = 36.dp) { Updater.checkAsync(ctx) }
                 else -> Unit
             }
-            if (s is Updater.State.Available || s is Updater.State.Failed || s is Updater.State.UpToDate) {
+            if (s is Updater.State.Available || s is Updater.State.Failed || s is Updater.State.UpToDate || s is Updater.State.NeedsPermission) {
                 IconBtn(Icons.Rounded.Close, "Hide", size = 32.dp) { Updater.dismiss() }
             }
         }
@@ -87,7 +89,6 @@ fun UpdateCard() {
 @Composable
 fun UpdateSourceDialog(onDismiss: () -> Unit) {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
     var url by remember { mutableStateOf(Updater.url(ctx)) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -97,7 +98,7 @@ fun UpdateSourceDialog(onDismiss: () -> Unit) {
             OutlinedTextField(url, { url = it }, singleLine = true, leadingIcon = { Icon(Icons.Rounded.Link, null) }, placeholder = { Text("https://…/update.json") }, modifier = Modifier.fillMaxWidth())
         },
         confirmButton = {
-            TextButton({ Updater.setUrl(ctx, url); onDismiss(); scope.launch { Updater.check(ctx) } }) { Text("Check") }
+            TextButton({ Updater.setUrl(ctx, url); onDismiss(); Updater.checkAsync(ctx) }) { Text("Check") }
         },
         dismissButton = { TextButton(onDismiss) { Text("Close") } },
     )

@@ -2,7 +2,7 @@
 """
 Builds an in-app update for Reel.
 
-    make_update.py --new app-release.apk --old 1.3.0.apk [--old 1.2.0.apk ...] --base-url URL --out DIR
+    make_update.py --new app-release.apk --old 1.3.0.apk [--old 1.2.0.apk ...] --out DIR
 
 Writes DIR/update.json, DIR/reel-<version>.apk and one patch per old APK. A patch rebuilds the new
 APK byte for byte from the APK already installed: zip entries whose bytes didn't change (the speech
@@ -121,19 +121,21 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--new", required=True)
     ap.add_argument("--old", action="append", default=[])
-    ap.add_argument("--base-url", required=True, help="where the files in --out will be served from")
+    ap.add_argument("--base-url", default="", help="optional absolute prefix; by default file names are relative to update.json")
     ap.add_argument("--out", required=True)
     ap.add_argument("--notes", default="")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     code, name = badging(a.new)
     base = a.base_url.rstrip("/")
+    def link(name):
+        return f"{base}/{name}" if base else name
     full = f"reel-{name}.apk"
     shutil.copyfile(a.new, os.path.join(a.out, full))
     target = sha256(a.new)
     manifest = {
         "versionCode": code, "versionName": name, "notes": a.notes,
-        "apk": {"url": f"{base}/{full}", "size": os.path.getsize(a.new), "sha256": target},
+        "apk": {"url": link(full), "size": os.path.getsize(a.new), "sha256": target},
         "patches": [],
     }
     for old in a.old:
@@ -147,7 +149,7 @@ def main():
         os.remove(check)
         if not ok:
             raise SystemExit(f"patch from {oname} does not rebuild the new APK")
-        manifest["patches"].append({"from": ocode, "url": f"{base}/{pname}", "size": os.path.getsize(ppath), "sourceSha256": sha256(old)})
+        manifest["patches"].append({"from": ocode, "url": link(pname), "size": os.path.getsize(ppath), "sourceSha256": sha256(old)})
         print(f"{oname} -> {name}: patch {os.path.getsize(ppath) / 1e6:.1f} MB (copies {copied / 1e6:.1f} MB, ships {literal / 1e6:.1f} MB)")
     with open(os.path.join(a.out, "update.json"), "w") as f:
         json.dump(manifest, f, indent=2)

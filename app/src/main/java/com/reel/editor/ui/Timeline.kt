@@ -375,6 +375,10 @@ fun Timeline(
                     if (x1 < 0 || x0 > size.width) continue
                     drawClip(p, x0, x1, clipY, clipH, tileW, scale, thumbs, waveforms[p.clip.uri], corner, measurer)
                 }
+                // A hidden video track stays visible on the timeline, just dimmed.
+                if (project.tracks.isHidden(TrackFlags.VIDEO) && placed.isNotEmpty()) {
+                    drawRect(C.Track.copy(alpha = 0.65f), Offset(xOf(0), clipY), Size(xOf(total) - xOf(0), clipH))
+                }
                 // Transition markers
                 for (p in placed) if (p.index > 0) {
                     val x = xOf(p.startUs)

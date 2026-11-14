@@ -7,7 +7,10 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
 import com.reel.editor.BuildConfig
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
@@ -51,12 +54,24 @@ object Updater {
         data object Verifying : State
         data object Installing : State
         data class Failed(val message: String) : State
+        /** Android needs the "install unknown apps" switch for Reel before it can update itself. */
+        data object NeedsPermission : State
     }
 
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state
     private val json = Json { ignoreUnknownKeys = true }
     private const val PREFS = "updates"
+    /** Updates outlive the screen that started them: closing a dialog or leaving Home doesn't stop one. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    fun checkAsync(context: Context, quiet: Boolean = false) { scope.launch { check(context.applicationContext, quiet) } }
+    fun installAsync(context: Context) { scope.launch { install(context.applicationContext) } }
+
+    /** Leftovers from an update that already went in. */
+    fun cleanUp(context: Context) {
+        scope.launch(Dispatchers.IO) { File(context.cacheDir, "update").deleteRecursively() }
+    }
 
     fun url(context: Context): String =
         context.getSharedPreferences(PREFS, 0).getString("url", null)?.takeIf { it.isNotBlank() } ?: BuildConfig.UPDATE_URL
@@ -82,13 +97,36 @@ object Updater {
         }
     }
 
-    fun dismiss() { _state.value = State.Idle }
+    fun dismiss() { _state.value = State.Idle; pending = null }
+
+    /** Kept while the user is away turning on "install unknown apps". */
+    private var pending: State.Available? = null
+
+    /** Back from settings: carry on if the switch is now on. */
+    fun resume(context: Context) {
+        if (_state.value != State.NeedsPermission) return
+        if (Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()) installAsync(context)
+    }
 
     /** Downloads (patch or full APK), verifies and starts the install. */
     suspend fun install(context: Context) {
-        val avail = _state.value as? State.Available ?: return
+        val avail = (_state.value as? State.Available) ?: (pending.takeIf { _state.value == State.NeedsPermission }) ?: return
         val info = avail.info
         val app = context.applicationContext
+        if (Build.VERSION.SDK_INT >= 26 && !app.packageManager.canRequestPackageInstalls()) {
+            pending = avail
+            _state.value = State.NeedsPermission
+            app.startActivity(
+                Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:${app.packageName}"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            return
+        }
+        pending = null
+        // Rebuilding needs room for the whole new APK next to the installed one.
+        val need = info.apk.size + (64L shl 20)
+        val free = app.cacheDir.usableSpace
+        if (free < need) { _state.value = State.Failed("Needs ${need / 1_000_000} MB free space"); return }
         val dir = File(app.cacheDir, "update").apply { deleteRecursively(); mkdirs() }
         val apk = File(dir, "reel-${info.versionName}.apk")
         try {
@@ -251,8 +289,11 @@ object Updater {
                 @Suppress("DEPRECATION") val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 confirm?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)?.let { context.startActivity(it) }
             }
-            PackageInstaller.STATUS_SUCCESS -> _state.value = State.Idle
-            else -> _state.value = State.Failed(intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "Install was cancelled")
+            PackageInstaller.STATUS_SUCCESS -> { _state.value = State.Idle; cleanUp(context) }
+            else -> {
+                cleanUp(context)
+                _state.value = State.Failed(intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "Install was cancelled")
+            }
         }
     }
 }
