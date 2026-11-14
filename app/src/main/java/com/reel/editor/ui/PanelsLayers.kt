@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.VolumeDown
+import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.Block
@@ -328,8 +330,21 @@ fun AudioPanel(vm: EditorViewModel, onClose: () -> Unit) {
             ValueSlider(Icons.Rounded.Gradient, "Fade out", selected.fadeOutUs / 1e6f, 0f..maxFade, { "%.1fs".format(it) }, C.Music, default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
                 vm.live { p -> p.copy(audio = p.audio.map { if (it.id == selected.id) it.copy(fadeOutUs = (v * 1e6).toLong()) else it }) }
             }
+            if (selected.kind == AudioKind.MUSIC) {
+                // Auto-duck: the music dips while someone speaks.
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(Icons.Rounded.RecordVoiceOver, null, tint = C.Music, modifier = Modifier.size(20.dp))
+                    Text("Auto duck", style = Body)
+                    Spacer(Modifier.weight(1f))
+                    androidx.compose.material3.Switch(selected.duck, { vm.setDuck(selected.id, it) }, colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = C.Music))
+                }
+                if (selected.duck) {
+                    ValueSlider(Icons.Rounded.VolumeDown, "Duck depth", -selected.duckDb, 3f..30f, { "-${it.roundToInt()} dB" }, C.Music, default = 14f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
+                        vm.live { p -> p.copy(audio = p.audio.map { if (it.id == selected.id) it.copy(duckDb = -v) else it }) }
+                    }
+                }
+            }
             Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (selected.beatsUs.isNotEmpty()) Text("${selected.beatsUs.size} beats", style = Label.copy(color = C.Key))
                 Spacer(Modifier.weight(1f))
                 PillButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }

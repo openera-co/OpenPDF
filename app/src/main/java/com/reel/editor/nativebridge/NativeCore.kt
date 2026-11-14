@@ -47,4 +47,21 @@ object NativeCore {
     external fun speechTranscribe(handle: Long, samples16k: FloatArray, language: String, translate: Boolean, threads: Int, listener: ProgressListener?): Array<Any>?
 
     external fun resample(samples: FloatArray, fromRate: Int, toRate: Int): FloatArray
+
+    // ------------------------------------------------------------------ voice processing
+
+    /** [effect] is a native effect id (see VoiceEffects). Free with [voiceFree]. */
+    external fun voiceCreate(rate: Int, channels: Int, enhance: Float, denoise: Float, normalize: Boolean, effect: Int): Long
+
+    external fun voiceFree(handle: Long)
+
+    external fun voiceReset(handle: Long)
+
+    /** Processes interleaved floats in a direct buffer in place; returns frames written. */
+    external fun voiceProcess(handle: Long, io: java.nio.ByteBuffer, frames: Int): Int
+
+    /** Writes frames held back by the noise reducer; returns frames. */
+    external fun voiceDrain(handle: Long, out: java.nio.ByteBuffer, maxFrames: Int): Int
+
+    external fun voiceLatency(handle: Long): Int
 }

@@ -35,6 +35,8 @@ class VolumeFadeProcessor(
     private val durationUs: Long,
     /** Maps a media offset reported by flush metadata to timeline offset. */
     private val mediaToTimeline: (Long) -> Long = { it },
+    /** Extra gain over the item's timeline offset (auto-duck), or null. */
+    private val extraGain: ((Long) -> Float)? = null,
 ) : BaseAudioProcessor() {
     private var framesSinceFlush = 0L
     private var startOffsetUs = 0L
@@ -46,7 +48,7 @@ class VolumeFadeProcessor(
         return inputAudioFormat
     }
 
-    override fun isActive(): Boolean = super.isActive() && (volume != 1f || fadeInUs > 0 || fadeOutUs > 0)
+    override fun isActive(): Boolean = super.isActive() && (volume != 1f || fadeInUs > 0 || fadeOutUs > 0 || extraGain != null)
 
     override fun onFlush(streamMetadata: AudioProcessor.StreamMetadata) {
         framesSinceFlush = 0
@@ -58,6 +60,7 @@ class VolumeFadeProcessor(
         if (fadeInUs > 0 && timeUs < fadeInUs) g *= timeUs.toFloat() / fadeInUs
         val left = durationUs - timeUs
         if (fadeOutUs > 0 && left < fadeOutUs) g *= max(0f, left.toFloat() / fadeOutUs)
+        extraGain?.let { g *= it(timeUs) }
         return g
     }
 

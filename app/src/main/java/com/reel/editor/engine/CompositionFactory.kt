@@ -49,10 +49,11 @@ object CompositionFactory {
                 ).build()
             }
             val audio = ArrayList<AudioProcessor>()
+            audio += voiceProcessors(clip.voice)
             val volume = if (clip.muted) 0f else clip.volume
-            audio += VolumeFadeProcessor(volume, clip.fadeInUs, clip.fadeOutUs, p.durationUs) { media ->
+            audio += VolumeFadeProcessor(volume, clip.fadeInUs, clip.fadeOutUs, p.durationUs, mediaToTimeline = { media ->
                 SpeedMath.mediaToTimeline(clip.speed, clip.trimmedDurationUs, media)
-            }
+            })
             val b = EditedMediaItem.Builder(item)
                 .setEffects(Effects(audio, listOf(ClipRenderEffect(context, plan, live))))
             if (clip.kind == ClipKind.PHOTO) {
@@ -72,6 +73,9 @@ object CompositionFactory {
         sequences += EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO, C.TRACK_TYPE_VIDEO)).addItems(items).build()
 
         val total = TimelineMath.duration(project)
+        // Auto-duck: where people speak, from the waveform analysis already done for the timeline.
+        val analyzer = (context.applicationContext as? com.reel.editor.ReelApp)?.audio
+        val speech by lazy { com.reel.editor.model.Ducking.speechOnTimeline(project, { analyzer?.cached(it)?.peaks }, LEVELS_PER_SEC) }
         val music = project.audio.filter { it.startUs < total && it.durationUs > 0 }.sortedBy { it.startUs }
         if (music.isNotEmpty()) {
             // Overlapping audio items are split across sequences so each sequence stays gap-ordered.
@@ -92,7 +96,9 @@ object CompositionFactory {
                     val dur = end - a.trimStartUs
                     sb.addItem(
                         EditedMediaItem.Builder(mi).setRemoveVideo(true).setDurationUs(a.sourceDurationUs)
-                            .setEffects(Effects(listOf(VolumeFadeProcessor(a.volume, a.fadeInUs, a.fadeOutUs, dur)), emptyList()))
+                            .setEffects(Effects(voiceProcessors(a.voice) + VolumeFadeProcessor(a.volume, a.fadeInUs, a.fadeOutUs, dur,
+                                extraGain = if (a.duck && a.kind == com.reel.editor.model.AudioKind.MUSIC) { off -> com.reel.editor.model.Ducking.gainAt(speech, a.startUs + off, a.duckDb) } else null,
+                            ), emptyList()))
                             .build(),
                     )
                     t = a.startUs + dur
@@ -109,11 +115,28 @@ object CompositionFactory {
         return Built(cb.build(), w, h, total)
     }
 
-    /** Parts of a project that need a new composition when they change. Everything else updates live. */
-    fun structure(project: Project): Any = listOf(
+    /** Waveform levels per second, as produced by AudioAnalyzer. */
+    const val LEVELS_PER_SEC = 40
+
+    /** Pitch (Sonic) then the native voice chain; nothing when the voice is untouched. */
+    private fun voiceProcessors(fx: com.reel.editor.model.VoiceFx): List<AudioProcessor> {
+        if (fx.isIdentity) return emptyList()
+        val out = ArrayList<AudioProcessor>()
+        val pitch = com.reel.editor.model.VoiceEffects.pitchFactor(fx.effect)
+        if (pitch != 1f) out += androidx.media3.common.audio.SonicAudioProcessor().apply { setPitch(pitch) }
+        out += VoiceProcessor(fx)
+        return out
+    }
+
+    /**
+     * Parts of a project that need a new composition when they change. Everything else updates
+     * live. [analyzed] lists sources whose levels are known, so auto-duck rebuilds when they arrive.
+     */
+    fun structure(project: Project, analyzed: Set<String> = emptySet()): Any = listOf(
         project.canvas.ratio,
-        project.clips.map { listOf(it.id, it.uri, it.kind, it.trimStartUs, it.trimEndUs, it.speed, it.keepPitch, it.muted, it.volume, it.fadeInUs, it.fadeOutUs) },
+        project.clips.map { listOf(it.id, it.uri, it.kind, it.trimStartUs, it.trimEndUs, it.speed, it.keepPitch, it.muted, it.volume, it.fadeInUs, it.fadeOutUs, it.voice) },
         project.audio,
+        if (project.audio.any { it.duck }) analyzed else emptySet<String>(),
     )
 
     /** Bitrate that keeps quality consistent across resolutions and frame rates. */

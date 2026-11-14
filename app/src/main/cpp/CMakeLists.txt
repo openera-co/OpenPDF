@@ -22,7 +22,7 @@ set(WHISPER_SDL2 OFF CACHE BOOL "" FORCE)
 set(WHISPER_CURL OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
 
-add_library(reelcore_static STATIC looks.cpp audio_analysis.cpp image_ops.cpp captions_core.cpp)
+add_library(reelcore_static STATIC looks.cpp audio_analysis.cpp image_ops.cpp captions_core.cpp voice_dsp.cpp)
 target_compile_options(reelcore_static PRIVATE -Wall -Wextra -ffast-math)
 target_link_libraries(reelcore_static PUBLIC whisper)
 
@@ -38,4 +38,7 @@ else()
     # Needs a model and a 16-bit wav: captions_test <model> <wav>
     add_executable(captions_test tests/captions_test.cpp)
     target_link_libraries(captions_test reelcore_static)
+    add_executable(voice_test tests/voice_test.cpp)
+    target_link_libraries(voice_test reelcore_static)
+    add_test(NAME voice_test COMMAND voice_test)
 endif()

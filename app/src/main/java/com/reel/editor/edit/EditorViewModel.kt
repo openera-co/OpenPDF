@@ -42,7 +42,7 @@ sealed interface Selection {
 
 enum class Panel {
     SPEED, VOLUME, ANIMATION, FILTERS, ADJUST, EFFECTS, TRANSITION, TEXT_EDIT, TEXT_STYLE, TEXT_ANIM,
-    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS
+    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE
 }
 
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
@@ -242,6 +242,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.Default) {
             val a = audioAnalyzer.analyze(uri) ?: return@launch
             _waveforms.value = _waveforms.value + (uri to a.peaks)
+            // Auto-duck depends on these levels: refresh the preview once they are known.
+            if (_project.value.audio.any { it.duck }) withContext(Dispatchers.Main) { preview.update(_project.value) }
             if (audioItemId != null && a.beatsUs.isNotEmpty()) {
                 withContext(Dispatchers.Main) {
                     // Beats are analysis results, not an edit: no undo step.
@@ -470,6 +472,22 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         if (gesture) live(f) else edit(f)
         p.hashCode()
     }
+
+    // ------------------------------------------------------------------ voice
+
+    /** Applies voice settings to the selected clip or audio item. */
+    fun setVoice(target: Selection, gesture: Boolean = false, change: (com.reel.editor.model.VoiceFx) -> com.reel.editor.model.VoiceFx) {
+        when (target) {
+            is Selection.ClipSel -> updateClip(target.id, gesture) { it.copy(voice = change(it.voice)) }
+            is Selection.AudioSel -> {
+                val f: (Project) -> Project = { p -> p.copy(audio = p.audio.map { if (it.id == target.id) it.copy(voice = change(it.voice)) else it }) }
+                if (gesture) live(f) else edit(f)
+            }
+            else -> Unit
+        }
+    }
+
+    fun setDuck(id: String, on: Boolean) = updateAudio(id) { it.copy(duck = on) }
 
     // ------------------------------------------------------------------ beat markers
 

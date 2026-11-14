@@ -75,6 +75,7 @@ import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material.icons.rounded.ClosedCaption
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.FindReplace
@@ -359,6 +360,7 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.ContentCut, "Split") { vm.split() }
                 ToolButton(Icons.Rounded.Speed, "Speed") { vm.openPanel(Panel.SPEED) }
                 ToolButton(Icons.Rounded.VolumeUp, "Volume") { vm.openPanel(Panel.VOLUME) }
+                ToolButton(Icons.Rounded.RecordVoiceOver, "Voice", active = vm.targetClip()?.voice?.isIdentity == false) { vm.openPanel(Panel.VOICE) }
                 ToolButton(Icons.Rounded.Animation, "Animate") { vm.openPanel(Panel.ANIMATION) }
                 ToolButton(Icons.Rounded.FilterVintage, "Filters") { vm.openPanel(Panel.FILTERS) }
                 ToolButton(Icons.Rounded.Tune, "Adjust") { vm.openPanel(Panel.ADJUST) }
@@ -388,6 +390,7 @@ private fun Toolbar(
             }
             is Selection.AudioSel -> {
                 ToolButton(Icons.Rounded.VolumeUp, "Volume") { vm.openPanel(Panel.AUDIO) }
+                ToolButton(Icons.Rounded.RecordVoiceOver, "Voice") { vm.openPanel(Panel.VOICE) }
                 ToolButton(Icons.Rounded.GraphicEq, "Beats") { vm.openPanel(Panel.BEATS) }
                 ToolButton(Icons.Rounded.ContentCut, "Split") { vm.split() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
@@ -429,6 +432,10 @@ private fun PanelHost(vm: EditorViewModel, panel: Panel, picking: Boolean, onPic
         Panel.CHROMA -> clip?.let { ChromaPanel(vm, it, picking, onPick, onClose) }
         Panel.CAPTIONS -> CaptionsPanel(vm, onClose)
         Panel.CUTOUT -> clip?.let { CutoutPanel(vm, it, onClose) }
+        Panel.VOICE -> when (val sel = selection) {
+            is Selection.AudioSel -> project.audio.firstOrNull { it.id == sel.id }?.let { VoicePanel(vm, sel, it.voice, onClose) }
+            else -> clip?.let { VoicePanel(vm, Selection.ClipSel(it.id), it.voice, onClose) }
+        }
         Panel.BEATS -> (selection as? Selection.AudioSel)?.let { s -> project.audio.firstOrNull { it.id == s.id } }?.let { BeatsPanel(vm, it, onClose) }
         else -> Unit
     }

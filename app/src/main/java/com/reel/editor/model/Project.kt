@@ -88,6 +88,7 @@ data class Clip(
     val transitionIn: TransitionRef? = null,
     val chroma: ChromaKey = ChromaKey(),
     val cutout: Cutout = Cutout(),
+    val voice: VoiceFx = VoiceFx(),
 ) {
     val trimmedDurationUs: Long get() = (trimEndUs - trimStartUs).coerceAtLeast(0)
 }
@@ -192,6 +193,21 @@ data class ChromaKey(
     val smoothness: Float = 0.2f,
     val spill: Float = 0.3f,
 )
+
+/** Voice tools for a clip's sound or an audio item. */
+@Serializable
+data class VoiceFx(
+    /** Vocal enhancer amount, 0..1. */
+    val enhance: Float = 0f,
+    /** Noise reduction amount, 0..1. */
+    val denoise: Float = 0f,
+    /** Keep the speaking level steady. */
+    val normalize: Boolean = false,
+    /** Voice effect id from [VoiceEffects], or null. */
+    val effect: String? = null,
+) {
+    val isIdentity: Boolean get() = enhance <= 0.001f && denoise <= 0.001f && !normalize && effect == null
+}
 
 /** Removes the background behind people and puts something else there. */
 @Serializable
@@ -303,6 +319,10 @@ data class AudioItem(
     val beatEvery: Int = 1,
     /** Markers placed by hand, in source time, so they move with the music. */
     val markersUs: List<Long> = emptyList(),
+    val voice: VoiceFx = VoiceFx(),
+    /** Lower this item while someone speaks (clip audio and voiceovers). */
+    val duck: Boolean = false,
+    val duckDb: Float = -14f,
 ) {
     val durationUs: Long get() = (trimEndUs - trimStartUs).coerceAtLeast(0)
     val endUs: Long get() = startUs + durationUs

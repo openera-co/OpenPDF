@@ -11,6 +11,7 @@
 
 #include "audio_analysis.h"
 #include "captions_core.h"
+#include "voice_dsp.h"
 #include "whisper.h"
 #include "image_ops.h"
 #include "looks.h"
@@ -206,6 +207,42 @@ JNIEXPORT jfloatArray JNICALL Java_com_reel_editor_nativebridge_NativeCore_resam
     jfloatArray arr = env->NewFloatArray(static_cast<jsize>(out.size()));
     env->SetFloatArrayRegion(arr, 0, static_cast<jsize>(out.size()), out.data());
     return arr;
+}
+
+// ------------------------------------------------------------------ voice processing
+
+JNIEXPORT jlong JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceCreate(JNIEnv*, jobject, jint rate, jint channels, jfloat enhance, jfloat denoise, jboolean normalize, jint effect) {
+    reel::VoiceSettings s;
+    s.enhance = enhance;
+    s.denoise = denoise;
+    s.normalize = normalize;
+    s.effect = static_cast<reel::VoiceEffect>(effect);
+    return reinterpret_cast<jlong>(new reel::VoiceChain(rate, channels, s));
+}
+
+JNIEXPORT void JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceFree(JNIEnv*, jobject, jlong h) {
+    delete reinterpret_cast<reel::VoiceChain*>(h);
+}
+
+JNIEXPORT void JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceReset(JNIEnv*, jobject, jlong h) {
+    reinterpret_cast<reel::VoiceChain*>(h)->reset();
+}
+
+// [io] is a direct buffer of interleaved floats, processed in place. Returns frames written.
+JNIEXPORT jint JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceProcess(JNIEnv* env, jobject, jlong h, jobject io, jint frames) {
+    auto* buf = static_cast<float*>(env->GetDirectBufferAddress(io));
+    if (!buf) return 0;
+    return reinterpret_cast<reel::VoiceChain*>(h)->process(buf, frames, buf);
+}
+
+JNIEXPORT jint JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceDrain(JNIEnv* env, jobject, jlong h, jobject out, jint maxFrames) {
+    auto* buf = static_cast<float*>(env->GetDirectBufferAddress(out));
+    if (!buf) return 0;
+    return reinterpret_cast<reel::VoiceChain*>(h)->drain(buf, maxFrames);
+}
+
+JNIEXPORT jint JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceLatency(JNIEnv*, jobject, jlong h) {
+    return reinterpret_cast<reel::VoiceChain*>(h)->latency();
 }
 
 }  // extern "C"

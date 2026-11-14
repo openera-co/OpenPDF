@@ -116,10 +116,15 @@ class PreviewController(context: Context) {
         outSurface = null
     }
 
+    private fun analyzed(p: Project): Set<String> {
+        val a = (app as? com.reel.editor.ReelApp)?.audio ?: return emptySet()
+        return (p.clips.map { it.uri } + p.audio.map { it.uri }).filter { a.cached(it) != null }.toSet()
+    }
+
     /** Call on every project change. */
     fun update(project: Project) {
         latest = project
-        val s = CompositionFactory.structure(project)
+        val s = CompositionFactory.structure(project, analyzed(project))
         if (s != structure || player == null) {
             pending = project
             main.removeCallbacks(rebuild)
@@ -135,7 +140,7 @@ class PreviewController(context: Context) {
         val p = pending ?: return@Runnable
         pending = null
         val built = CompositionFactory.build(app, p, CompositionFactory.PREVIEW_HEIGHT, live = live)
-        structure = CompositionFactory.structure(p)
+        structure = CompositionFactory.structure(p, analyzed(p))
         if (built == null) {
             player?.let { it.stop(); it.clearMediaItems() }
             durationUs = 0
