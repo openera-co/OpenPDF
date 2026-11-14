@@ -121,5 +121,9 @@ class Batch16Test {
         val packed = com.reel.editor.model.ProjectUris.map(p) { "media/" + it.hashCode() }
         org.junit.Assert.assertTrue(packed.clips[0].uri.startsWith("media/"))
         org.junit.Assert.assertEquals("shape:star", packed.stickers[0].source)
+        // Unpacking maps the packed paths back to real files.
+        val unpacked = com.reel.editor.model.ProjectUris.map(packed) { if (it.startsWith("media/")) "file:///x/" + it.removePrefix("media/") else it }
+        org.junit.Assert.assertTrue(unpacked.clips[0].uri.startsWith("file:///x/"))
+        org.junit.Assert.assertTrue(unpacked.audio[0].uri.startsWith("file:///x/"))
     }
 }

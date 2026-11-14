@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -334,7 +335,8 @@ private val ADJ = listOf(
 
 @Composable
 fun AdjustPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    // Scrolls when HSL's extra sliders don't fit; the curves editor keeps its own drags.
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SheetHeader("Adjust", Icons.Rounded.Tune, onClose = onClose, onDone = onClose)
         AdjustBody(vm, clip.adjust) { g, f -> vm.updateClip(clip.id, g) { it.copy(adjust = f(it.adjust)) } }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

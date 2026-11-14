@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.reel.editor.BuildConfig
+import kotlinx.coroutines.launch
 import com.reel.editor.Settings
 import com.reel.editor.model.AspectRatio
 
@@ -49,7 +50,10 @@ fun SettingsSheet(onClose: () -> Unit) {
     var ratio by remember { mutableStateOf(Settings.defaultRatio(ctx)) }
     var height by remember { mutableIntStateOf(Settings.exportHeight(ctx)) }
     var fps by remember { mutableIntStateOf(Settings.exportFps(ctx)) }
-    var cache by remember { mutableLongStateOf(dirSize(ctx.cacheDir)) }
+    var cache by remember { mutableLongStateOf(0L) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // Measuring and clearing the cache reads the disk: never on the main thread.
+    androidx.compose.runtime.LaunchedEffect(Unit) { cache = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { dirSize(ctx.cacheDir) } }
     var updates by remember { mutableStateOf(false) }
     if (updates) UpdateSourceDialog { updates = false }
     Column(Modifier.fillMaxWidth().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -71,8 +75,12 @@ fun SettingsSheet(onClose: () -> Unit) {
         Section(Icons.Rounded.SystemUpdate, "Updates") { Chip("Update source", false) { updates = true } }
         Section(Icons.Rounded.CleaningServices, "Storage") {
             Chip("Clear cache · ${cache / 1_000_000} MB", false) {
-                ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
-                cache = dirSize(ctx.cacheDir)
+                scope.launch {
+                    cache = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+                        dirSize(ctx.cacheDir)
+                    }
+                }
             }
         }
         Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {

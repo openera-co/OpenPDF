@@ -57,6 +57,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ContentCut
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.ContentPaste
@@ -258,30 +259,42 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
                 Text(" / ${formatTime(total)}", style = Mono.copy(color = C.Muted, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium))
             }
             IconBtn(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", iconSize = 28.dp, enabled = project.clips.isNotEmpty()) { vm.preview.toggle() }
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
+            Row(Modifier.weight(1.5f), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                 // Save frame needs the storage permission on Android 9 and older.
                 val askWrite = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
                     if (ok) vm.saveFrame() else vm.toast("Allow storage to save frames")
                 }
-                IconBtn(Icons.Rounded.PhotoCamera, "Save frame", iconSize = 20.dp) {
-                    val needs = android.os.Build.VERSION.SDK_INT < 29 && androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED
-                    if (needs) askWrite.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) else vm.saveFrame()
-                }
-                IconBtn(Icons.Rounded.Smartphone, "Safe area", tint = if (safeMode > 0) C.Accent else C.Text, iconSize = 20.dp) {
-                    val (sw, sh) = com.reel.editor.fx.RenderPlans.canvasSize(project, 1280)
-                    if (sw.toFloat() / sh > 0.7f) { vm.toast("Safe areas are for 9:16 videos"); return@IconBtn }
-                    safeMode = (safeMode + 1) % SAFE_AREAS.size.plus(1)
-                    vm.toast(if (safeMode == 0) "Safe area off" else SAFE_AREAS[safeMode - 1].name)
+                // Less frequent tools share one menu so the row fits narrow phones.
+                var more by remember { mutableStateOf(false) }
+                Box {
+                    IconBtn(Icons.Rounded.MoreVert, "More", tint = if (safeMode > 0) C.Accent else C.Text, size = 38.dp, iconSize = 20.dp) { more = true }
+                    androidx.compose.material3.DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
+                        androidx.compose.material3.DropdownMenuItem(text = { Text("Save frame") }, leadingIcon = { Icon(Icons.Rounded.PhotoCamera, null) }, onClick = {
+                            more = false
+                            val needs = android.os.Build.VERSION.SDK_INT < 29 && androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                            if (needs) askWrite.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) else vm.saveFrame()
+                        })
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(if (safeMode == 0) "Safe area" else SAFE_AREAS[safeMode - 1].name) },
+                            leadingIcon = { Icon(Icons.Rounded.Smartphone, null, tint = if (safeMode > 0) C.Accent else C.Text) },
+                            onClick = {
+                                val (sw, sh) = com.reel.editor.fx.RenderPlans.canvasSize(project, 1280)
+                                if (sw.toFloat() / sh > 0.7f) { more = false; vm.toast("Safe areas are for 9:16 videos"); return@DropdownMenuItem }
+                                // Stays open so you can step through TikTok, Reels, Shorts, off.
+                                safeMode = (safeMode + 1) % SAFE_AREAS.size.plus(1)
+                            },
+                        )
+                    }
                 }
                 if (transformInfo(project, selection, pos) != null) {
                     val keys = transformInfo(project, selection, pos)
                     val on = keys?.let { (_, k, s) -> k.any { abs(s + it.timeUs - pos) < 40_000 } } ?: false
-                    IconBtn(Icons.Rounded.Diamond, if (on) "Remove keyframe" else "Add keyframe", tint = if (on) C.Key else C.Text, iconSize = 20.dp) { vm.toggleKeyframe() }
+                    IconBtn(Icons.Rounded.Diamond, if (on) "Remove keyframe" else "Add keyframe", tint = if (on) C.Key else C.Text, size = 38.dp, iconSize = 20.dp) { vm.toggleKeyframe() }
                 }
                 // Hold undo to see every step and jump back several at once.
-                IconBtn(Icons.AutoMirrored.Rounded.Undo, "Undo", enabled = canUndo, iconSize = 20.dp, onLongClick = { vm.openPanel(Panel.HISTORY) }) { vm.undo() }
-                IconBtn(Icons.AutoMirrored.Rounded.Redo, "Redo", enabled = canRedo, iconSize = 20.dp) { vm.redo() }
-                IconBtn(if (fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, "Full screen", iconSize = 20.dp) { fullscreen = !fullscreen }
+                IconBtn(Icons.AutoMirrored.Rounded.Undo, "Undo", enabled = canUndo, size = 38.dp, iconSize = 20.dp, onLongClick = { vm.openPanel(Panel.HISTORY) }) { vm.undo() }
+                IconBtn(Icons.AutoMirrored.Rounded.Redo, "Redo", enabled = canRedo, size = 38.dp, iconSize = 20.dp) { vm.redo() }
+                IconBtn(if (fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, "Full screen", size = 38.dp, iconSize = 20.dp) { fullscreen = !fullscreen }
             }
         }
 

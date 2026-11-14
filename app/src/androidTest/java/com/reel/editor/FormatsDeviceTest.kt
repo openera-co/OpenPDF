@@ -55,11 +55,11 @@ class FormatsDeviceTest {
 
     @Test fun exportsAGif() {
         val d = export(project(), ExportSettings(format = ExportFormat.GIF))
-        val head = d.file.inputStream().use { it.readNBytes(6) }.decodeToString()
+        val head = d.file.inputStream().use { s -> ByteArray(6).also { s.read(it) } }.decodeToString()
         val bmp = android.graphics.BitmapFactory.decodeFile(d.file.absolutePath)
         Log.i(TAG, "gif ${d.file.length()} bytes ${bmp?.width}x${bmp?.height} uri=${d.uri}")
         assertEquals("GIF89a", head)
-        assertTrue(bmp != null && bmp.height <= 480 && bmp.width > 0)
+        assertTrue(bmp != null && minOf(bmp.width, bmp.height) <= 360)
         assertTrue(ctx.contentResolver.getType(d.uri)?.startsWith("image/") == true)
     }
 

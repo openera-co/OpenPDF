@@ -2,7 +2,8 @@ package com.reel.editor.model
 
 /** Every media file a project points at, and a way to repoint them all (used to pack and unpack projects). */
 object ProjectUris {
-    private fun isMedia(u: String) = u.startsWith("content:") || u.startsWith("file:")
+    /** Phone media, or a file packed inside a .reelproj ("media/…"). */
+    private fun isMedia(u: String) = u.startsWith("content:") || u.startsWith("file:") || u.startsWith("media/")
 
     fun all(p: Project): Set<String> = buildSet {
         p.clips.forEach { c -> add(c.uri); c.reversedFrom?.let { add(it.uri) }; c.cutout.imageUri?.let { add(it) } }

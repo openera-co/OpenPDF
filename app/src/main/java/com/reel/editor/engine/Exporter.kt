@@ -56,7 +56,7 @@ object Exporter {
         // GIFs are made from a small video first; sound-only skips the picture entirely.
         val gif = format == com.reel.editor.model.ExportFormat.GIF
         val audio = format == com.reel.editor.model.ExportFormat.AUDIO
-        val height = if (gif) minOf(settings.height, 480) else settings.height
+        val height = if (gif) minOf(settings.height, 360) else settings.height
         val fps = if (gif) minOf(settings.fps, 15) else settings.fps
         val built = CompositionFactory.build(app, project, height, fps, audioOnly = audio)
         progressScale = if (gif) 0.7f else 1f

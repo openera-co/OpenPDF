@@ -74,6 +74,10 @@ fun describe(a: Project, b: Project): String {
         x != y -> "$what changed"
         else -> null
     }
+    // Same words, more or fewer lines: a caption was split or merged.
+    val ca = a.texts.filter { it.isCaption }; val cb = b.texts.filter { it.isCaption }
+    fun words(l: List<com.reel.editor.model.TextLayer>) = l.sortedBy { it.startUs }.joinToString(" ") { it.text.trim() }.split(Regex("\\s+"))
+    if (ca.size != cb.size && ca.isNotEmpty() && cb.isNotEmpty() && words(ca) == words(cb)) return if (cb.size > ca.size) "Caption split" else "Captions merged"
     return change(a.clips, b.clips, "Clip")
         ?: change(a.texts.filter { !it.isCaption }, b.texts.filter { !it.isCaption }, "Text")
         ?: change(a.texts.filter { it.isCaption }, b.texts.filter { it.isCaption }, "Captions")
