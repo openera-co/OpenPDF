@@ -45,7 +45,8 @@ private val CUT_COLORS = listOf(0xFF14141C, 0xFFFFFFFF, 0xFF2BD46A, 0xFF1F6FFF, 
 @Composable
 fun CutoutPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
     val cut = clip.cutout
-    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    val picker = LocalPicker.current
+    val onImage: (android.net.Uri?) -> Unit = { uri ->
         if (uri != null) {
             runCatching { vm.getApplication<android.app.Application>().contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             vm.updateClip(clip.id) { it.copy(cutout = it.cutout.copy(enabled = true, mode = CutoutMode.IMAGE, imageUri = uri.toString())) }
@@ -60,7 +61,7 @@ fun CutoutPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
                 when (i) {
                     0 -> set { it.copy(enabled = true, mode = CutoutMode.BLUR) }
                     1 -> set { it.copy(enabled = true, mode = CutoutMode.COLOR) }
-                    else -> if (cut.imageUri == null) pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) else set { it.copy(enabled = true, mode = CutoutMode.IMAGE) }
+                    else -> if (cut.imageUri == null) picker.open(PickerRequest(setOf(com.reel.editor.media.MediaLibrary.Kind.PHOTO), multi = false) { onImage(it.firstOrNull()) }) else set { it.copy(enabled = true, mode = CutoutMode.IMAGE) }
                 }
             })
             Spacer(Modifier.weight(1f))
@@ -83,7 +84,7 @@ fun CutoutPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
             }
             CutoutMode.IMAGE -> Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PillButton(if (cut.imageUri == null) Icons.Rounded.AddPhotoAlternate else Icons.Rounded.Image, if (cut.imageUri == null) "Pick picture" else "Change picture") {
-                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    picker.open(PickerRequest(setOf(com.reel.editor.media.MediaLibrary.Kind.PHOTO), multi = false) { onImage(it.firstOrNull()) })
                 }
             }
         }

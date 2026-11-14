@@ -80,13 +80,22 @@ float personAlpha(vec2 uv) {
 
 float keyAlpha(vec3 c) {
   if (uKeyOn < 0.5) return 1.0;
+  // Distance in the chroma plane plus a little luminance, so shadows on the screen still key.
   float y = luma(c);
   vec2 cbcr = vec2(c.b - y, c.r - y);
   float ky = luma(uKeyColor);
   vec2 kcbcr = vec2(uKeyColor.b - ky, uKeyColor.r - ky);
-  float d = distance(cbcr, kcbcr);
-  float sim = uKeySimilarity * 0.4;
-  return smoothstep(sim, sim + max(0.001, uKeySmoothness * 0.3), d);
+  float d = distance(cbcr, kcbcr) + abs(y - ky) * 0.15;
+  float sim = uKeySimilarity * 0.45;
+  return smoothstep(sim, sim + max(0.002, uKeySmoothness * 0.35), d);
+}
+
+// Removes the key colour's tint from what is left (green fringes on hair and edges).
+vec3 despill(vec3 c) {
+  vec3 kch = uKeyColor - luma(uKeyColor);
+  vec3 dir = kch / max(length(kch), 1e-4);
+  float along = max(dot(c - luma(c), dir), 0.0);
+  return c - dir * along * uKeySpill;
 }
 
 void main() {
@@ -103,9 +112,6 @@ void main() {
   vec3 c = texture2D(uTex, clamp(uv, 0.0, 1.0)).rgb;
   if (uMaskOn > 0.5) bg = cutBackground(p, uv, bg, inside);
   float a = keyAlpha(c) * personAlpha(uv) * inside * uOpacity;
-  if (uKeyOn > 0.5) {
-    float y = luma(c);
-    c = mix(c, vec3(y), uKeySpill * (1.0 - keyAlpha(c)));
-  }
+  if (uKeyOn > 0.5) c = despill(c);
   gl_FragColor = vec4(mix(bg, c, a), 1.0);
 }

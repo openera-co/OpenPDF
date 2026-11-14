@@ -60,3 +60,49 @@ object CaptionGrouping {
         words = line.words.map { WordTiming(it.text, it.startUs - line.startUs, it.endUs - line.startUs) },
     )
 }
+
+/** Keeps auto captions on the speech they transcribe when clips are trimmed, moved, sped up or deleted. */
+object CaptionAnchor {
+    /** Ties each unanchored caption to the clip under its start, in source media time. */
+    fun anchor(p: Project, layers: List<TextLayer>): List<TextLayer> {
+        val placed = TimelineMath.place(p.clips)
+        return layers.map { l ->
+            if (!l.isCaption || l.anchorClipId != null) return@map l
+            val pc = placed.firstOrNull { l.startUs >= it.startUs && l.startUs < it.endUs } ?: return@map l
+            val c = pc.clip
+            fun media(t: Long) = c.trimStartUs + SpeedMath.timelineToMedia(c.speed, c.trimmedDurationUs, (t - pc.startUs).coerceIn(0, pc.durationUs))
+            l.copy(anchorClipId = c.id, anchorUri = c.uri, anchorMediaStartUs = media(l.startUs), anchorMediaEndUs = media(minOf(l.startUs + l.durationUs, pc.endUs)))
+        }
+    }
+
+    /** Moves anchored captions to where their speech now plays; drops ones whose speech was cut. */
+    fun reflow(p: Project): Project {
+        if (p.texts.none { it.anchorClipId != null }) return p
+        val all = TimelineMath.place(p.clips)
+        val placed = all.associateBy { it.clip.id }
+        var changed = false
+        val out = p.texts.mapNotNull { l ->
+            val id = l.anchorClipId ?: return@mapNotNull l
+            fun covers(x: Placed) = minOf(l.anchorMediaEndUs, x.clip.trimEndUs) - maxOf(l.anchorMediaStartUs, x.clip.trimStartUs) >= 200_000
+            // After a split or duplicate the speech may live in another clip of the same file.
+            val pc = placed[id]?.takeIf { covers(it) }
+                ?: all.firstOrNull { it.clip.uri == (l.anchorUri ?: placed[id]?.clip?.uri) && covers(it) }
+            if (pc == null) { changed = true; return@mapNotNull null }
+            val c = pc.clip
+            val trimEnd = c.trimStartUs + c.trimmedDurationUs
+            // Less than a fifth of a second of the speech left: the caption goes with it.
+            val visStart = maxOf(l.anchorMediaStartUs, c.trimStartUs)
+            val visEnd = minOf(l.anchorMediaEndUs, trimEnd)
+            if (visEnd - visStart < 200_000) { changed = true; return@mapNotNull null }
+            fun tl(m: Long) = pc.startUs + SpeedMath.mediaToTimeline(c.speed, c.trimmedDurationUs, (m - c.trimStartUs).coerceIn(0, c.trimmedDurationUs))
+            val s = tl(visStart)
+            val e = maxOf(tl(visEnd), s + 1)
+            val d = e - s
+            if (s == l.startUs && d == l.durationUs && c.id == id) return@mapNotNull l
+            changed = true
+            val k = if (l.durationUs > 0) d.toDouble() / l.durationUs else 1.0
+            l.copy(anchorClipId = c.id, startUs = s, durationUs = d, words = l.words.map { w -> w.copy(startUs = (w.startUs * k).toLong(), endUs = (w.endUs * k).toLong()) })
+        }
+        return if (changed) p.copy(texts = out) else p
+    }
+}

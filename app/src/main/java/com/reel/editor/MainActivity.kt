@@ -38,11 +38,12 @@ class MainActivity : ComponentActivity() {
         handleShare(intent)
         val app = application as ReelApp
         setContent {
-            ReelTheme {
+            ReelTheme { com.reel.editor.ui.MediaPickerHost {
+                val picker = com.reel.editor.ui.LocalPicker.current
                 // "home" | "edit:<project id or new>:<session>" | "export:<project id>:<session>"
                 var screen by rememberSaveable { mutableStateOf("home") }
                 var pendingUris by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
-                val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+                fun startNew(uris: List<Uri>) {
                     if (uris.isNotEmpty()) {
                         pendingUris = uris.map { it.toString() }
                         screen = "edit:new:${System.nanoTime()}"
@@ -61,7 +62,7 @@ class MainActivity : ComponentActivity() {
                     when (parts[0]) {
                         "home" -> HomeScreen(
                             app.store, app.thumbnails,
-                            onNew = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+                            onNew = { picker.open(com.reel.editor.ui.PickerRequest(setOf(com.reel.editor.media.MediaLibrary.Kind.VIDEO, com.reel.editor.media.MediaLibrary.Kind.PHOTO), multi = true) { startNew(it) }) },
                             onOpen = { id -> screen = "edit:$id:${System.nanoTime()}" },
                         )
                         else -> {
@@ -82,7 +83,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-            }
+            } }
         }
     }
 

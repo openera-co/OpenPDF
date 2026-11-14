@@ -63,6 +63,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.rounded.Colorize
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -77,6 +78,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.reel.editor.edit.EditorViewModel
+import com.reel.editor.model.TimelineMath
+import com.reel.editor.model.setKey
+import com.reel.editor.model.keyAt
 import com.reel.editor.fx.FxCatalog
 import com.reel.editor.model.Adjustments
 import com.reel.editor.model.AnimRef
@@ -113,7 +117,10 @@ fun SpeedPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SheetHeader("Speed", onClose = onClose, onDone = onClose, center = { Segmented(listOf("Normal", "Curve"), tab, { tab = it }) })
         if (clip.kind == ClipKind.PHOTO) {
-            Text("Photos play at their set length. Trim the photo on the timeline to change it.", style = Body.copy(color = C.Muted), modifier = Modifier.padding(20.dp))
+            // Photos have no speed; set how long they show instead.
+            ValueSlider(Icons.Rounded.AccessTime, "Length", clip.trimmedDurationUs / 1e6f, 0.5f..30f, { "%.1fs".format(it) }, default = 3f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
+                vm.updateClip(clip.id, true) { c -> val end = c.trimStartUs + (v * 1e6).toLong(); c.copy(trimEndUs = end, sourceDurationUs = maxOf(c.sourceDurationUs, end)) }
+            }
             return@Column
         }
         val newLen = clip.timelineDurationUs
@@ -125,18 +132,14 @@ fun SpeedPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
         if (tab == 0) {
             val s = clip.speed.constant
             Text("%.1fx".format(s), style = Title.copy(fontSize = 36.sp), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-            androidx.compose.material3.Slider(
-                value = speedToPos(s),
-                onValueChange = { v ->
-                    var sp = posToSpeed(v)
-                    for (snap in listOf(0.5f, 1f, 2f)) if (abs(speedToPos(sp) - speedToPos(snap)) < 0.02f) sp = snap
-                    vm.beginGesture()
-                    vm.updateClip(clip.id, gesture = true) { it.copy(speed = Speed(constant = (sp * 10).roundToInt() / 10f)) }
-                },
-                onValueChangeFinished = { vm.endGesture() },
-                colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = C.Text, inactiveTrackColor = C.Line),
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
+            ReelSlider(
+                speedToPos(s), 0f..1f, C.Text, Modifier.padding(horizontal = 22.dp), default = speedToPos(1f),
+                onStart = vm::beginGesture, onEnd = vm::endGesture,
+            ) { v ->
+                var sp = posToSpeed(v)
+                for (snap in listOf(0.5f, 1f, 2f)) if (abs(speedToPos(sp) - speedToPos(snap)) < 0.02f) sp = snap
+                vm.updateClip(clip.id, gesture = true) { it.copy(speed = Speed(constant = (sp * 10).roundToInt() / 10f)) }
+            }
             Row(Modifier.fillMaxWidth().padding(horizontal = 28.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 listOf("0.1x", "0.5x", "1x", "2x", "10x", "100x").forEach { Text(it, style = Label.copy(color = C.Muted)) }
             }
@@ -219,8 +222,23 @@ fun VolumePanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SheetHeader("Volume", Icons.Rounded.VolumeUp, onClose = onClose, onDone = onClose)
         val maxFade = (clip.timelineDurationUs / 2 / 1e6f).coerceAtLeast(0.1f)
-        ValueSlider(Icons.Rounded.VolumeUp, "Volume", clip.volume * 100, 0f..200f, { "${it.roundToInt()}%" }, C.Music, default = 100f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
-            vm.updateClip(clip.id, true) { it.copy(volume = v / 100f, muted = false) }
+        val pos by vm.preview.positionUs.collectAsStateCompat()
+        val start = TimelineMath.place(vm.project.value.clips).firstOrNull { it.clip.id == clip.id }?.startUs ?: 0L
+        val local = pos - start
+        val inside = local in 0..clip.timelineDurationUs
+        val vol = com.reel.editor.model.interpolateValue(clip.volume, clip.volumeKeys, local)
+        ValueSlider(
+            Icons.Rounded.VolumeUp, "Volume", vol * 100, 0f..200f, { "${it.roundToInt()}%" }, C.Music, default = 100f,
+            key = SliderKey(inside && clip.volumeKeys.keyAt(local) != null, clip.volumeKeys.isNotEmpty()) {
+                if (!inside) return@SliderKey
+                vm.updateClip(clip.id) { c ->
+                    val ex = c.volumeKeys.keyAt(local)
+                    if (ex != null) c.copy(volumeKeys = c.volumeKeys - ex) else c.copy(volumeKeys = c.volumeKeys.setKey(local, com.reel.editor.model.interpolateValue(c.volume, c.volumeKeys, local)))
+                }
+            },
+            onStart = vm::beginGesture, onEnd = vm::endGesture,
+        ) { v ->
+            vm.updateClip(clip.id, true) { c -> if (c.volumeKeys.isEmpty() || !inside) c.copy(volume = v / 100f, muted = false) else c.copy(volumeKeys = c.volumeKeys.setKey(local, v / 100f), muted = false) }
         }
         ValueSlider(Icons.Rounded.Gradient, "Fade in", clip.fadeInUs / 1e6f, 0f..maxFade, { "%.1fs".format(it) }, C.Music, default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
             vm.updateClip(clip.id, true) { it.copy(fadeInUs = (v * 1e6).toLong()) }
@@ -315,29 +333,37 @@ private val ADJ = listOf(
 
 @Composable
 fun AdjustPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
-    var current by remember { mutableStateOf("brightness") }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SheetHeader("Adjust", Icons.Rounded.Tune, onClose = onClose, onDone = onClose)
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            ADJ.forEach { d ->
-                val v = d.get(clip.adjust)
-                ParamButton(d.label, d.icon, current == d.key, if (v != 0f) "${(v * 100).roundToInt()}" else null) { current = d.key }
-            }
-            ParamButton("Curves", Icons.Rounded.ShowChart, current == "curves", if (!clip.adjust.curves.isIdentity) "•" else null) { current = "curves" }
-        }
-        if (current == "curves") {
-            CurvesEditor(clip.adjust.curves, onStart = vm::beginGesture, onEnd = vm::endGesture) { c -> vm.updateClip(clip.id, true) { it.copy(adjust = it.adjust.copy(curves = c)) } }
-        } else {
-            val d = ADJ.first { it.key == current }
-            ValueSlider(d.icon, d.label, d.get(clip.adjust) * 100, (if (d.signed) -100f else 0f)..100f, { "${it.roundToInt()}" }, C.Accent, default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
-                vm.updateClip(clip.id, true) { it.copy(adjust = d.set(it.adjust, v / 100f)) }
-            }
-        }
+        AdjustBody(vm, clip.adjust) { g, f -> vm.updateClip(clip.id, g) { it.copy(adjust = f(it.adjust)) } }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PillButton(Icons.Rounded.Refresh, "Reset") { vm.updateClip(clip.id) { it.copy(adjust = Adjustments()) } }
             PillButton(Icons.Rounded.ContentCopy, "Apply to all") { vm.edit { p -> p.copy(clips = p.clips.map { it.copy(adjust = clip.adjust) }) }; vm.toast("Applied to all clips") }
         }
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** Round parameter buttons with value badges, then the slider (or curves) for the chosen one. */
+@Composable
+fun AdjustBody(vm: EditorViewModel, adjust: Adjustments, set: (gesture: Boolean, (Adjustments) -> Adjustments) -> Unit) {
+    var current by remember { mutableStateOf("brightness") }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            ADJ.forEach { d ->
+                val v = d.get(adjust)
+                ParamButton(d.label, d.icon, current == d.key, if (v != 0f) "${(v * 100).roundToInt()}" else null) { current = d.key }
+            }
+            ParamButton("Curves", Icons.Rounded.ShowChart, current == "curves", if (!adjust.curves.isIdentity) "•" else null) { current = "curves" }
+        }
+        if (current == "curves") {
+            CurvesEditor(adjust.curves, onStart = vm::beginGesture, onEnd = vm::endGesture) { c -> set(true) { it.copy(curves = c) } }
+        } else {
+            val d = ADJ.first { it.key == current }
+            ValueSlider(d.icon, d.label, d.get(adjust) * 100, (if (d.signed) -100f else 0f)..100f, { "${it.roundToInt()}" }, C.Accent, default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
+                set(true) { d.set(it, v / 100f) }
+            }
+        }
     }
 }
 
@@ -499,24 +525,31 @@ fun CanvasPanel(vm: EditorViewModel, onClose: () -> Unit) {
 
 @Composable
 fun ChromaPanel(vm: EditorViewModel, clip: Clip, picking: Boolean, onPick: () -> Unit, onClose: () -> Unit) {
-    val k = clip.chroma
+    ChromaBody(vm, clip.chroma, picking, onPick, onClose) { g, f -> vm.updateClip(clip.id, g) { it.copy(chroma = f(it.chroma)) } }
+}
+
+@Composable
+fun ChromaBody(vm: EditorViewModel, k: com.reel.editor.model.ChromaKey, picking: Boolean, onPick: () -> Unit, onClose: () -> Unit, set: (Boolean, (com.reel.editor.model.ChromaKey) -> com.reel.editor.model.ChromaKey) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         SheetHeader("Chroma key", Icons.Rounded.InvertColors, iconTint = C.Good, onClose = onClose, onDone = onClose)
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(if (picking) C.Accent else C.Text).clickable(onClick = onPick), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Palette, "Pick color from video", tint = C.Bg)
+            Box(Modifier.size(44.dp).clip(CircleShape).background(if (picking) C.Accent else C.Text).clickable(onClick = onPick), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Colorize, "Pick color from video", tint = C.Bg)
             }
             listOf(0xFF2BD46A, 0xFF1F6FFF).forEach { col ->
-                Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color(col)).border(if (k.color == col && k.enabled) 3.dp else 0.dp, C.Accent, RoundedCornerShape(14.dp))
-                    .clickable { vm.updateClip(clip.id) { it.copy(chroma = it.chroma.copy(enabled = true, color = col)) } })
+                Box(Modifier.size(36.dp).clip(CircleShape).background(Color(col)).border(if (k.color == col && k.enabled) 3.dp else 0.dp, C.Accent, CircleShape)
+                    .clickable { set(false) { it.copy(enabled = true, color = col) } })
             }
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Color(k.color)))
+            Row(Modifier.clip(RoundedCornerShape(10.dp)).background(C.Surface2).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.size(16.dp).clip(CircleShape).background(Color(k.color)))
+                Text("#%06X".format(k.color and 0xFFFFFF), style = Mono.copy(color = C.Text))
+            }
             Spacer(Modifier.weight(1f))
-            Switch(k.enabled, { e -> vm.updateClip(clip.id) { it.copy(chroma = it.chroma.copy(enabled = e)) } }, colors = SwitchDefaults.colors(checkedTrackColor = C.Accent))
+            Switch(k.enabled, { e -> set(false) { it.copy(enabled = e) } }, colors = SwitchDefaults.colors(checkedTrackColor = C.Accent))
         }
-        ValueSlider(Icons.Rounded.InvertColors, "Strength", k.similarity * 100, 0f..100f, { "${it.roundToInt()}" }, C.Good, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.updateClip(clip.id, true) { it.copy(chroma = it.chroma.copy(similarity = v / 100f, enabled = true)) } }
-        ValueSlider(Icons.Rounded.BlurOn, "Edge", k.smoothness * 100, 0f..100f, { "${it.roundToInt()}" }, C.Good, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.updateClip(clip.id, true) { it.copy(chroma = it.chroma.copy(smoothness = v / 100f)) } }
-        ValueSlider(Icons.Rounded.Opacity, "Spill", k.spill * 100, 0f..100f, { "${it.roundToInt()}" }, C.Good, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.updateClip(clip.id, true) { it.copy(chroma = it.chroma.copy(spill = v / 100f)) } }
+        ValueSlider(Icons.Rounded.InvertColors, "Strength", k.similarity * 100, 0f..100f, { "${it.roundToInt()}" }, C.Good, default = 60f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> set(true) { it.copy(similarity = v / 100f, enabled = true) } }
+        ValueSlider(Icons.Rounded.BlurOn, "Edge", k.smoothness * 100, 0f..100f, { "${it.roundToInt()}" }, C.Good, default = 20f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> set(true) { it.copy(smoothness = v / 100f) } }
+        ValueSlider(Icons.Rounded.Opacity, "Spill", k.spill * 100, 0f..100f, { "${it.roundToInt()}" }, C.Good, default = 30f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> set(true) { it.copy(spill = v / 100f) } }
         Spacer(Modifier.height(8.dp))
     }
 }

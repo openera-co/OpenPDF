@@ -16,13 +16,16 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -124,18 +127,26 @@ fun Timeline(
     val names = remember(catalog) {
         (catalog.effects + catalog.filters).associate { it.id to it.name } + catalog.looks.associate { it.id to it.name }
     }
-    val bars = remember(project, names) {
+    // Every kind of layer has its own lanes; overlapping layers stack instead of covering each other.
+    val layout = remember(project) { com.reel.editor.model.TrackLayout.assign(com.reel.editor.model.TrackLayout.itemsOf(project)) }
+    val bars = remember(project, names, layout) {
         val list = ArrayList<BarItem>()
-        project.effects.forEach { list += BarItem(Selection.EffectSel(it.id), it.startUs, it.startUs + it.durationUs, names[it.fx.id] ?: it.fx.id, C.Effect, Color(0xFF3B2F66), 0) }
-        project.filters.forEach { list += BarItem(Selection.FilterSel(it.id), it.startUs, it.startUs + it.durationUs, (it.lookId ?: it.shaderFx?.id)?.let { id -> names[id] ?: id } ?: "Filter", C.Music.copy(alpha = 0.9f), Color(0xFF143A3A), 0) }
-        project.texts.forEach { list += BarItem(Selection.TextSel(it.id), it.startUs, it.startUs + it.durationUs, it.text.replace('\n', ' '), C.TextTrack, Color(0xFF5A2A20), 1) }
-        project.stickers.forEach { list += BarItem(Selection.StickerSel(it.id), it.startUs, it.startUs + it.durationUs, "Sticker", C.Overlay, Color(0xFF4A1D38), 1) }
+        fun row(k: String) = layout.rowOf[k] ?: 0
+        project.effects.forEach { list += BarItem(Selection.EffectSel(it.id), it.startUs, it.startUs + it.durationUs, names[it.fx.id] ?: it.fx.id, C.Effect, Color(0xFF3B2F66), row("fx:${it.id}")) }
+        project.filters.forEach { list += BarItem(Selection.FilterSel(it.id), it.startUs, it.startUs + it.durationUs, (it.lookId ?: it.shaderFx?.id)?.let { id -> names[id] ?: id } ?: "Filter", C.Music.copy(alpha = 0.9f), Color(0xFF143A3A), row("filter:${it.id}")) }
+        project.adjustments.forEach { list += BarItem(Selection.AdjustSel(it.id), it.startUs, it.startUs + it.durationUs, "Adjust", C.Accent, Color(0xFF1A2E5A), row("adjust:${it.id}")) }
+        project.texts.forEach { list += BarItem(Selection.TextSel(it.id), it.startUs, it.startUs + it.durationUs, it.text.replace('\n', ' '), C.TextTrack, Color(0xFF5A2A20), row("text:${it.id}")) }
+        project.stickers.forEach { list += BarItem(Selection.StickerSel(it.id), it.startUs, it.startUs + it.durationUs, "Sticker", C.Overlay, Color(0xFF4A1D38), row("sticker:${it.id}")) }
+        project.shapes.forEach { list += BarItem(Selection.ShapeSel(it.id), it.startUs, it.startUs + it.durationUs, it.shape.replaceFirstChar { c -> c.uppercase() }, Color(0xFFFFD36B), Color(0xFF4A3E14), row("shape:${it.id}")) }
+        project.overlays.forEach { list += BarItem(Selection.OverlaySel(it.id), it.startUs, it.endUs, if (it.kind == ClipKind.PHOTO) "Photo" else "Video", C.Overlay, Color(0xFF3A1430), row("overlay:${it.id}")) }
         list
     }
-    val fxRowY = rulerH + gap
-    val textRowY = fxRowY + barH + gap
-    val clipY = textRowY + barH + gap
-    val audioY = clipY + clipH + gap * 1.5f
+    // Two lanes always show so the layout doesn't jump when the first layer arrives.
+    val layerRows = max(layout.rows, 2)
+    val currentRows by rememberUpdatedState(layerRows)
+    var scrollY by remember { mutableFloatStateOf(0f) }
+    fun rowY(r: Int) = rulerH + gap + r * (barH + gap) - scrollY
+    fun clipYNow() = rulerH + gap + currentRows * (barH + gap) - scrollY
     val audioLanes = remember(project.audio) {
         val lanes = ArrayList<MutableList<com.reel.editor.model.AudioItem>>()
         for (a in project.audio.sortedBy { it.startUs }) {
@@ -151,9 +162,18 @@ fun Timeline(
     val currentSel by rememberUpdatedState(selection)
     val currentLanes by rememberUpdatedState(audioLanes)
     val currentTotal by rememberUpdatedState(total)
+    fun audioYNow() = clipYNow() + clipH + gap * 1.5f
+    fun contentBottom() = audioYNow() + scrollY + currentLanes.size * (audioH + gap) + gap
 
-    BoxWithConstraints(modifier.background(C.Track)) {
+    BoxWithConstraints(modifier.clipToBounds().background(C.Track)) {
         val widthPx = with(density) { maxWidth.toPx() }
+        val heightPx = with(density) { maxHeight.toPx() }
+        val currentHeight by rememberUpdatedState(heightPx)
+        fun maxScroll() = (contentBottom() - currentHeight).coerceAtLeast(0f)
+        // Removing layers can leave the view scrolled past the content.
+        SideEffect { if (scrollY > maxScroll()) scrollY = maxScroll() }
+        val clipY = clipYNow()
+        val audioY = audioYNow()
         val centerX = widthPx / 2f
         fun xOf(t: Long) = centerX + (t - pos) / 1e6f * scale
         fun tOf(x: Float) = (pos + ((x - centerX) / scale * 1e6f).toLong())
@@ -183,6 +203,9 @@ fun Timeline(
         fun hitTest(o: Offset): Hit {
             val sel = currentSel
             val t = tOf(o.x)
+            val clipY = clipYNow()
+            val audioY = audioYNow()
+            if (o.y < rulerH) return Hit.Empty
             // Selected clip handles win over everything.
             if (sel is Selection.ClipSel) currentPlaced.firstOrNull { it.clip.id == sel.id }?.let { p ->
                 if (o.y in clipY - gap..clipY + clipH + gap) {
@@ -191,7 +214,7 @@ fun Timeline(
                 }
             }
             currentBars.firstOrNull { it.sel == sel }?.let { b ->
-                val y = if (b.row == 0) fxRowY else textRowY
+                val y = rowY(b.row)
                 if (o.y in y - gap..y + barH + gap) {
                     if (abs(o.x - xOf(b.startUs)) < handleW * 1.2f) return Hit.BarHandle(b.sel, true)
                     if (abs(o.x - xOf(b.endUs)) < handleW * 1.2f) return Hit.BarHandle(b.sel, false)
@@ -201,8 +224,11 @@ fun Timeline(
                 for (p in currentPlaced) if (p.index > 0 && abs(o.x - xOf(p.startUs)) < 14 * density.density) return Hit.Transition(p.clip.id)
                 currentPlaced.firstOrNull { t >= it.startUs && t < it.endUs }?.let { return Hit.ClipBody(it) }
             }
-            if (o.y in fxRowY..fxRowY + barH) currentBars.lastOrNull { it.row == 0 && t in it.startUs until it.endUs }?.let { return Hit.Bar(it.sel, it.startUs, it.endUs) }
-            if (o.y in textRowY..textRowY + barH) currentBars.lastOrNull { it.row == 1 && t in it.startUs until it.endUs }?.let { return Hit.Bar(it.sel, it.startUs, it.endUs) }
+            if (o.y < clipY) {
+                val r = ((o.y - (rulerH + gap - scrollY)) / (barH + gap)).toInt()
+                val inBar = (o.y - rowY(r)) <= barH + gap / 2
+                if (inBar) currentBars.lastOrNull { it.row == r && t in it.startUs until it.endUs }?.let { return Hit.Bar(it.sel, it.startUs, it.endUs) }
+            }
             currentLanes.forEachIndexed { i, lane ->
                 val y = audioY + i * (audioH + gap)
                 if (o.y in y..y + audioH) lane.firstOrNull { t >= it.startUs && t < it.endUs }?.let {
@@ -261,6 +287,9 @@ fun Timeline(
                         val ch = pressed[0]
                         val d = ch.positionChange()
                         moved += d
+                        if (mode == 0 && moved.getDistance() > slop && abs(moved.y) > abs(moved.x) * 1.3f && maxScroll() > 0f && hit !is Hit.ClipHandle && hit !is Hit.BarHandle) {
+                            mode = 7
+                        }
                         if (mode == 0 && moved.getDistance() > slop) {
                             mode = when (hit) {
                                 is Hit.ClipHandle -> { actions.gestureStart(); 3 }
@@ -290,6 +319,7 @@ fun Timeline(
                                 actions.resizeBar(h.sel, h.left, snapped)
                             }
                             6 -> reorder = reorder?.copy(second = ch.position.x)
+                            7 -> scrollY = (scrollY - d.y).coerceIn(0f, maxScroll())
                         }
                         ch.consume()
                     }
@@ -309,11 +339,14 @@ fun Timeline(
                 }
             },
         ) {
-            drawRuler(measurer, pos, scale, centerX, rulerH)
-            // Bars
+            // Bars, culled to what's on screen.
             for (b in bars) {
-                val y = if (b.row == 0) fxRowY else textRowY
-                drawBar(measurer, xOf(b.startUs), xOf(b.endUs), y, barH, b.label, b.color, b.fill, b.sel == selection, corner)
+                val y = rowY(b.row)
+                if (y + barH < rulerH || y > size.height) continue
+                val x0 = xOf(b.startUs)
+                val x1 = xOf(b.endUs)
+                if (x1 < 0 || x0 > size.width) continue
+                drawBar(measurer, x0, x1, y, barH, b.label, b.color, b.fill, b.sel == selection, corner)
             }
             val r = reorder
             if (r != null) drawReorder(placed, thumbs, r, centerX, clipY, clipH, corner)
@@ -364,6 +397,17 @@ fun Timeline(
                     if (x1 < 0 || x0 > size.width) continue
                     drawAudio(a, x0, x1, y, audioH, waveforms[a.uri], selection == Selection.AudioSel(a.id), corner, scale, measurer)
                 }
+            }
+            // Ruler stays pinned above the scrolled rows.
+            drawRect(C.Track, Offset.Zero, Size(size.width, rulerH))
+            drawRuler(measurer, pos, scale, centerX, rulerH)
+            if (maxScroll() > 0f) {
+                // Scroll indicator at the right edge.
+                val view = size.height - rulerH
+                val content = contentBottom() - rulerH
+                val h = (view * view / content).coerceAtLeast(16 * density.density)
+                val y = rulerH + (view - h) * (scrollY / maxScroll())
+                drawRoundRect(C.Dim, Offset(size.width - 4 * density.density, y), Size(3 * density.density, h), CornerRadius(2 * density.density))
             }
             // Playhead
             drawLine(Color.White, Offset(centerX, 4f), Offset(centerX, size.height - 4f), 2 * density.density)

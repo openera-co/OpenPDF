@@ -172,6 +172,13 @@ class PreviewController(context: Context) {
     }
 
     /** While paused, re-run the effect pipeline on the cached frame; no decoder work needed. */
+    /** Shows the clips without looks, effects and layers while held. */
+    fun showOriginal(on: Boolean) {
+        if (com.reel.editor.fx.PreviewOriginal.on == on) return
+        com.reel.editor.fx.PreviewOriginal.on = on
+        redraw()
+    }
+
     private fun redraw() {
         val p = player ?: return
         if (p.isPlaying) return

@@ -21,6 +21,9 @@ data class Project(
     val filters: List<TimedFilter> = emptyList(),
     val audio: List<AudioItem> = emptyList(),
     val playheadUs: Long = 0,
+    val shapes: List<ShapeLayer> = emptyList(),
+    val adjustments: List<AdjustmentLayer> = emptyList(),
+    val overlays: List<OverlayClip> = emptyList(),
 )
 
 @Serializable
@@ -89,6 +92,11 @@ data class Clip(
     val chroma: ChromaKey = ChromaKey(),
     val cutout: Cutout = Cutout(),
     val voice: VoiceFx = VoiceFx(),
+    /** Volume keyframes, offsets from the clip start on the timeline. */
+    val volumeKeys: List<ValueKey> = emptyList(),
+    /** Look strength keyframes. */
+    val lookKeys: List<ValueKey> = emptyList(),
+    val mask: Mask = Mask(),
 ) {
     val trimmedDurationUs: Long get() = (trimEndUs - trimStartUs).coerceAtLeast(0)
 }
@@ -121,7 +129,10 @@ data class Easing(val x1: Float, val y1: Float, val x2: Float, val y2: Float, va
         val EASE_OUT = Easing(0f, 0f, 0.58f, 1f, "Ease out")
         val EASE_IN_OUT = Easing(0.42f, 0f, 0.58f, 1f, "Ease in out")
         val BACK = Easing(0.34f, 1.56f, 0.64f, 1f, "Overshoot")
-        val PRESETS = listOf(LINEAR, EASE_IN, EASE_OUT, EASE_IN_OUT, BACK)
+        /** Not bezier curves: [ease] special-cases these names. */
+        val BOUNCE = Easing(0.3f, 0f, 0.7f, 1f, "Bounce")
+        val ELASTIC = Easing(0.3f, 0f, 0.7f, 1f, "Elastic")
+        val PRESETS = listOf(LINEAR, EASE_IN, EASE_OUT, EASE_IN_OUT, BACK, BOUNCE, ELASTIC)
     }
 }
 
@@ -152,6 +163,13 @@ data class Adjustments(
     val curves: Curves = Curves(),
 ) {
     val isIdentity: Boolean get() = this == Adjustments() || (copy(curves = Curves()) == Adjustments() && curves.isIdentity)
+
+    /** Every slider multiplied by [k] (curves stay as they are). */
+    fun scaled(k: Float): Adjustments = if (k >= 0.999f) this else copy(
+        brightness = brightness * k, contrast = contrast * k, saturation = saturation * k, vibrance = vibrance * k,
+        exposure = exposure * k, temperature = temperature * k, tint = tint * k, highlights = highlights * k,
+        shadows = shadows * k, fade = fade * k, hue = hue * k, vignette = vignette * k, sharpen = sharpen * k, grain = grain * k,
+    )
 }
 
 /** Tone curves as control points (x,y in 0..1) per channel. */
@@ -193,6 +211,97 @@ data class ChromaKey(
     val smoothness: Float = 0.2f,
     val spill: Float = 0.3f,
 )
+
+/** A vector shape drawn above the video. [aspect] is width / height of its box. */
+@Serializable
+data class ShapeLayer(
+    val id: String = newId(),
+    val shape: String = "roundrect",
+    val fill: Long? = 0xFF4C8DFF,
+    val stroke: Long = 0xFFFFFFFF,
+    val strokeWidth: Float = 0f,
+    /** Corner radius for rectangles, as a fraction of the shorter side (0..0.5). */
+    val corner: Float = 0.18f,
+    val aspect: Float = 1f,
+    val startUs: Long,
+    val durationUs: Long,
+    val transform: Transform = Transform(scale = 0.4f),
+    val keyframes: List<Keyframe> = emptyList(),
+    val animIn: TextAnim? = null,
+    val animOut: TextAnim? = null,
+)
+
+/** Applies adjustments, a look and effects to everything below it while it is on the timeline. */
+@Serializable
+data class AdjustmentLayer(
+    val id: String = newId(),
+    val startUs: Long,
+    val durationUs: Long,
+    val adjust: Adjustments = Adjustments(),
+    val lookId: String? = null,
+    val lookAmount: Float = 1f,
+    val effects: List<FxRef> = emptyList(),
+    /** Overall strength, 0..1; keyframable through [amountKeys]. */
+    val amount: Float = 1f,
+    val amountKeys: List<ValueKey> = emptyList(),
+)
+
+@Serializable
+enum class BlendMode(val label: String) {
+    NORMAL("Normal"), SCREEN("Screen"), MULTIPLY("Multiply"), OVERLAY("Overlay"), LIGHTEN("Lighten"),
+    DARKEN("Darken"), ADD("Add"), SOFT_LIGHT("Soft light"), DIFFERENCE("Difference"),
+}
+
+@Serializable
+enum class MaskShape { NONE, CIRCLE, RECT, LINEAR, HEART, STAR }
+
+/** A mask in the layer's own space: centre, size (fractions of the layer), rotation, feather. */
+@Serializable
+data class Mask(
+    val shape: MaskShape = MaskShape.NONE,
+    val x: Float = 0.5f,
+    val y: Float = 0.5f,
+    val w: Float = 0.7f,
+    val h: Float = 0.7f,
+    val rotation: Float = 0f,
+    val feather: Float = 0.15f,
+    val invert: Boolean = false,
+)
+
+/** A video or photo placed over the main video (picture in picture). */
+@Serializable
+data class OverlayClip(
+    val id: String = newId(),
+    val uri: String,
+    val kind: ClipKind,
+    val sourceDurationUs: Long,
+    val sourceWidth: Int,
+    val sourceHeight: Int,
+    val rotationDegrees: Int = 0,
+    val hasAudio: Boolean = false,
+    val startUs: Long,
+    val trimStartUs: Long = 0,
+    val trimEndUs: Long = sourceDurationUs,
+    val volume: Float = 1f,
+    val muted: Boolean = false,
+    val transform: Transform = Transform(scale = 0.5f),
+    val keyframes: List<Keyframe> = emptyList(),
+    val blend: BlendMode = BlendMode.NORMAL,
+    val mask: Mask = Mask(),
+    val chroma: ChromaKey = ChromaKey(),
+    val adjust: Adjustments = Adjustments(),
+    val lookId: String? = null,
+    val animIn: TextAnim? = null,
+    val animOut: TextAnim? = null,
+    val volumeKeys: List<ValueKey> = emptyList(),
+) {
+    val timelineDurationUs: Long get() = (trimEndUs - trimStartUs).coerceAtLeast(0)
+    val endUs: Long get() = startUs + timelineDurationUs
+}
+
+/** A keyframed number (volume, strength...) at an offset from the item's start. */
+@Serializable
+data class ValueKey(val timeUs: Long, val value: Float, val easing: Easing = Easing.EASE_IN_OUT)
 
 /** Voice tools for a clip's sound or an audio item. */
 @Serializable
@@ -278,6 +387,11 @@ data class TextLayer(
     val isCaption: Boolean = false,
     /** Word timings for karaoke highlight (captions), offsets from startUs. */
     val words: List<WordTiming> = emptyList(),
+    /** Captions follow the speech they came from: the source clip and media range (absolute source time). */
+    val anchorClipId: String? = null,
+    val anchorUri: String? = null,
+    val anchorMediaStartUs: Long = 0,
+    val anchorMediaEndUs: Long = 0,
 )
 
 @Serializable
@@ -320,6 +434,7 @@ data class AudioItem(
     /** Markers placed by hand, in source time, so they move with the music. */
     val markersUs: List<Long> = emptyList(),
     val voice: VoiceFx = VoiceFx(),
+    val volumeKeys: List<ValueKey> = emptyList(),
     /** Lower this item while someone speaks (clip audio and voiceovers). */
     val duck: Boolean = false,
     val duckDb: Float = -14f,

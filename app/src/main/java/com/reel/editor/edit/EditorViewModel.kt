@@ -38,11 +38,14 @@ sealed interface Selection {
     data class AudioSel(val id: String) : Selection
     data class EffectSel(val id: String) : Selection
     data class FilterSel(val id: String) : Selection
+    data class ShapeSel(val id: String) : Selection
+    data class AdjustSel(val id: String) : Selection
+    data class OverlaySel(val id: String) : Selection
 }
 
 enum class Panel {
     SPEED, VOLUME, ANIMATION, FILTERS, ADJUST, EFFECTS, TRANSITION, TEXT_EDIT, TEXT_STYLE, TEXT_ANIM,
-    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE
+    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE, SHAPE, ADJUST_LAYER, OVERLAY, MASK, ADD_LAYER
 }
 
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
@@ -112,7 +115,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun apply(p: Project) {
-        val fixed = p.copy(updatedAt = System.currentTimeMillis())
+        val fixed = com.reel.editor.model.TrackLayout.clampLayers(com.reel.editor.model.CaptionAnchor.reflow(p)).copy(updatedAt = System.currentTimeMillis())
         _project.value = fixed
         preview.update(fixed)
         refreshHistoryFlags()
@@ -175,6 +178,9 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             is Selection.AudioSel -> p.audio.any { it.id == s.id }
             is Selection.EffectSel -> p.effects.any { it.id == s.id }
             is Selection.FilterSel -> p.filters.any { it.id == s.id }
+            is Selection.ShapeSel -> p.shapes.any { it.id == s.id }
+            is Selection.AdjustSel -> p.adjustments.any { it.id == s.id }
+            is Selection.OverlaySel -> p.overlays.any { it.id == s.id }
             Selection.None -> true
         }
         if (!ok) select(Selection.None)
@@ -297,6 +303,9 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             is Selection.AudioSel -> edit { p -> p.copy(audio = p.audio.filter { it.id != s.id }) }
             is Selection.EffectSel -> edit { p -> p.copy(effects = p.effects.filter { it.id != s.id }) }
             is Selection.FilterSel -> edit { p -> p.copy(filters = p.filters.filter { it.id != s.id }) }
+            is Selection.ShapeSel -> edit { p -> p.copy(shapes = p.shapes.filter { it.id != s.id }) }
+            is Selection.AdjustSel -> edit { p -> p.copy(adjustments = p.adjustments.filter { it.id != s.id }) }
+            is Selection.OverlaySel -> edit { p -> p.copy(overlays = p.overlays.filter { it.id != s.id }) }
             Selection.None -> return
         }
         select(Selection.None)
@@ -319,6 +328,18 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             is Selection.EffectSel -> edit { p ->
                 val e = p.effects.firstOrNull { it.id == s.id } ?: return@edit p
                 p.copy(effects = p.effects + e.copy(id = newId(), startUs = e.startUs + e.durationUs))
+            }
+            is Selection.ShapeSel -> edit { p ->
+                val l = p.shapes.firstOrNull { it.id == s.id } ?: return@edit p
+                p.copy(shapes = p.shapes + l.copy(id = newId(), transform = l.transform.copy(x = l.transform.x + 0.05f, y = l.transform.y + 0.05f)))
+            }
+            is Selection.AdjustSel -> edit { p ->
+                val l = p.adjustments.firstOrNull { it.id == s.id } ?: return@edit p
+                p.copy(adjustments = p.adjustments + l.copy(id = newId(), startUs = l.startUs + l.durationUs))
+            }
+            is Selection.OverlaySel -> edit { p ->
+                val l = p.overlays.firstOrNull { it.id == s.id } ?: return@edit p
+                p.copy(overlays = p.overlays + l.copy(id = newId(), transform = l.transform.copy(x = l.transform.x + 0.05f, y = l.transform.y + 0.05f)))
             }
             else -> Unit
         }
@@ -441,7 +462,27 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 })
             }
-            else -> toast("Select a clip, text or sticker first")
+            is Selection.ShapeSel -> edit { pp ->
+                pp.copy(shapes = pp.shapes.map { l ->
+                    if (l.id != s.id) l else {
+                        val local = (t - l.startUs).coerceIn(0, l.durationUs)
+                        val ex = l.keyframes.firstOrNull { kotlin.math.abs(it.timeUs - local) < 40_000 }
+                        if (ex != null) l.copy(keyframes = l.keyframes - ex)
+                        else l.copy(keyframes = (l.keyframes + Keyframe(local, interpolate(l.transform, l.keyframes, local))).sortedBy { it.timeUs })
+                    }
+                })
+            }
+            is Selection.OverlaySel -> edit { pp ->
+                pp.copy(overlays = pp.overlays.map { l ->
+                    if (l.id != s.id) l else {
+                        val local = (t - l.startUs).coerceIn(0, l.timelineDurationUs)
+                        val ex = l.keyframes.firstOrNull { kotlin.math.abs(it.timeUs - local) < 40_000 }
+                        if (ex != null) l.copy(keyframes = l.keyframes - ex)
+                        else l.copy(keyframes = (l.keyframes + Keyframe(local, interpolate(l.transform, l.keyframes, local))).sortedBy { it.timeUs })
+                    }
+                })
+            }
+            else -> toast("Select a layer first")
         }
     }
 
@@ -467,10 +508,75 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             }
             is Selection.TextSel -> { pp -> pp.copy(texts = pp.texts.map { if (it.id == s.id) apply(it.transform, it.keyframes, t - it.startUs).let { (b, k) -> it.copy(transform = b, keyframes = k) } else it }) }
             is Selection.StickerSel -> { pp -> pp.copy(stickers = pp.stickers.map { if (it.id == s.id) apply(it.transform, it.keyframes, t - it.startUs).let { (b, k) -> it.copy(transform = b, keyframes = k) } else it }) }
+            is Selection.ShapeSel -> { pp -> pp.copy(shapes = pp.shapes.map { if (it.id == s.id) apply(it.transform, it.keyframes, t - it.startUs).let { (b, k) -> it.copy(transform = b, keyframes = k) } else it }) }
+            is Selection.OverlaySel -> { pp -> pp.copy(overlays = pp.overlays.map { if (it.id == s.id) apply(it.transform, it.keyframes, t - it.startUs).let { (b, k) -> it.copy(transform = b, keyframes = k) } else it }) }
             else -> return
         }
         if (gesture) live(f) else edit(f)
         p.hashCode()
+    }
+
+    // ------------------------------------------------------------------ shape, adjustment and overlay layers
+
+    private fun layerSpan(defaultUs: Long = 3_000_000): Pair<Long, Long> {
+        val total = TimelineMath.duration(_project.value)
+        val start = preview.positionUs.value.coerceIn(0, (total - 200_000).coerceAtLeast(0))
+        return start to minOf(defaultUs, (total - start).coerceAtLeast(200_000))
+    }
+
+    fun addShape(kind: String) {
+        if (_project.value.clips.isEmpty()) { toast("Add a clip first"); return }
+        val (s, d) = layerSpan()
+        val l = com.reel.editor.model.ShapeLayer(shape = kind, startUs = s, durationUs = d, aspect = if (kind == "line" || kind == "arrow") 3f else 1f)
+        edit { p -> p.copy(shapes = p.shapes + l) }
+        select(Selection.ShapeSel(l.id))
+    }
+
+    fun addAdjustmentLayer() {
+        if (_project.value.clips.isEmpty()) { toast("Add a clip first"); return }
+        val (s, d) = layerSpan()
+        val l = com.reel.editor.model.AdjustmentLayer(startUs = s, durationUs = d)
+        edit { p -> p.copy(adjustments = p.adjustments + l) }
+        select(Selection.AdjustSel(l.id))
+        openPanel(Panel.ADJUST_LAYER)
+    }
+
+    fun addOverlays(uris: List<Uri>) {
+        if (_project.value.clips.isEmpty()) { toast("Add a clip first"); return }
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            var start = layerSpan().first
+            val added = ArrayList<com.reel.editor.model.OverlayClip>()
+            val total = TimelineMath.duration(_project.value)
+            for (u in uris) {
+                val c = withContext(Dispatchers.IO) { MediaProbe.probeClip(ctx, u) } ?: continue
+                runCatching { ctx.contentResolver.takePersistableUriPermission(u, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                val len = minOf(c.sourceDurationUs, (total - start).coerceAtLeast(200_000))
+                added += com.reel.editor.model.OverlayClip(
+                    uri = c.uri, kind = c.kind, sourceDurationUs = c.sourceDurationUs, sourceWidth = c.sourceWidth, sourceHeight = c.sourceHeight,
+                    rotationDegrees = c.rotationDegrees, hasAudio = c.hasAudio, startUs = start, trimEndUs = len,
+                    transform = com.reel.editor.model.Transform(x = 0.5f + 0.06f * added.size, y = 0.42f + 0.06f * added.size, scale = 0.45f),
+                )
+            }
+            if (added.isEmpty()) { toast("Couldn't open that file"); return@launch }
+            edit { p -> p.copy(overlays = p.overlays + added) }
+            select(Selection.OverlaySel(added.last().id))
+        }
+    }
+
+    fun updateShape(id: String, gesture: Boolean = false, change: (com.reel.editor.model.ShapeLayer) -> com.reel.editor.model.ShapeLayer) {
+        val f: (Project) -> Project = { p -> p.copy(shapes = p.shapes.map { if (it.id == id) change(it) else it }) }
+        if (gesture) live(f) else edit(f)
+    }
+
+    fun updateAdjustLayer(id: String, gesture: Boolean = false, change: (com.reel.editor.model.AdjustmentLayer) -> com.reel.editor.model.AdjustmentLayer) {
+        val f: (Project) -> Project = { p -> p.copy(adjustments = p.adjustments.map { if (it.id == id) change(it) else it }) }
+        if (gesture) live(f) else edit(f)
+    }
+
+    fun updateOverlay(id: String, gesture: Boolean = false, change: (com.reel.editor.model.OverlayClip) -> com.reel.editor.model.OverlayClip) {
+        val f: (Project) -> Project = { p -> p.copy(overlays = p.overlays.map { if (it.id == id) change(it) else it }) }
+        if (gesture) live(f) else edit(f)
     }
 
     // ------------------------------------------------------------------ voice
@@ -553,7 +659,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                     toast("No speech found")
                 } else {
                     val y = _project.value.texts.firstOrNull { it.isCaption }?.transform?.y ?: 0.78f
-                    edit { p -> p.copy(texts = p.texts.filterNot { it.isCaption } + res.lines.map { com.reel.editor.model.CaptionGrouping.toLayer(it, style, y) }) }
+                    edit { p -> p.copy(texts = p.texts.filterNot { it.isCaption } + com.reel.editor.model.CaptionAnchor.anchor(p, res.lines.map { com.reel.editor.model.CaptionGrouping.toLayer(it, style, y) })) }
                     toast("${res.lines.size} captions added")
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {

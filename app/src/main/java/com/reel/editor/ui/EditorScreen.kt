@@ -57,6 +57,9 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ContentCut
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Diamond
 import androidx.compose.material.icons.rounded.Edit
@@ -143,8 +146,10 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val addClips = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris -> vm.addMedia(uris) }
-    val replace = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) vm.replaceClip(uri) }
+    val picker = LocalPicker.current
+    val visual = setOf(com.reel.editor.media.MediaLibrary.Kind.VIDEO, com.reel.editor.media.MediaLibrary.Kind.PHOTO)
+    val addClips = remember(vm) { { picker.open(PickerRequest(visual, multi = true) { vm.addMedia(it) }) } }
+    val replace = remember(vm) { { picker.open(PickerRequest(visual, multi = false) { u -> u.firstOrNull()?.let(vm::replaceClip) }) } }
 
     BackHandler {
         when {
@@ -194,6 +199,14 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
                 )
                 PreviewOverlay(vm, selection, project, pos, aspect, picking) { uv ->
                     picking = false
+                    (selection as? Selection.OverlaySel)?.let { os ->
+                        val o = project.overlays.firstOrNull { it.id == os.id } ?: return@PreviewOverlay
+                        scope.launch {
+                            val color = withContext(Dispatchers.IO) { sampleOverlayColor(ctx, o, pos, uv, aspect) }
+                            if (color != null) vm.updateOverlay(o.id) { it.copy(chroma = it.chroma.copy(enabled = true, color = color)) }
+                        }
+                        return@PreviewOverlay
+                    }
                     val clip = vm.targetClip() ?: return@PreviewOverlay
                     scope.launch {
                         val color = withContext(Dispatchers.IO) { sampleColor(ctx, project, clip.id, pos, uv, aspect) }
@@ -203,7 +216,7 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
             }
             if (project.clips.isEmpty() && !busy) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconBtn(androidx.compose.material.icons.Icons.Rounded.AutoAwesome, "Add clips", tint = C.Accent, size = 64.dp, iconSize = 30.dp, background = C.Surface) { addClips.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+                    IconBtn(androidx.compose.material.icons.Icons.Rounded.AutoAwesome, "Add clips", tint = C.Accent, size = 64.dp, iconSize = 30.dp, background = C.Surface) { addClips() }
                 }
             }
             if (busy) CircularProgressIndicator(color = C.Accent)
@@ -284,15 +297,17 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
 }
 
 private fun timelineHeight(p: com.reel.editor.model.Project): androidx.compose.ui.unit.Dp {
+    // Layer lanes above the video: two are always there; more grow the timeline up to five, then it scrolls.
+    val layerRows = com.reel.editor.model.TrackLayout.assign(com.reel.editor.model.TrackLayout.itemsOf(p)).rows.coerceIn(2, 5)
     val lanes = p.audio.sortedBy { it.startUs }.fold(mutableListOf<Long>()) { acc, a ->
         val i = acc.indexOfFirst { it <= a.startUs }
         if (i >= 0) acc[i] = a.endUs else acc += a.endUs
         acc
     }.size
-    return (178 + lanes.coerceAtMost(3) * 38).dp
+    return (178 + (layerRows - 2) * 30 + lanes.coerceAtMost(3) * 38).dp
 }
 
-private fun actionsFor(vm: EditorViewModel, addClips: androidx.activity.result.ActivityResultLauncher<PickVisualMediaRequest>, openTransition: (String) -> Unit) = object : TimelineActions {
+private fun actionsFor(vm: EditorViewModel, addClips: () -> Unit, openTransition: (String) -> Unit) = object : TimelineActions {
     override fun scrubStart() = vm.preview.setScrubbing(true)
     override fun scrub(timeUs: Long) = vm.preview.seekTo(timeUs)
     override fun scrubEnd() = vm.preview.setScrubbing(false)
@@ -308,11 +323,14 @@ private fun actionsFor(vm: EditorViewModel, addClips: androidx.activity.result.A
     }
     override fun moveBar(sel: Selection, startUs: Long) = vm.live { p ->
         when (sel) {
-            is Selection.TextSel -> p.copy(texts = p.texts.map { if (it.id == sel.id) it.copy(startUs = startUs) else it })
+            is Selection.TextSel -> p.copy(texts = p.texts.map { if (it.id == sel.id) it.copy(startUs = startUs, anchorClipId = null) else it })
             is Selection.StickerSel -> p.copy(stickers = p.stickers.map { if (it.id == sel.id) it.copy(startUs = startUs) else it })
             is Selection.EffectSel -> p.copy(effects = p.effects.map { if (it.id == sel.id) it.copy(startUs = startUs) else it })
             is Selection.FilterSel -> p.copy(filters = p.filters.map { if (it.id == sel.id) it.copy(startUs = startUs) else it })
             is Selection.AudioSel -> p.copy(audio = p.audio.map { if (it.id == sel.id) it.copy(startUs = startUs) else it })
+            is Selection.ShapeSel -> p.copy(shapes = p.shapes.map { if (it.id == sel.id) it.copy(startUs = startUs) else it })
+            is Selection.AdjustSel -> p.copy(adjustments = p.adjustments.map { if (it.id == sel.id) it.copy(startUs = startUs) else it })
+            is Selection.OverlaySel -> p.copy(overlays = p.overlays.map { if (it.id == sel.id) it.copy(startUs = startUs) else it })
             else -> p
         }
     }
@@ -322,7 +340,7 @@ private fun actionsFor(vm: EditorViewModel, addClips: androidx.activity.result.A
             return if (left) { val s = timeUs.coerceIn(0, end - 200_000); s to end - s } else start to (timeUs - start).coerceAtLeast(200_000)
         }
         when (sel) {
-            is Selection.TextSel -> p.copy(texts = p.texts.map { if (it.id == sel.id) span(it.startUs, it.durationUs).let { (s, d) -> it.copy(startUs = s, durationUs = d) } else it })
+            is Selection.TextSel -> p.copy(texts = p.texts.map { if (it.id == sel.id) span(it.startUs, it.durationUs).let { (s, d) -> it.copy(startUs = s, durationUs = d, anchorClipId = null) } else it })
             is Selection.StickerSel -> p.copy(stickers = p.stickers.map { if (it.id == sel.id) span(it.startUs, it.durationUs).let { (s, d) -> it.copy(startUs = s, durationUs = d) } else it })
             is Selection.EffectSel -> p.copy(effects = p.effects.map { if (it.id == sel.id) span(it.startUs, it.durationUs).let { (s, d) -> it.copy(startUs = s, durationUs = d) } else it })
             is Selection.FilterSel -> p.copy(filters = p.filters.map { if (it.id == sel.id) span(it.startUs, it.durationUs).let { (s, d) -> it.copy(startUs = s, durationUs = d) } else it })
@@ -332,19 +350,31 @@ private fun actionsFor(vm: EditorViewModel, addClips: androidx.activity.result.A
                     a.copy(startUs = newStart, trimStartUs = a.trimStartUs + (newStart - a.startUs))
                 } else a.copy(trimEndUs = (a.trimStartUs + (timeUs - a.startUs)).coerceIn(a.trimStartUs + 200_000, a.sourceDurationUs))
             })
+            is Selection.ShapeSel -> p.copy(shapes = p.shapes.map { if (it.id == sel.id) span(it.startUs, it.durationUs).let { (s, d) -> it.copy(startUs = s, durationUs = d) } else it })
+            is Selection.AdjustSel -> p.copy(adjustments = p.adjustments.map { if (it.id == sel.id) span(it.startUs, it.durationUs).let { (s, d) -> it.copy(startUs = s, durationUs = d) } else it })
+            is Selection.OverlaySel -> p.copy(overlays = p.overlays.map { o ->
+                // Photos can be stretched to any length; videos stop at their own ends.
+                val photo = o.kind == com.reel.editor.model.ClipKind.PHOTO
+                if (o.id != sel.id) o else if (left) {
+                    val minStart = if (photo) 0 else (o.startUs - o.trimStartUs).coerceAtLeast(0)
+                    val newStart = timeUs.coerceIn(minStart, o.endUs - 200_000)
+                    if (photo) o.copy(startUs = newStart, trimEndUs = o.trimEndUs - (newStart - o.startUs))
+                    else o.copy(startUs = newStart, trimStartUs = o.trimStartUs + (newStart - o.startUs))
+                } else o.copy(trimEndUs = (o.trimStartUs + (timeUs - o.startUs)).coerceIn(o.trimStartUs + 200_000, if (photo) 3_600_000_000 else o.sourceDurationUs))
+            })
             else -> p
         }
     }
     override fun reorder(from: Int, to: Int) = vm.edit { TimelineMath.move(it, from, to) }
-    override fun addClips() = addClips.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+    override fun addClips() = addClips()
 }
 
 @Composable
 private fun Toolbar(
     vm: EditorViewModel,
     selection: Selection,
-    addClips: androidx.activity.result.ActivityResultLauncher<PickVisualMediaRequest>,
-    replace: androidx.activity.result.ActivityResultLauncher<PickVisualMediaRequest>,
+    addClips: () -> Unit,
+    replace: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth().height(72.dp).horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         if (selection != Selection.None) {
@@ -352,9 +382,10 @@ private fun Toolbar(
         }
         when (selection) {
             Selection.None -> {
-                ToolButton(Icons.Rounded.ContentCut, "Edit") { vm.clipAtPlayhead()?.let { vm.select(Selection.ClipSel(it.id)) } ?: addClips.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+                ToolButton(Icons.Rounded.ContentCut, "Edit") { vm.clipAtPlayhead()?.let { vm.select(Selection.ClipSel(it.id)) } ?: addClips() }
                 ToolButton(Icons.Rounded.LibraryMusic, "Audio") { vm.select(Selection.None); vm.openPanel(Panel.AUDIO) }
                 ToolButton(Icons.Rounded.TextFields, "Text") { vm.addText() }
+                ToolButton(Icons.Rounded.Layers, "Layer") { vm.openPanel(Panel.ADD_LAYER) }
                 ToolButton(Icons.Rounded.ClosedCaption, "Captions") { vm.openPanel(Panel.CAPTIONS) }
                 ToolButton(Icons.Rounded.EmojiEmotions, "Stickers") { vm.openPanel(Panel.STICKERS) }
                 ToolButton(Icons.Rounded.AutoAwesome, "Effects") { vm.openPanel(Panel.EFFECTS) }
@@ -376,7 +407,7 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.ContentCut, "Cutout", active = vm.targetClip()?.cutout?.enabled == true) { vm.openPanel(Panel.CUTOUT) }
                 ToolButton(Icons.Rounded.AspectRatio, "Canvas") { vm.openPanel(Panel.CANVAS) }
                 ToolButton(Icons.Rounded.AcUnit, "Freeze") { vm.freezeFrame() }
-                ToolButton(Icons.Rounded.FindReplace, "Replace") { replace.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+                ToolButton(Icons.Rounded.FindReplace, "Replace") { replace() }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
@@ -411,6 +442,27 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.FilterVintage, "Filter") { vm.openPanel(Panel.FILTERS) }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
+            is Selection.ShapeSel -> {
+                ToolButton(Icons.Rounded.Category, "Shape") { vm.openPanel(Panel.SHAPE) }
+                ToolButton(Icons.Rounded.Animation, "Animate") { vm.openPanel(Panel.TEXT_ANIM) }
+                ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
+                ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
+                ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
+            }
+            is Selection.AdjustSel -> {
+                ToolButton(Icons.Rounded.Tune, "Adjust") { vm.openPanel(Panel.ADJUST_LAYER) }
+                ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
+                ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
+            }
+            is Selection.OverlaySel -> {
+                ToolButton(Icons.Rounded.Layers, "Blend") { vm.openPanel(Panel.OVERLAY) }
+                ToolButton(Icons.Rounded.Star, "Mask") { vm.openPanel(Panel.MASK) }
+                ToolButton(Icons.Rounded.InvertColors, "Chroma") { vm.openPanel(Panel.CHROMA) }
+                ToolButton(Icons.Rounded.Animation, "Animate") { vm.openPanel(Panel.TEXT_ANIM) }
+                ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
+                ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
+                ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
+            }
         }
     }
 }
@@ -421,6 +473,9 @@ private fun PanelHost(vm: EditorViewModel, panel: Panel, picking: Boolean, onPic
     val selection by vm.selection.collectAsStateCompat()
     val clip = (selection as? Selection.ClipSel)?.let { s -> project.clips.firstOrNull { it.id == s.id } } ?: vm.targetClip()
     val text = (selection as? Selection.TextSel)?.let { s -> project.texts.firstOrNull { it.id == s.id } }
+    val shape = (selection as? Selection.ShapeSel)?.let { s -> project.shapes.firstOrNull { it.id == s.id } }
+    val adjustLayer = (selection as? Selection.AdjustSel)?.let { s -> project.adjustments.firstOrNull { it.id == s.id } }
+    val overlay = (selection as? Selection.OverlaySel)?.let { s -> project.overlays.firstOrNull { it.id == s.id } }
     when (panel) {
         Panel.SPEED -> clip?.let { SpeedPanel(vm, it, onClose) }
         Panel.VOLUME -> clip?.let { VolumePanel(vm, it, onClose) }
@@ -430,12 +485,25 @@ private fun PanelHost(vm: EditorViewModel, panel: Panel, picking: Boolean, onPic
         Panel.EFFECTS -> EffectsPanel(vm, onClose)
         Panel.TEXT_EDIT -> text?.let { TextPanel(vm, it, 0, onClose) }
         Panel.TEXT_STYLE -> text?.let { TextPanel(vm, it, 1, onClose) }
-        Panel.TEXT_ANIM -> text?.let { TextPanel(vm, it, 2, onClose) }
+        Panel.TEXT_ANIM -> when {
+            text != null -> TextPanel(vm, text, 2, onClose)
+            shape != null -> LayerAnimPanel(vm, shape.startUs, shape.durationUs, shape.animIn, shape.animOut, onClose) { i, a -> vm.updateShape(shape.id) { if (i) it.copy(animIn = a) else it.copy(animOut = a) } }
+            overlay != null -> LayerAnimPanel(vm, overlay.startUs, overlay.timelineDurationUs, overlay.animIn, overlay.animOut, onClose) { i, a -> vm.updateOverlay(overlay.id) { if (i) it.copy(animIn = a) else it.copy(animOut = a) } }
+            else -> Unit
+        }
         Panel.STICKERS -> StickerPanel(vm, onClose)
         Panel.AUDIO -> AudioPanel(vm, onClose)
         Panel.CANVAS -> CanvasPanel(vm, onClose)
         Panel.KEYFRAMES -> KeyframePanel(vm, onClose)
-        Panel.CHROMA -> clip?.let { ChromaPanel(vm, it, picking, onPick, onClose) }
+        Panel.CHROMA -> when (val sel = selection) {
+            is Selection.OverlaySel -> project.overlays.firstOrNull { it.id == sel.id }?.let { o -> ChromaBody(vm, o.chroma, picking, onPick, onClose) { g, f -> vm.updateOverlay(o.id, g) { it.copy(chroma = f(it.chroma)) } } }
+            else -> clip?.let { ChromaPanel(vm, it, picking, onPick, onClose) }
+        }
+        Panel.ADD_LAYER -> AddLayerPanel(vm, onClose)
+        Panel.SHAPE -> shape?.let { ShapePanel(vm, it, onClose) }
+        Panel.ADJUST_LAYER -> adjustLayer?.let { AdjustLayerPanel(vm, it, onClose) }
+        Panel.OVERLAY -> overlay?.let { OverlayPanel(vm, it, onClose) }
+        Panel.MASK -> overlay?.let { MaskPanel(vm, it, onClose) }
         Panel.CAPTIONS -> CaptionsPanel(vm, onClose)
         Panel.CUTOUT -> clip?.let { CutoutPanel(vm, it, onClose) }
         Panel.VOICE -> when (val sel = selection) {
@@ -459,37 +527,62 @@ private fun PreviewOverlay(
     onPickColor: (Offset) -> Unit,
 ) {
     val density = LocalDensity.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val sel by androidx.compose.runtime.rememberUpdatedState(selection)
     val pick by androidx.compose.runtime.rememberUpdatedState(picking)
     Canvas(
         Modifier.fillMaxSize().pointerInput(Unit) {
             awaitEachGesture {
                 val down = awaitFirstDown()
-                val movable = sel is Selection.TextSel || sel is Selection.StickerSel || sel is Selection.ClipSel
+                val movable = sel is Selection.TextSel || sel is Selection.StickerSel || sel is Selection.ClipSel || sel is Selection.ShapeSel || sel is Selection.OverlaySel
                 var moved = false
                 var started = false
-                do {
-                    val e = awaitPointerEvent()
+                var holding = false
+                var maxPointers = 1
+                var totalMove = Offset.Zero
+                while (true) {
+                    // A still finger for a moment shows the original, without effects.
+                    val waitHold = !moved && !holding && maxPointers == 1 && !pick
+                    val e = if (waitHold) withTimeoutOrNull(450) { awaitPointerEvent() } else awaitPointerEvent()
+                    if (e == null) {
+                        holding = true
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        vm.preview.showOriginal(true)
+                        continue
+                    }
+                    maxPointers = maxOf(maxPointers, e.changes.count { it.pressed })
                     val zoom = e.calculateZoom()
-                    val pan = e.calculatePan()
+                    var pan = e.calculatePan()
                     val rot = e.calculateRotation()
+                    totalMove += pan
                     if (!moved && (pan.getDistance() > viewConfiguration.touchSlop / 4 || abs(zoom - 1f) > 0.01f || abs(rot) > 0.5f)) {
                         if (e.changes.any { it.positionChanged() }) moved = true
                     }
-                    if (moved && movable && !pick) {
+                    // A hold that turns into a drag is a drag: stop showing the original and move.
+                    if (holding && totalMove.getDistance() > viewConfiguration.touchSlop) {
+                        holding = false
+                        vm.preview.showOriginal(false)
+                        moved = true
+                        pan = totalMove
+                    }
+                    if (moved && movable && !pick && !holding) {
                         if (!started) { vm.beginGesture(); started = true }
                         val dx = pan.x / size.width
                         val dy = pan.y / size.height
                         vm.setTransformAtPlayhead(gesture = true) { t ->
-                            t.copy(x = t.x + dx, y = t.y + dy, scale = (t.scale * zoom).coerceIn(0.05f, 8f), rotation = t.rotation + rot)
+                            t.copy(x = (t.x + dx).coerceIn(-0.5f, 1.5f), y = (t.y + dy).coerceIn(-0.5f, 1.5f), scale = (t.scale * zoom).coerceIn(0.05f, 8f), rotation = t.rotation + rot)
                         }
                         e.changes.forEach { it.consume() }
                     }
-                } while (e.changes.any { it.pressed })
+                    if (e.changes.none { it.pressed }) break
+                }
                 if (started) vm.endGesture()
-                if (!moved) {
-                    if (pick) onPickColor(Offset(down.position.x / size.width, down.position.y / size.height))
-                    else vm.preview.toggle()
+                when {
+                    holding -> vm.preview.showOriginal(false)
+                    // Two-finger tap undoes, three-finger tap redoes.
+                    !moved && maxPointers == 2 -> vm.undo()
+                    !moved && maxPointers >= 3 -> vm.redo()
+                    !moved -> if (pick) onPickColor(Offset(down.position.x / size.width, down.position.y / size.height)) else vm.preview.toggle()
                 }
             }
         },
@@ -507,6 +600,21 @@ private fun PreviewOverlay(
                 val t = interpolate(l.transform, l.keyframes, pos - l.startUs)
                 Triple(t, t.scale, t.scale)
             }
+            is Selection.ShapeSel -> project.shapes.firstOrNull { it.id == s.id }?.takeIf { pos in it.startUs until it.startUs + it.durationUs }?.let { l ->
+                val t = interpolate(l.transform, l.keyframes, pos - l.startUs)
+                Triple(t, t.scale * l.aspect, t.scale)
+            }
+            is Selection.OverlaySel -> project.overlays.firstOrNull { it.id == s.id }?.takeIf { pos in it.startUs until it.endUs }?.let { o ->
+                val t = interpolate(o.transform, o.keyframes, pos - o.startUs)
+                val rot = o.rotationDegrees % 180 != 0
+                val sw = (if (rot) o.sourceHeight else o.sourceWidth).coerceAtLeast(1).toFloat()
+                val sh = (if (rot) o.sourceWidth else o.sourceHeight).coerceAtLeast(1).toFloat()
+                // Overlay fits inside the canvas at scale 1, like the shader's fitSize.
+                val canvasAspect = size.width / size.height
+                val srcAspect = sw / sh
+                val (fw, fh) = if (srcAspect > canvasAspect) canvasAspect to canvasAspect / srcAspect else srcAspect to 1f
+                Triple(t, fw * t.scale, fh * t.scale)
+            }
             else -> null
         }
         if (box != null) {
@@ -523,6 +631,32 @@ private fun PreviewOverlay(
         }
         aspect.hashCode()
     }
+}
+
+/** Reads the overlay's pixel under a preview tap, undoing its placement. */
+private fun sampleOverlayColor(ctx: android.content.Context, o: com.reel.editor.model.OverlayClip, pos: Long, uv: Offset, canvasAspect: Float): Long? {
+    val local = (pos - o.startUs).coerceIn(0, o.timelineDurationUs)
+    val bmp = if (o.kind == com.reel.editor.model.ClipKind.PHOTO) {
+        ctx.contentResolver.openInputStream(Uri.parse(o.uri))?.use { android.graphics.BitmapFactory.decodeStream(it) }
+    } else {
+        val r = MediaMetadataRetriever()
+        try { r.setDataSource(ctx, Uri.parse(o.uri)); r.getFrameAtTime(o.trimStartUs + local, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) } catch (e: Exception) { null } finally { r.release() }
+    } ?: return null
+    val t = interpolate(o.transform, o.keyframes, local)
+    val srcAspect = bmp.width.toFloat() / bmp.height
+    val (fw, fh) = if (srcAspect > canvasAspect) 1f to canvasAspect / srcAspect else srcAspect / canvasAspect to 1f
+    // Canvas uv -> overlay local uv: undo translate, rotate (in canvas-aspect space) and scale.
+    var dx = (uv.x - t.x) * canvasAspect
+    var dy = uv.y - t.y
+    val a = Math.toRadians(-t.rotation.toDouble())
+    val rx = (dx * kotlin.math.cos(a) - dy * kotlin.math.sin(a)).toFloat()
+    val ry = (dx * kotlin.math.sin(a) + dy * kotlin.math.cos(a)).toFloat()
+    dx = rx / canvasAspect; dy = ry
+    val u = dx / (fw * t.scale) + 0.5f
+    val v = dy / (fh * t.scale) + 0.5f
+    if (u !in 0f..1f || v !in 0f..1f) return null
+    val px = bmp.getPixel((u * (bmp.width - 1)).toInt(), (v * (bmp.height - 1)).toInt())
+    return 0xFF000000L or (px.toLong() and 0xFFFFFF)
 }
 
 /** Reads the source pixel under a preview tap (ignores keyframed motion). */

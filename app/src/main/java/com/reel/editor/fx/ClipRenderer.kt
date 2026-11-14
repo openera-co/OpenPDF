@@ -13,6 +13,7 @@ import com.reel.editor.model.Adjustments
 import com.reel.editor.model.BackgroundMode
 import com.reel.editor.model.Curves
 import com.reel.editor.model.interpolate
+import com.reel.editor.model.interpolateValue
 import com.reel.editor.nativebridge.NativeCore
 import kotlin.math.max
 import kotlin.math.min
@@ -21,13 +22,18 @@ import kotlin.math.roundToInt
 /** Media3 effect wrapping a clip's whole look: one GL program with internal passes. */
 class ClipRenderEffect(private val context: Context, private val plan: RenderPlan, private val live: LivePlans?) : GlEffect {
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
-        ClipRenderer(this.context.applicationContext, { live?.get(plan.clip.id) ?: plan }, FxCatalog.get(this.context))
+        ClipRenderer(this.context.applicationContext, { live?.get(plan.clip.id) ?: plan }, FxCatalog.get(this.context), isLive = live != null)
 }
 
 /**
  * Plans the preview reads on every frame. Non-structural edits (color, effects, text, keyframes)
  * replace plans here and show up on the next frame without rebuilding the player.
  */
+/** Press and hold on the preview: show the clips without looks, effects, animations or layers. */
+object PreviewOriginal {
+    @Volatile var on = false
+}
+
 class LivePlans {
     @Volatile private var plans: Map<String, RenderPlan> = emptyMap()
     fun get(clipId: String): RenderPlan? = plans[clipId]
@@ -47,6 +53,7 @@ class ClipRenderer(
     private val context: Context,
     private val planSource: () -> RenderPlan,
     private val catalog: FxCatalog,
+    private val isLive: Boolean = false,
 ) : BaseGlShaderProgram(/* useHighPrecisionColorComponents= */ false, /* texturePoolCapacity= */ 1) {
 
     /** Snapshot for the frame being drawn; canvas size is fixed for the program's lifetime. */
@@ -63,6 +70,7 @@ class ClipRenderer(
     private var curveTex = 0
     private var lutTexCache = HashMap<String, Int>()
     private var curvesKey: Curves? = null
+    private val overlays by lazy { OverlayRenderer(context, catalog) }
 
     // Cutout: a small copy of the frame for the segmenter, and the mask it produces.
     private var segW = 0
@@ -120,45 +128,43 @@ class ClipRenderer(
         ensureTargets()
         if (plan.cutout.enabled) updateMask(inputTexId, pts)
 
+        // Only the live preview reads this; export always renders everything.
+        val original = isLive && PreviewOriginal.on
         val pre = ArrayList<Pass>()
-        val post = ArrayList<Pass>()
-        buildPrePasses(pre, local, global)
-        post += Pass({ src, _, _ -> canvasPass(src, local) }, true)
-        buildPostPasses(post, local, global)
+        if (!original) buildPrePasses(pre, local, global)
+        // The clip itself: canvas, its in/out animation and the transition into it.
+        val clipPost = ArrayList<Pass>()
+        clipPost += Pass({ src, _, _ -> canvasPass(src, local) }, true)
+        if (!original) buildClipPasses(clipPost, local)
+        // Everything above the clip: overlays, then timed looks, filters, adjustment layers, effects.
+        val globalPost = ArrayList<Pass>()
+        if (!original) buildGlobalPasses(globalPost, local, global)
 
         // Pre-canvas: ping-pong at work size. The first pass downsamples from the input.
         var src = inputTexId
-        var srcW = inW
-        var srcH = inH
         var ping = 0
         for (p in pre) {
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, workFb[ping])
             GLES20.glViewport(0, 0, workW, workH)
             p.run(src, workW, workH)
-            src = workTex[ping]; srcW = workW; srcH = workH
+            src = workTex[ping]
             ping = 1 - ping
         }
 
-        // Post-canvas: canvas-size ping-pong, last pass to the output framebuffer.
-        val layers = activeLayers(global)
+        // Post-canvas: canvas-size ping-pong.
         var cping = 0
-        for ((i, p) in post.withIndex()) {
-            val last = i == post.lastIndex
-            if (last && layers.isEmpty() && !wantsTap(local)) {
-                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outFb)
-                GLES20.glViewport(viewport[0], viewport[1], viewport[2], viewport[3])
-            } else {
+        fun runAll(passes: List<Pass>) {
+            for (p in passes) {
                 GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, canvasFb[cping])
                 GLES20.glViewport(0, 0, plan.canvasWidth, plan.canvasHeight)
-            }
-            p.run(src, plan.canvasWidth, plan.canvasHeight)
-            if (!(last && layers.isEmpty() && !wantsTap(local))) {
+                currentTarget = canvasFb[cping]
+                p.run(src, plan.canvasWidth, plan.canvasHeight)
                 src = canvasTex[cping]
                 cping = 1 - cping
             }
         }
-        if (layers.isEmpty() && !wantsTap(local)) return
-
+        runAll(clipPost)
+        // Keep the clip's last frames (without overlays or global effects) for the next transition.
         if (wantsTap(local)) {
             val target = GlCache.frameTarget(plan.clip.id, plan.canvasWidth, plan.canvasHeight)
             val fb = GlTex.framebuffer(target.id)
@@ -167,13 +173,18 @@ class ClipRenderer(
             GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
             GLES20.glDeleteFramebuffers(1, intArrayOf(fb), 0)
         }
+        runAll(globalPost)
 
-        // Final: frame, then blended layers, into the output.
+        // Final: frame, then text, stickers and shapes, into the output.
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, outFb)
         GLES20.glViewport(viewport[0], viewport[1], viewport[2], viewport[3])
         passthrough(src)
+        val layers = if (original) emptyList() else activeLayers(global)
         if (layers.isNotEmpty()) drawLayers(layers, global)
     }
+
+    /** Framebuffer the running post pass writes to (overlays bind it again after decoding). */
+    private var currentTarget = 0
 
     private fun wantsTap(local: Long) = plan.keepTail && plan.clipDurationUs - local <= 200_000
 
@@ -188,7 +199,8 @@ class ClipRenderer(
 
     private fun buildPrePasses(out: MutableList<Pass>, local: Long, global: Long) {
         val needGrade = !plan.adjust.isIdentity || plan.look != null
-        if (needGrade) out += Pass({ src, w, h -> gradePass(src, w, h, local, plan.adjust, plan.look) }, false)
+        val look = plan.look?.let { it.copy(amount = interpolateValue(it.amount, plan.clip.lookKeys, local)) }
+        if (needGrade) out += Pass({ src, w, h -> gradePass(src, w, h, local, plan.adjust, look) }, false)
         plan.clipFilter?.let { f -> out += Pass({ src, w, h -> shaderPass(f, src, w, h, local / 1e6f, plan.clipDurationUs / 1e6f) }, false) }
         for (e in plan.clipEffects) out += Pass({ src, w, h -> shaderPass(e, src, w, h, local / 1e6f, plan.clipDurationUs / 1e6f) }, false)
     }
@@ -379,16 +391,7 @@ class ClipRenderer(
 
     // ------------------------------------------------------------------ post-canvas
 
-    private fun buildPostPasses(out: MutableList<Pass>, local: Long, global: Long) {
-        for (l in plan.timedLooks) if (global in l.startUs until l.endUs) {
-            out += Pass({ src, w, h -> gradePass(src, w, h, local, Adjustments(), l) }, true)
-        }
-        for (f in plan.timedFilters) if (global in f.startUs until f.endUs) {
-            out += Pass({ src, w, h -> shaderPass(f, src, w, h, (global - f.startUs) / 1e6f, (f.endUs - f.startUs) / 1e6f) }, true)
-        }
-        for (e in plan.timedEffects) if (global in e.startUs until e.endUs) {
-            out += Pass({ src, w, h -> shaderPass(e, src, w, h, (global - e.startUs) / 1e6f, (e.endUs - e.startUs) / 1e6f) }, true)
-        }
+    private fun buildClipPasses(out: MutableList<Pass>, local: Long) {
         plan.animIn?.let { (def, ref) ->
             val d = min(ref.durationUs, plan.clipDurationUs / 2)
             if (local < d && d > 0) out += Pass({ src, w, h -> animPass(def, src, w, h, smooth(local.toFloat() / d), local) }, true)
@@ -400,6 +403,37 @@ class ClipRenderer(
         }
         plan.transition?.let { tr ->
             if (local < tr.durationUs) out += Pass({ src, _, _ -> transitionPass(tr, src, local.toFloat() / tr.durationUs) }, true)
+        }
+    }
+
+    private fun buildGlobalPasses(out: MutableList<Pass>, local: Long, global: Long) {
+        for (o in plan.overlays) if (global >= o.startUs && global < o.endUs) {
+            out += Pass({ src, _, _ ->
+                val target = currentTarget
+                if (!overlays.draw(o, global, src, plan.canvasWidth, plan.canvasHeight, target)) {
+                    GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, target)
+                    GLES20.glViewport(0, 0, plan.canvasWidth, plan.canvasHeight)
+                    passthrough(src)
+                }
+            }, true)
+        }
+        for (l in plan.timedLooks) if (global in l.startUs until l.endUs) {
+            out += Pass({ src, w, h -> gradePass(src, w, h, local, Adjustments(), l) }, true)
+        }
+        for (f in plan.timedFilters) if (global in f.startUs until f.endUs) {
+            out += Pass({ src, w, h -> shaderPass(f, src, w, h, (global - f.startUs) / 1e6f, (f.endUs - f.startUs) / 1e6f) }, true)
+        }
+        for (a in plan.adjustLayers) if (global >= a.startUs && global < a.endUs) {
+            val al = global - a.startUs
+            val k = interpolateValue(a.layer.amount, a.layer.amountKeys, al).coerceIn(0f, 1f)
+            if (k <= 0.001f) continue
+            val look = a.look?.let { LookUse(it, a.layer.lookAmount * k, a.startUs, a.endUs) }
+            val adj = a.layer.adjust.scaled(k)
+            if (!adj.isIdentity || look != null) out += Pass({ src, w, h -> gradePass(src, w, h, al, adj, look) }, true)
+            for (e in a.effects) out += Pass({ src, w, h -> shaderPass(e.copy(intensity = e.intensity * k), src, w, h, al / 1e6f, (a.endUs - a.startUs) / 1e6f) }, true)
+        }
+        for (e in plan.timedEffects) if (global in e.startUs until e.endUs) {
+            out += Pass({ src, w, h -> shaderPass(e, src, w, h, (global - e.startUs) / 1e6f, (e.endUs - e.startUs) / 1e6f) }, true)
         }
     }
 
@@ -453,9 +487,11 @@ class ClipRenderer(
             val dur = layer.endUs - layer.startUs
             val text = layer.text
             val sticker = layer.sticker
+            val shape = layer.shape
             val (base, keys, motion) = when {
                 text != null -> Triple(text.transform, text.keyframes, TextMotion.at(text.animIn, text.animOut, text.loop, local, dur))
                 sticker != null -> Triple(sticker.transform, sticker.keyframes, TextMotion.at(sticker.animIn, sticker.animOut, null, local, dur))
+                shape != null -> Triple(shape.transform, shape.keyframes, TextMotion.at(shape.animIn, shape.animOut, null, local, dur))
                 else -> continue
             }
             if (motion.opacity <= 0.001f) continue
@@ -465,11 +501,20 @@ class ClipRenderer(
             val px = if (text != null) tex.height.toFloat() / plan.canvasHeight else 1f
             val heightUnits = if (text != null) px * t.scale * motion.scale else t.scale * motion.scale
             val widthUnits = heightUnits * tex.width / tex.height
+            var cx = t.x + motion.dx
+            var cy = t.y + motion.dy
+            if (text?.isCaption == true) {
+                // Captions always stay inside the frame's safe area, whatever their length or position.
+                val hx = widthUnits / aspect / 2f
+                val hy = heightUnits / 2f
+                cx = if (hx >= 0.46f) 0.5f else cx.coerceIn(0.04f + hx, 0.96f - hx)
+                cy = if (hy >= 0.44f) 0.5f else cy.coerceIn(0.06f + hy, 0.94f - hy)
+            }
             p.use()
             p.texture("uLayer", tex.id, 0)
             p.set("uCanvasAspect", aspect)
-            p.set("uCenter", t.x + motion.dx, 1f - (t.y + motion.dy))
-            p.set("uSize", widthUnits, heightUnits)
+            p.set("uCenter", cx, 1f - cy)
+            p.set("uSize", widthUnits * motion.sx, heightUnits * motion.sy)
             p.set("uRotation", Math.toRadians((t.rotation + motion.rotationDeg).toDouble()).toFloat())
             p.set("uOpacity", (t.opacity * motion.opacity).coerceIn(0f, 1f))
             p.draw()
@@ -482,8 +527,13 @@ class ClipRenderer(
         if (text != null) {
             val chars = if (reveal >= 1f) -1 else (text.text.length * reveal).toInt()
             val word = if (text.words.isEmpty()) -1 else text.words.indexOfFirst { local >= it.startUs && local < it.endUs }
-            val key = "text:${text.hashCode()}:$chars:$word:${plan.canvasHeight}"
-            return GlCache.texture(key) { LayerBitmaps.text(text, chars, word, plan.canvasHeight)?.let { flipForGl(it) } }
+            val key = "text:${text.hashCode()}:$chars:$word:${plan.canvasWidth}x${plan.canvasHeight}"
+            return GlCache.texture(key) { LayerBitmaps.text(text, chars, word, plan.canvasHeight, plan.canvasWidth)?.let { flipForGl(it) } }
+        }
+        layer.shape?.let { sh ->
+            return GlCache.texture("shape:${sh.copy(transform = com.reel.editor.model.Transform(), keyframes = emptyList(), startUs = 0, durationUs = 0).hashCode()}:${plan.canvasHeight}") {
+                LayerBitmaps.shapeLayer(sh, plan.canvasHeight)
+            }
         }
         val s = layer.sticker ?: return null
         return GlCache.texture("sticker:${s.source}:${plan.canvasHeight}") {
@@ -497,6 +547,7 @@ class ClipRenderer(
     override fun release() {
         super.release()
         releaseMask()
+        if (plan.overlays.isNotEmpty()) overlays.release()
         for (i in 0..1) {
             if (workFb[i] != 0) GLES20.glDeleteFramebuffers(1, intArrayOf(workFb[i]), 0)
             if (canvasFb[i] != 0) GLES20.glDeleteFramebuffers(1, intArrayOf(canvasFb[i]), 0)

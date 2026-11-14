@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -88,6 +89,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.reel.editor.edit.EditorViewModel
+import com.reel.editor.model.setKey
+import com.reel.editor.model.keyAt
 import com.reel.editor.edit.Selection
 import com.reel.editor.fx.Fonts
 import com.reel.editor.fx.LayerBitmaps
@@ -229,18 +232,21 @@ private fun SwatchRow(current: Long, allowNone: Boolean = false, onPick: (Long) 
 
 @Composable
 fun StickerPanel(vm: EditorViewModel, onClose: () -> Unit) {
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) {
-            runCatching { vm.getApplication<android.app.Application>().contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            vm.addSticker(uri.toString())
-            onClose()
-        }
+    val picker = LocalPicker.current
+    val pickImage = {
+        picker.open(PickerRequest(setOf(com.reel.editor.media.MediaLibrary.Kind.PHOTO), multi = false) { list ->
+            list.firstOrNull()?.let { uri ->
+                runCatching { vm.getApplication<android.app.Application>().contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                vm.addSticker(uri.toString())
+                onClose()
+            }
+        })
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SheetHeader("Stickers", onClose = onClose)
         LazyVerticalGrid(GridCells.Fixed(5), Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 170.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
-                Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(C.Surface2).clickable { pick.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).background(C.Surface2).clickable { pickImage() }, contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.Image, "Image from gallery", tint = C.Text)
                 }
             }
@@ -264,7 +270,8 @@ fun AudioPanel(vm: EditorViewModel, onClose: () -> Unit) {
     val project by vm.project.collectAsStateCompat()
     val selection by vm.selection.collectAsStateCompat()
     val selected = (selection as? Selection.AudioSel)?.let { s -> project.audio.firstOrNull { it.id == s.id } }
-    val pickMusic = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? -> if (uri != null) vm.addAudio(uri, AudioKind.MUSIC) }
+    val picker = LocalPicker.current
+    val pickMusic = { picker.open(PickerRequest(setOf(com.reel.editor.media.MediaLibrary.Kind.AUDIO), multi = false, audioFromVideo = true) { u -> u.firstOrNull()?.let { vm.addAudio(it, AudioKind.MUSIC) } }) }
     var recording by remember { mutableStateOf<Pair<MediaRecorder, File>?>(null) }
     var recStart by remember { mutableLongStateOf(0L) }
     var recPos by remember { mutableLongStateOf(0L) }
@@ -312,9 +319,23 @@ fun AudioPanel(vm: EditorViewModel, onClose: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SheetHeader("Audio", Icons.Rounded.LibraryMusic, iconTint = C.Music, onClose = onClose, onDone = onClose)
         if (selected != null) {
-            ValueSlider(Icons.Rounded.VolumeUp, "Volume", selected.volume * 100, 0f..200f, { "${it.roundToInt()}%" }, C.Music, default = 100f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
-                vm.live { p -> p.copy(audio = p.audio.map { if (it.id == selected.id) it.copy(volume = v / 100f) else it }) }
-            }
+            val pos by vm.preview.positionUs.collectAsStateCompat()
+            val local = pos - selected.startUs
+            val inside = local in 0..selected.durationUs
+            fun upd(f: (com.reel.editor.model.AudioItem) -> com.reel.editor.model.AudioItem) = vm.live { p -> p.copy(audio = p.audio.map { if (it.id == selected.id) f(it) else it }) }
+            ValueSlider(
+                Icons.Rounded.VolumeUp, "Volume", com.reel.editor.model.interpolateValue(selected.volume, selected.volumeKeys, local) * 100, 0f..200f, { "${it.roundToInt()}%" }, C.Music, default = 100f,
+                key = SliderKey(inside && selected.volumeKeys.keyAt(local) != null, selected.volumeKeys.isNotEmpty()) {
+                    if (!inside) return@SliderKey
+                    vm.beginGesture()
+                    upd { a ->
+                        val ex = a.volumeKeys.keyAt(local)
+                        if (ex != null) a.copy(volumeKeys = a.volumeKeys - ex) else a.copy(volumeKeys = a.volumeKeys.setKey(local, com.reel.editor.model.interpolateValue(a.volume, a.volumeKeys, local)))
+                    }
+                    vm.endGesture()
+                },
+                onStart = vm::beginGesture, onEnd = vm::endGesture,
+            ) { v -> upd { a -> if (a.volumeKeys.isEmpty() || !inside) a.copy(volume = v / 100f) else a.copy(volumeKeys = a.volumeKeys.setKey(local, v / 100f)) } }
             val maxFade = (selected.durationUs / 2e6f).coerceAtLeast(0.1f)
             ValueSlider(Icons.Rounded.Gradient, "Fade in", selected.fadeInUs / 1e6f, 0f..maxFade, { "%.1fs".format(it) }, C.Music, default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
                 vm.live { p -> p.copy(audio = p.audio.map { if (it.id == selected.id) it.copy(fadeInUs = (v * 1e6).toLong()) else it }) }
@@ -342,7 +363,7 @@ fun AudioPanel(vm: EditorViewModel, onClose: () -> Unit) {
             }
         } else {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                BigAction(Icons.Rounded.LibraryMusic, "Music", C.Music, Modifier.weight(1f)) { pickMusic.launch(arrayOf("audio/*")) }
+                BigAction(Icons.Rounded.LibraryMusic, "Music", C.Music, Modifier.weight(1f)) { pickMusic() }
                 BigAction(if (recording != null) Icons.Rounded.Stop else Icons.Rounded.Mic, if (recording != null) formatTime(elapsed * 1000) else "Voiceover", C.Voice, Modifier.weight(1f)) {
                     if (recording != null) stopRec() else startRec()
                 }
@@ -370,13 +391,14 @@ fun KeyframePanel(vm: EditorViewModel, onClose: () -> Unit) {
     val pos by vm.preview.positionUs.collectAsStateCompat()
     val info = remember(project, selection, pos) { transformInfo(project, selection, pos) }
     if (info == null) {
-        Column { SheetHeader("Keyframes", onClose = onClose); Text("Select a clip, text or sticker.", style = Body.copy(color = C.Muted), modifier = Modifier.padding(20.dp)) }
+        Column { SheetHeader("Keyframes", onClose = onClose); Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Diamond, null, tint = C.Muted) } }
         return
     }
     val (t, keys, start) = info
     val onKey = keys.any { abs(start + it.timeUs - pos) < 40_000 }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SheetHeader("Keyframes", Icons.Rounded.Diamond, iconTint = C.Key, onClose = onClose, onDone = onClose)
+    var tab by remember { mutableIntStateOf(0) }
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SheetHeader("Keyframes", onClose = onClose, onDone = onClose, center = { Segmented(listOf("Values", "Graph"), tab, { tab = it }) })
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             IconBtn(Icons.Rounded.ChevronLeft, "Previous keyframe", background = C.Surface2, size = 40.dp) {
                 keys.map { start + it.timeUs }.filter { it < pos - 40_000 }.maxOrNull()?.let { vm.preview.seekTo(it) }
@@ -390,11 +412,20 @@ fun KeyframePanel(vm: EditorViewModel, onClose: () -> Unit) {
             Spacer(Modifier.weight(1f))
             Text("${keys.size}", style = Mono.copy(color = C.Key))
         }
+        if (tab == 0) {
         ValueSlider(Icons.Rounded.OpenWith, "X", t.x * 100, -50f..150f, { "${it.roundToInt()}" }, C.Key, default = 50f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.setTransformAtPlayhead(true) { it.copy(x = v / 100f) } }
         ValueSlider(Icons.Rounded.OpenWith, "Y", t.y * 100, -50f..150f, { "${it.roundToInt()}" }, C.Key, default = 50f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.setTransformAtPlayhead(true) { it.copy(y = v / 100f) } }
         ValueSlider(Icons.Rounded.ZoomOutMap, "Scale", t.scale * 100, 5f..400f, { "${it.roundToInt()}%" }, C.Key, default = 100f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.setTransformAtPlayhead(true) { it.copy(scale = v / 100f) } }
         ValueSlider(Icons.Rounded.RotateRight, "Rotation", t.rotation, -180f..180f, { "${it.roundToInt()}°" }, C.Key, default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.setTransformAtPlayhead(true) { it.copy(rotation = v) } }
         ValueSlider(Icons.Rounded.Opacity, "Opacity", t.opacity * 100, 0f..100f, { "${it.roundToInt()}%" }, C.Key, default = 100f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.setTransformAtPlayhead(true) { it.copy(opacity = v / 100f) } }
+        } else {
+        // How the chosen property changes over the whole layer.
+        val span = itemSpan(project, selection)
+        if (span != null && keys.isNotEmpty()) {
+            var prop by remember { mutableStateOf(GraphProp.SCALE) }
+            GraphPropChips(prop) { prop = it }
+            ValueGraph(span.first, keys, start, span.second, pos, prop, onSeek = { vm.preview.seekTo(it) }, modifier = Modifier.padding(horizontal = 16.dp))
+        }
         // Easing of the segment arriving at the next keyframe after the playhead.
         val next = keys.sortedBy { it.timeUs }.firstOrNull { start + it.timeUs > pos }
         if (next != null) {
@@ -403,8 +434,11 @@ fun KeyframePanel(vm: EditorViewModel, onClose: () -> Unit) {
                 Easing.PRESETS.forEach { e ->
                     Chip(e.name, next.easing == e) { vm.edit { p -> setEasing(p, selection, next.timeUs, e) } }
                 }
+                if (next.easing !in Easing.PRESETS) Chip("Custom", true) {}
             }
-            EasingCurve(next.easing)
+            EasingEditor(next.easing, onStart = vm::beginGesture, onChange = { e -> vm.live { p -> setEasing(p, selection, next.timeUs, e) } }, onEnd = vm::endGesture)
+        }
+        if (keys.size < 2) Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.ShowChart, null, tint = C.Dim) }
         }
         Spacer(Modifier.height(8.dp))
     }
@@ -416,33 +450,31 @@ private fun setEasing(p: com.reel.editor.model.Project, sel: Selection, timeUs: 
         is Selection.ClipSel -> p.copy(clips = p.clips.map { if (it.id == sel.id) it.copy(keyframes = fix(it.keyframes)) else it })
         is Selection.TextSel -> p.copy(texts = p.texts.map { if (it.id == sel.id) it.copy(keyframes = fix(it.keyframes)) else it })
         is Selection.StickerSel -> p.copy(stickers = p.stickers.map { if (it.id == sel.id) it.copy(keyframes = fix(it.keyframes)) else it })
+        is Selection.ShapeSel -> p.copy(shapes = p.shapes.map { if (it.id == sel.id) it.copy(keyframes = fix(it.keyframes)) else it })
+        is Selection.OverlaySel -> p.copy(overlays = p.overlays.map { if (it.id == sel.id) it.copy(keyframes = fix(it.keyframes)) else it })
         else -> p
     }
+}
+
+/** The layer's untouched transform and its length, for the value graph. */
+private fun itemSpan(p: com.reel.editor.model.Project, sel: Selection): Pair<com.reel.editor.model.Transform, Long>? = when (sel) {
+    is Selection.ClipSel -> TimelineMath.place(p.clips).firstOrNull { it.clip.id == sel.id }?.let { it.clip.transform to it.durationUs }
+    is Selection.TextSel -> p.texts.firstOrNull { it.id == sel.id }?.let { it.transform to it.durationUs }
+    is Selection.StickerSel -> p.stickers.firstOrNull { it.id == sel.id }?.let { it.transform to it.durationUs }
+    is Selection.ShapeSel -> p.shapes.firstOrNull { it.id == sel.id }?.let { it.transform to it.durationUs }
+    is Selection.OverlaySel -> p.overlays.firstOrNull { it.id == sel.id }?.let { it.transform to it.timelineDurationUs }
+    else -> null
 }
 
 fun transformInfo(p: com.reel.editor.model.Project, sel: Selection, pos: Long): Triple<com.reel.editor.model.Transform, List<com.reel.editor.model.Keyframe>, Long>? = when (sel) {
     is Selection.ClipSel -> TimelineMath.place(p.clips).firstOrNull { it.clip.id == sel.id }?.let { Triple(interpolate(it.clip.transform, it.clip.keyframes, pos - it.startUs), it.clip.keyframes, it.startUs) }
     is Selection.TextSel -> p.texts.firstOrNull { it.id == sel.id }?.let { Triple(interpolate(it.transform, it.keyframes, pos - it.startUs), it.keyframes, it.startUs) }
     is Selection.StickerSel -> p.stickers.firstOrNull { it.id == sel.id }?.let { Triple(interpolate(it.transform, it.keyframes, pos - it.startUs), it.keyframes, it.startUs) }
+    is Selection.ShapeSel -> p.shapes.firstOrNull { it.id == sel.id }?.let { Triple(interpolate(it.transform, it.keyframes, pos - it.startUs), it.keyframes, it.startUs) }
+    is Selection.OverlaySel -> p.overlays.firstOrNull { it.id == sel.id }?.let { Triple(interpolate(it.transform, it.keyframes, pos - it.startUs), it.keyframes, it.startUs) }
     else -> null
 }
 
-@Composable
-private fun EasingCurve(e: Easing) {
-    Canvas(Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(70.dp).clip(RoundedCornerShape(12.dp)).background(C.Track)) {
-        val w = size.width
-        val h = size.height
-        val path = androidx.compose.ui.graphics.Path()
-        for (i in 0..60) {
-            val x = i / 60f
-            val y = e.ease(x)
-            val px = x * w
-            val py = h - 6 - y * (h - 12)
-            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
-        }
-        drawPath(path, C.Key, style = androidx.compose.ui.graphics.drawscope.Stroke(2.5f * density))
-    }
-}
 
 
 @Suppress("unused")

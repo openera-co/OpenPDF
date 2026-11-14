@@ -208,6 +208,23 @@ object TimelineMath {
 /** Cubic-bezier easing (CSS semantics) solved with Newton iterations. */
 fun Easing.ease(t: Float): Float {
     val x = t.coerceIn(0f, 1f)
+    when (name) {
+        "Bounce" -> {
+            // Falls and bounces three times, settling at 1.
+            val n = 7.5625f
+            val d = 2.75f
+            return when {
+                x < 1 / d -> n * x * x
+                x < 2 / d -> { val k = x - 1.5f / d; n * k * k + 0.75f }
+                x < 2.5 / d -> { val k = x - 2.25f / d; n * k * k + 0.9375f }
+                else -> { val k = x - 2.625f / d; n * k * k + 0.984375f }
+            }
+        }
+        "Elastic" -> {
+            if (x == 0f || x == 1f) return x
+            return (Math.pow(2.0, -10.0 * x) * kotlin.math.sin((x * 10 - 0.75) * (2 * Math.PI / 3)) + 1).toFloat()
+        }
+    }
     if (this.x1 == this.y1 && this.x2 == this.y2) return x
     fun bx(u: Float) = 3 * (1 - u) * (1 - u) * u * x1 + 3 * (1 - u) * u * u * x2 + u * u * u
     fun by(u: Float) = 3 * (1 - u) * (1 - u) * u * y1 + 3 * (1 - u) * u * u * y2 + u * u * u
@@ -252,3 +269,24 @@ fun interpolate(base: Transform, keyframes: List<Keyframe>, localUs: Long): Tran
         opacity = l(a.transform.opacity, b.transform.opacity),
     )
 }
+
+/** Value at [t] (offset from the item's start) from keyframes, or [base] without any. */
+fun interpolateValue(base: Float, keys: List<ValueKey>, t: Long): Float {
+    if (keys.isEmpty()) return base
+    val k = keys.sortedBy { it.timeUs }
+    if (t <= k.first().timeUs) return k.first().value
+    if (t >= k.last().timeUs) return k.last().value
+    val i = k.indexOfLast { it.timeUs <= t }
+    val a = k[i]
+    val b = k[i + 1]
+    val u = (t - a.timeUs).toFloat() / (b.timeUs - a.timeUs).coerceAtLeast(1)
+    return a.value + (b.value - a.value) * b.easing.ease(u)
+}
+
+/** Adds a key at [t] with [value], or replaces the one within [tolUs]. */
+fun List<ValueKey>.setKey(t: Long, value: Float, tolUs: Long = 30_000): List<ValueKey> {
+    val i = indexOfFirst { kotlin.math.abs(it.timeUs - t) <= tolUs }
+    return if (i >= 0) toMutableList().also { it[i] = it[i].copy(value = value) } else (this + ValueKey(t, value)).sortedBy { it.timeUs }
+}
+
+fun List<ValueKey>.keyAt(t: Long, tolUs: Long = 30_000): ValueKey? = firstOrNull { kotlin.math.abs(it.timeUs - t) <= tolUs }

@@ -74,21 +74,33 @@ fun rememberThumbTick(): State<Int> {
     return tick
 }
 
-/** The clip's frame at [localUs] on the timeline (offset from the clip start), ready for previews. */
+/** Bundled preview pictures: a person, a sunset and a scene above Earth. */
+object Samples {
+    const val PERSON = "person"
+    const val SCENE = "scene"
+    const val SCENE2 = "scene2"
+    private val cache = HashMap<String, Bitmap?>()
+
+    fun bitmap(context: android.content.Context, name: String): Bitmap? = synchronized(cache) {
+        cache.getOrPut(name) { runCatching { context.assets.open("samples/$name.jpg").use { android.graphics.BitmapFactory.decodeStream(it) } }.getOrNull() }
+    }
+}
+
+/** A sample picture ready for shader previews; the same picture for every tile, whatever is in the timeline. */
 @Composable
-fun rememberClipSource(vm: EditorViewModel, clip: Clip?, localUs: Long, tag: String = ""): FxSource? {
-    val mediaUs = clip?.let {
-        if (it.kind == ClipKind.PHOTO) 0L
-        else it.trimStartUs + SpeedMath.timelineToMedia(it.speed, it.trimmedDurationUs, localUs.coerceAtLeast(0))
-    } ?: 0L
-    val bucket = mediaUs / 250_000
-    val state = produceState<FxSource?>(null, clip?.uri, bucket) {
-        val frame = clip?.let { vm.thumbnails.frame(it.uri, mediaUs, 240, it.kind == ClipKind.PHOTO) }
-        val key = if (clip == null) "sample$tag" else "${clip.uri.hashCode()}:$bucket"
-        value = FxSource(FxThumbs.prepare(frame, hueShift = tag == "b"), key)
+fun rememberSampleSource(name: String): FxSource? {
+    val ctx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val state = produceState<FxSource?>(null, name) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { FxSource(FxThumbs.prepare(Samples.bitmap(ctx, name)), "sample:$name") }
     }
     return state.value
 }
+
+/** Previews for clip animations and transitions: "a" and "b" are the two sides of a transition. */
+@Suppress("UNUSED_PARAMETER")
+@Composable
+fun rememberClipSource(vm: EditorViewModel, clip: Clip?, localUs: Long, tag: String = ""): FxSource? =
+    rememberSampleSource(when (tag) { "a" -> Samples.SCENE; "b" -> Samples.SCENE2; else -> Samples.PERSON })
 
 /**
  * The playhead in half-second steps, following it only while paused: scrubbing updates the
@@ -106,24 +118,15 @@ fun rememberPausedPlayheadUs(vm: EditorViewModel): Long? {
     return pos.takeIf { it >= 0 }
 }
 
-/** The clip's frame under the playhead when the playhead is on it, else its first frame. */
+/** Effect and filter previews: the bundled person picture. */
 @Composable
-fun rememberTargetSource(vm: EditorViewModel, clip: Clip?): FxSource? {
-    val project by vm.project.collectAsStateCompat()
-    val pos = rememberPausedPlayheadUs(vm) ?: 0L
-    val placed = clip?.let { c -> TimelineMath.place(project.clips).firstOrNull { it.clip.id == c.id } }
-    val local = placed?.let { (pos - it.startUs).takeIf { l -> l in 0 until it.durationUs } } ?: 0L
-    return rememberClipSource(vm, clip, local)
-}
+@Suppress("UNUSED_PARAMETER")
+fun rememberTargetSource(vm: EditorViewModel, clip: Clip?): FxSource? = rememberSampleSource(Samples.PERSON)
 
-/** The frame under the playhead, used where an effect is not tied to one clip. */
+/** Timed effect previews: the bundled person picture. */
 @Composable
-fun rememberPlayheadSource(vm: EditorViewModel): FxSource? {
-    val project by vm.project.collectAsStateCompat()
-    val pos = rememberPausedPlayheadUs(vm) ?: 0L
-    val placed = TimelineMath.clipAt(TimelineMath.place(project.clips), pos)
-    return rememberClipSource(vm, placed?.clip, placed?.let { pos - it.startUs } ?: 0L)
-}
+@Suppress("UNUSED_PARAMETER")
+fun rememberPlayheadSource(vm: EditorViewModel): FxSource? = rememberSampleSource(Samples.PERSON)
 
 /** Tile for a filter, effect or clip animation, rendered with its real shader. */
 @Composable
@@ -208,8 +211,8 @@ fun TextAnimTile(id: String, phase: Int, selected: Boolean, tick: State<Int>, on
             val shown = if (motion.reveal >= 1f) word else word.take((word.length * motion.reveal).toInt())
             Box(Modifier.fillMaxSize().graphicsLayer {
                 alpha = motion.opacity.coerceIn(0f, 1f)
-                scaleX = motion.scale
-                scaleY = motion.scale
+                scaleX = motion.scale * motion.sx
+                scaleY = motion.scale * motion.sy
                 // Motion offsets are fractions of the canvas; scale them up so they read in a small tile.
                 translationX = motion.dx * size.width * 1.6f
                 translationY = motion.dy * size.height * 2.4f

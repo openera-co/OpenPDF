@@ -51,9 +51,10 @@ object CompositionFactory {
             val audio = ArrayList<AudioProcessor>()
             audio += voiceProcessors(clip.voice)
             val volume = if (clip.muted) 0f else clip.volume
-            audio += VolumeFadeProcessor(volume, clip.fadeInUs, clip.fadeOutUs, p.durationUs, mediaToTimeline = { media ->
+            val keyed = !clip.muted && clip.volumeKeys.isNotEmpty()
+            audio += VolumeFadeProcessor(if (keyed) 1f else volume, clip.fadeInUs, clip.fadeOutUs, p.durationUs, mediaToTimeline = { media ->
                 SpeedMath.mediaToTimeline(clip.speed, clip.trimmedDurationUs, media)
-            })
+            }, extraGain = if (keyed) { off -> com.reel.editor.model.interpolateValue(clip.volume, clip.volumeKeys, off) } else null)
             val b = EditedMediaItem.Builder(item)
                 .setEffects(Effects(audio, listOf(ClipRenderEffect(context, plan, live))))
             if (clip.kind == ClipKind.PHOTO) {
@@ -76,12 +77,30 @@ object CompositionFactory {
         // Auto-duck: where people speak, from the waveform analysis already done for the timeline.
         val analyzer = (context.applicationContext as? com.reel.editor.ReelApp)?.audio
         val speech by lazy { com.reel.editor.model.Ducking.speechOnTimeline(project, { analyzer?.cached(it)?.peaks }, LEVELS_PER_SEC) }
-        val music = project.audio.filter { it.startUs < total && it.durationUs > 0 }.sortedBy { it.startUs }
-        if (music.isNotEmpty()) {
-            // Overlapping audio items are split across sequences so each sequence stays gap-ordered.
-            val lanes = ArrayList<MutableList<com.reel.editor.model.AudioItem>>()
-            for (a in music) {
-                val lane = lanes.firstOrNull { it.last().endUs <= a.startUs } ?: mutableListOf<com.reel.editor.model.AudioItem>().also { lanes += it }
+        // Music, sounds and the sound of video overlays, each placed on the timeline.
+        class Src(val uri: String, val startUs: Long, val trimStartUs: Long, val trimEndUs: Long, val sourceDurationUs: Long, val fx: List<AudioProcessor>)
+        fun gainFn(volume: Float, keys: List<com.reel.editor.model.ValueKey>, duck: ((Long) -> Float)?): Pair<Float, ((Long) -> Float)?> = when {
+            keys.isEmpty() -> volume to duck
+            duck == null -> 1f to { off: Long -> com.reel.editor.model.interpolateValue(volume, keys, off) }
+            else -> 1f to { off: Long -> com.reel.editor.model.interpolateValue(volume, keys, off) * duck(off) }
+        }
+        val srcs = ArrayList<Src>()
+        for (a in project.audio.filter { it.startUs < total && it.durationUs > 0 }) {
+            val end = minOf(a.trimEndUs, a.trimStartUs + (total - a.startUs))
+            val duck = if (a.duck && a.kind == com.reel.editor.model.AudioKind.MUSIC) { off: Long -> com.reel.editor.model.Ducking.gainAt(speech, a.startUs + off, a.duckDb) } else null
+            val (vol, extra) = gainFn(a.volume, a.volumeKeys, duck)
+            srcs += Src(a.uri, a.startUs, a.trimStartUs, end, a.sourceDurationUs, voiceProcessors(a.voice) + VolumeFadeProcessor(vol, a.fadeInUs, a.fadeOutUs, end - a.trimStartUs, extraGain = extra))
+        }
+        for (o in project.overlays.filter { it.kind == ClipKind.VIDEO && it.hasAudio && !it.muted && it.startUs < total && it.timelineDurationUs > 0 }) {
+            val end = minOf(o.trimEndUs, o.trimStartUs + (total - o.startUs))
+            val (vol, extra) = gainFn(o.volume, o.volumeKeys, null)
+            srcs += Src(o.uri, o.startUs, o.trimStartUs, end, o.sourceDurationUs, listOf(VolumeFadeProcessor(vol, 0, 0, end - o.trimStartUs, extraGain = extra)))
+        }
+        if (srcs.isNotEmpty()) {
+            // Overlapping sources are split across sequences so each sequence stays gap-ordered.
+            val lanes = ArrayList<MutableList<Src>>()
+            for (a in srcs.sortedBy { it.startUs }) {
+                val lane = lanes.firstOrNull { l -> l.last().let { it.startUs + (it.trimEndUs - it.trimStartUs) } <= a.startUs } ?: mutableListOf<Src>().also { lanes += it }
                 lane += a
             }
             for (lane in lanes.take(4)) {
@@ -89,19 +108,11 @@ object CompositionFactory {
                 var t = 0L
                 for (a in lane) {
                     if (a.startUs > t) sb.addGap(a.startUs - t)
-                    val end = minOf(a.trimEndUs, a.trimStartUs + (total - a.startUs))
                     val mi = MediaItem.Builder().setUri(a.uri).setClippingConfiguration(
-                        MediaItem.ClippingConfiguration.Builder().setStartPositionUs(a.trimStartUs).setEndPositionUs(end).build(),
+                        MediaItem.ClippingConfiguration.Builder().setStartPositionUs(a.trimStartUs).setEndPositionUs(a.trimEndUs).build(),
                     ).build()
-                    val dur = end - a.trimStartUs
-                    sb.addItem(
-                        EditedMediaItem.Builder(mi).setRemoveVideo(true).setDurationUs(a.sourceDurationUs)
-                            .setEffects(Effects(voiceProcessors(a.voice) + VolumeFadeProcessor(a.volume, a.fadeInUs, a.fadeOutUs, dur,
-                                extraGain = if (a.duck && a.kind == com.reel.editor.model.AudioKind.MUSIC) { off -> com.reel.editor.model.Ducking.gainAt(speech, a.startUs + off, a.duckDb) } else null,
-                            ), emptyList()))
-                            .build(),
-                    )
-                    t = a.startUs + dur
+                    sb.addItem(EditedMediaItem.Builder(mi).setRemoveVideo(true).setDurationUs(a.sourceDurationUs).setEffects(Effects(a.fx, emptyList())).build())
+                    t = a.startUs + (a.trimEndUs - a.trimStartUs)
                 }
                 sequences += sb.build()
             }
@@ -134,8 +145,9 @@ object CompositionFactory {
      */
     fun structure(project: Project, analyzed: Set<String> = emptySet()): Any = listOf(
         project.canvas.ratio,
-        project.clips.map { listOf(it.id, it.uri, it.kind, it.trimStartUs, it.trimEndUs, it.speed, it.keepPitch, it.muted, it.volume, it.fadeInUs, it.fadeOutUs, it.voice) },
+        project.clips.map { listOf(it.id, it.uri, it.kind, it.trimStartUs, it.trimEndUs, it.speed, it.keepPitch, it.muted, it.volume, it.fadeInUs, it.fadeOutUs, it.voice, it.volumeKeys) },
         project.audio,
+        project.overlays.filter { it.kind == ClipKind.VIDEO && it.hasAudio }.map { listOf(it.id, it.uri, it.startUs, it.trimStartUs, it.trimEndUs, it.volume, it.muted, it.volumeKeys) },
         if (project.audio.any { it.duck }) analyzed else emptySet<String>(),
     )
 

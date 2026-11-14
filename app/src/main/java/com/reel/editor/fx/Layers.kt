@@ -19,6 +19,8 @@ import com.reel.editor.model.TextLayer
 import com.reel.editor.model.TextStyle
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.pow
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.max
@@ -181,7 +183,11 @@ object LayerBitmaps {
     /** Pixel size of 1 style unit, relative to canvas height so text keeps its look at any export size. */
     fun pxPerUnit(canvasHeight: Int) = canvasHeight / 1280f
 
-    fun text(layer: TextLayer, visibleChars: Int, highlightWord: Int, canvasHeight: Int): Bitmap? {
+    /**
+     * Renders a text layer. Lines wrap so the text fits inside the canvas width at the layer's
+     * scale ([canvasWidth] defaults to a 9:16 frame).
+     */
+    fun text(layer: TextLayer, visibleChars: Int, highlightWord: Int, canvasHeight: Int, canvasWidth: Int = canvasHeight * 9 / 16): Bitmap? {
         val st = layer.style
         val raw = layer.text.ifEmpty { " " }
         val shown = if (visibleChars in 0 until raw.length) raw.substring(0, visibleChars) else raw
@@ -192,7 +198,7 @@ object LayerBitmaps {
             letterSpacing = st.letterSpacing
             color = st.color.toInt()
         }
-        val maxWidth = (canvasHeight * 0.95f * 9f / 16f * 1.6f).toInt().coerceAtLeast(64)
+        val maxWidth = wrapWidth(layer, canvasWidth)
         val measureWidth = min(maxWidth, ceil(StaticLayout.getDesiredWidth(raw, paint)).toInt() + 2)
         val align = when (st.align) {
             TextAlignment.START -> Layout.Alignment.ALIGN_NORMAL
@@ -245,6 +251,96 @@ object LayerBitmaps {
             }
         }
         return bmp
+    }
+
+    /** Line width in pixels: captions take 84% of the frame, other text 90%, divided by the layer's own scale. */
+    fun wrapWidth(layer: TextLayer, canvasWidth: Int): Int {
+        val frac = if (layer.isCaption) 0.84f else 0.9f
+        val s = layer.transform.scale.coerceIn(0.2f, 8f)
+        return (canvasWidth * frac / s).toInt().coerceAtLeast(64)
+    }
+
+    /** Shape layers offered in the picker. */
+    val shapeKinds = listOf("rect", "roundrect", "circle", "triangle", "star", "heart", "hexagon", "ring", "line", "arrow", "bubble", "burst")
+
+    /** A shape layer drawn into a box of its [ShapeLayer.aspect], height relative to the canvas. */
+    fun shapeLayer(s: com.reel.editor.model.ShapeLayer, canvasHeight: Int): Bitmap {
+        val h = (canvasHeight * 0.6f).toInt().coerceIn(64, 1400)
+        val w = (h * s.aspect.coerceIn(0.1f, 10f)).toInt().coerceIn(16, 2400)
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val unit = pxPerUnit(canvasHeight)
+        val sw = s.strokeWidth * unit * 2
+        val inset = sw / 2 + 1
+        val r = RectF(inset, inset, w - inset, h - inset)
+        val path = shapePath(s.shape, r, s.corner)
+        s.fill?.let { col -> c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = col.toInt(); style = Paint.Style.FILL }) }
+        val ringOrLine = s.shape == "ring"
+        if (sw > 0f || ringOrLine) {
+            c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = (if (ringOrLine && s.strokeWidth <= 0f) (s.fill ?: s.stroke) else s.stroke).toInt()
+                style = Paint.Style.STROKE
+                strokeWidth = if (ringOrLine && sw <= 0f) h * 0.12f else sw
+                strokeJoin = Paint.Join.ROUND
+            })
+        }
+        return bmp
+    }
+
+    private fun shapePath(kind: String, r: RectF, corner: Float): Path {
+        val p = Path()
+        val cx = r.centerX()
+        val cy = r.centerY()
+        val w = r.width()
+        val h = r.height()
+        when (kind) {
+            "rect" -> p.addRect(r, Path.Direction.CW)
+            "roundrect" -> { val rad = min(w, h) * corner.coerceIn(0f, 0.5f); p.addRoundRect(r, rad, rad, Path.Direction.CW) }
+            "circle" -> p.addOval(r, Path.Direction.CW)
+            "ring" -> p.addOval(RectF(r.left + h * 0.06f, r.top + h * 0.06f, r.right - h * 0.06f, r.bottom - h * 0.06f), Path.Direction.CW)
+            "triangle" -> { p.moveTo(cx, r.top); p.lineTo(r.right, r.bottom); p.lineTo(r.left, r.bottom); p.close() }
+            "hexagon" -> {
+                for (i in 0 until 6) {
+                    val a = Math.toRadians(60.0 * i - 90)
+                    val x = cx + w / 2 * cos(a).toFloat(); val y = cy + h / 2 * sin(a).toFloat()
+                    if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
+                }
+                p.close()
+            }
+            "star", "burst" -> {
+                val n = if (kind == "star") 5 else 12
+                val inner = if (kind == "star") 0.42f else 0.72f
+                for (i in 0 until n * 2) {
+                    val a = Math.toRadians(180.0 / n * i - 90)
+                    val k = if (i % 2 == 0) 1f else inner
+                    val x = cx + w / 2 * k * cos(a).toFloat(); val y = cy + h / 2 * k * sin(a).toFloat()
+                    if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
+                }
+                p.close()
+            }
+            "heart" -> {
+                p.moveTo(cx, r.bottom)
+                p.cubicTo(r.left - w * 0.1f, cy + h * 0.1f, r.left + w * 0.05f, r.top - h * 0.05f, cx, r.top + h * 0.28f)
+                p.cubicTo(r.right - w * 0.05f, r.top - h * 0.05f, r.right + w * 0.1f, cy + h * 0.1f, cx, r.bottom)
+                p.close()
+            }
+            "line" -> { val t = h * 0.12f; p.addRoundRect(RectF(r.left, cy - t / 2, r.right, cy + t / 2), t / 2, t / 2, Path.Direction.CW) }
+            "arrow" -> {
+                val t = h * 0.22f
+                val head = min(w * 0.4f, h * 0.9f)
+                p.moveTo(r.left, cy - t / 2); p.lineTo(r.right - head, cy - t / 2); p.lineTo(r.right - head, r.top)
+                p.lineTo(r.right, cy); p.lineTo(r.right - head, r.bottom); p.lineTo(r.right - head, cy + t / 2); p.lineTo(r.left, cy + t / 2); p.close()
+            }
+            "bubble" -> {
+                val body = RectF(r.left, r.top, r.right, r.top + h * 0.8f)
+                val rad = min(w, h) * 0.2f
+                p.addRoundRect(body, rad, rad, Path.Direction.CW)
+                val tail = Path().apply { moveTo(r.left + w * 0.2f, body.bottom - 1); lineTo(r.left + w * 0.18f, r.bottom); lineTo(r.left + w * 0.4f, body.bottom - 1); close() }
+                p.op(tail, Path.Op.UNION)
+            }
+            else -> p.addRect(r, Path.Direction.CW)
+        }
+        return p
     }
 
     val stickerShapes = listOf("heart", "star", "sparkle", "arrow", "circle", "bubble", "sun", "bolt", "check", "fire", "music", "smile")
@@ -372,18 +468,23 @@ data class LayerMotion(
     val dy: Float = 0f,
     val rotationDeg: Float = 0f,
     val reveal: Float = 1f,
+    /** Extra horizontal and vertical stretch on top of [scale]. */
+    val sx: Float = 1f,
+    val sy: Float = 1f,
 )
 
 object TextMotion {
-    val inAnims = listOf("none", "fade", "pop", "slideup", "slidedown", "slideleft", "slideright", "typewriter", "bounce", "zoom", "spin", "drop", "glitch", "wipe")
-    val outAnims = listOf("none", "fade", "pop", "slideup", "slidedown", "slideleft", "slideright", "zoom", "spin", "drop", "glitch")
-    val loopAnims = listOf("none", "bob", "pulse", "swing", "shake", "blink", "float")
+    val inAnims = listOf("none", "fade", "pop", "slideup", "slidedown", "slideleft", "slideright", "typewriter", "bounce", "zoom", "spin", "drop", "glitch", "wipe", "stretch", "flip", "spread", "elastic", "rise", "swirl")
+    val outAnims = listOf("none", "fade", "pop", "slideup", "slidedown", "slideleft", "slideright", "zoom", "spin", "drop", "glitch", "stretch", "flip", "spread", "swirl")
+    val loopAnims = listOf("none", "bob", "pulse", "swing", "shake", "blink", "float", "wave", "heartbeat", "jelly", "flicker")
 
     fun label(id: String) = when (id) {
         "none" -> "None"; "fade" -> "Fade"; "pop" -> "Pop"; "slideup" -> "Slide up"; "slidedown" -> "Slide down"
         "slideleft" -> "Slide left"; "slideright" -> "Slide right"; "typewriter" -> "Typewriter"; "bounce" -> "Bounce"
         "zoom" -> "Zoom"; "spin" -> "Spin"; "drop" -> "Drop"; "glitch" -> "Glitch"; "wipe" -> "Wipe"; "bob" -> "Bob"
         "pulse" -> "Pulse"; "swing" -> "Swing"; "shake" -> "Shake"; "blink" -> "Blink"; "float" -> "Float"
+        "stretch" -> "Stretch"; "flip" -> "Flip"; "spread" -> "Spread"; "elastic" -> "Elastic"; "rise" -> "Rise"; "swirl" -> "Swirl"
+        "wave" -> "Wave"; "heartbeat" -> "Heartbeat"; "jelly" -> "Jelly"; "flicker" -> "Flicker"
         else -> id
     }
 
@@ -417,6 +518,16 @@ object TextMotion {
                 LayerMotion(opacity = if (k > 0.05f && ((timeSec * 20).toInt() % 3 == 0)) 0.4f else 1f, dx = j)
             }
             "wipe" -> LayerMotion(reveal = t)
+            "stretch" -> LayerMotion(opacity = min(1f, t * 3f), sx = max(0.01f, e), sy = 1f + (1f - e) * 0.25f)
+            // A card turning over: width goes through zero and back.
+            "flip" -> LayerMotion(opacity = min(1f, t * 4f), sx = max(0.01f, abs(cos((1f - e) * PI.toFloat()))))
+            "spread" -> LayerMotion(opacity = t, sx = 1f + (1f - e) * 0.8f)
+            "elastic" -> {
+                val s = if (t >= 1f) 1f else 1f - cos(t * PI.toFloat() * 3.5f) * (1f - t).pow(2.2f)
+                LayerMotion(opacity = min(1f, t * 4f), scale = max(0.01f, s))
+            }
+            "rise" -> LayerMotion(opacity = t, dy = (1f - e) * 0.08f, scale = 0.85f + 0.15f * e)
+            "swirl" -> LayerMotion(opacity = t, scale = max(0.01f, e), rotationDeg = (1f - e) * 360f)
             else -> LayerMotion()
         }
     }
@@ -428,6 +539,15 @@ object TextMotion {
         "shake" -> LayerMotion(dx = sin(timeSec * 60f) * 0.006f, dy = cos(timeSec * 47f) * 0.004f)
         "blink" -> LayerMotion(opacity = if ((timeSec * 2f) % 1f < 0.75f) 1f else 0.15f)
         "float" -> LayerMotion(dy = sin(timeSec * 1.6f) * 0.02f, rotationDeg = sin(timeSec * 1.1f) * 3f)
+        "wave" -> LayerMotion(dy = sin(timeSec * 4f) * 0.01f, rotationDeg = sin(timeSec * 4f + 1.2f) * 4f, sx = 1f + 0.03f * sin(timeSec * 4f + 0.6f))
+        "heartbeat" -> {
+            // Two quick beats, then rest.
+            val ph = (timeSec * 1.2f) % 1f
+            val b = exp(-((ph - 0.1f) * 30f).pow(2)) + 0.7f * exp(-((ph - 0.3f) * 30f).pow(2))
+            LayerMotion(scale = 1f + 0.12f * b)
+        }
+        "jelly" -> LayerMotion(sx = 1f + 0.07f * sin(timeSec * 7f), sy = 1f - 0.07f * sin(timeSec * 7f))
+        "flicker" -> LayerMotion(opacity = 0.75f + 0.25f * ((sin(timeSec * 31f) + sin(timeSec * 17f + 1f)) * 0.5f).coerceIn(-1f, 1f))
         else -> LayerMotion()
     }
 
@@ -438,6 +558,8 @@ object TextMotion {
         dy = a.dy + b.dy,
         rotationDeg = a.rotationDeg + b.rotationDeg,
         reveal = min(a.reveal, b.reveal),
+        sx = a.sx * b.sx,
+        sy = a.sy * b.sy,
     )
 
     /** Motion of a layer at [localUs] from its start, for a layer lasting [durationUs]. */

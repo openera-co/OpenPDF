@@ -41,7 +41,18 @@ data class LayerUse(
     val endUs: Long,
     val text: TextLayer? = null,
     val sticker: StickerLayer? = null,
+    val shape: com.reel.editor.model.ShapeLayer? = null,
 )
+
+/** An adjustment layer resolved for rendering. */
+data class AdjustUse(
+    val layer: com.reel.editor.model.AdjustmentLayer,
+    val look: LookDef?,
+    val effects: List<ShaderUse>,
+) {
+    val startUs: Long get() = layer.startUs
+    val endUs: Long get() = layer.startUs + layer.durationUs
+}
 
 /**
  * Everything one clip's renderer needs, resolved on the main thread so the GL thread never
@@ -73,6 +84,8 @@ data class RenderPlan(
     val animOut: Pair<FxDef, AnimRef>?,
     val transition: TransitionUse?,
     val layers: List<LayerUse>,
+    val adjustLayers: List<AdjustUse> = emptyList(),
+    val overlays: List<com.reel.editor.model.OverlayClip> = emptyList(),
     /** Whether this clip's last frames should be kept for the next clip's transition. */
     val keepTail: Boolean,
     val timeOrigin: TimeOrigin,
@@ -141,10 +154,17 @@ object RenderPlans {
             .mapNotNull { f -> shader(catalog, f.shaderFx, f.startUs, f.startUs + f.durationUs)?.copy(intensity = f.amount * (f.shaderFx?.intensity ?: 1f)) }
         val timedEffects = project.effects.filter { overlaps(it.startUs, it.startUs + it.durationUs, p.startUs, p.endUs) }
             .mapNotNull { shader(catalog, it.fx, it.startUs, it.startUs + it.durationUs) }
-        val layers = project.texts.filter { overlaps(it.startUs, it.startUs + it.durationUs, p.startUs, p.endUs) }
+        val layers = (project.texts.filter { overlaps(it.startUs, it.startUs + it.durationUs, p.startUs, p.endUs) }
             .map { LayerUse(it.id, it.startUs, it.startUs + it.durationUs, text = it) } +
             project.stickers.filter { overlaps(it.startUs, it.startUs + it.durationUs, p.startUs, p.endUs) }
-                .map { LayerUse(it.id, it.startUs, it.startUs + it.durationUs, sticker = it) }
+                .map { LayerUse(it.id, it.startUs, it.startUs + it.durationUs, sticker = it) } +
+            project.shapes.filter { overlaps(it.startUs, it.startUs + it.durationUs, p.startUs, p.endUs) }
+                .map { LayerUse(it.id, it.startUs, it.startUs + it.durationUs, shape = it) })
+            // Captions sit above every other layer.
+            .sortedBy { it.text?.isCaption == true }
+        val adjustLayers = project.adjustments.filter { overlaps(it.startUs, it.startUs + it.durationUs, p.startUs, p.endUs) }
+            .map { a -> AdjustUse(a, a.lookId?.let(catalog::look), a.effects.mapNotNull { shader(catalog, it, a.startUs, a.startUs + a.durationUs) }) }
+        val overlays = project.overlays.filter { overlaps(it.startUs, it.endUs, p.startUs, p.endUs) }
         return RenderPlan(
             clip = c,
             clipStartUs = p.startUs,
@@ -171,6 +191,8 @@ object RenderPlans {
             animOut = c.animOut?.let { a -> catalog.fx(a.id)?.let { it to a } },
             transition = transition,
             layers = layers,
+            adjustLayers = adjustLayers,
+            overlays = overlays,
             keepTail = next?.clip?.transitionIn != null,
             timeOrigin = timeOrigin,
         )

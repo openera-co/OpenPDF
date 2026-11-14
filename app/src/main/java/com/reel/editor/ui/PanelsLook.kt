@@ -58,6 +58,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.reel.editor.edit.EditorViewModel
+import com.reel.editor.model.setKey
+import com.reel.editor.model.timelineDurationUs
+import com.reel.editor.model.keyAt
 import com.reel.editor.edit.Selection
 import com.reel.editor.fx.FxCatalog
 import com.reel.editor.fx.FxDef
@@ -104,9 +107,9 @@ fun FiltersPanel(vm: EditorViewModel, onClose: () -> Unit) {
     var tab by remember { mutableIntStateOf(if (clip?.filter != null || timed?.shaderFx != null) 1 else 0) }
     val categories = remember { listOf("All") + catalog.looks.map { it.category }.distinct() }
     var cat by remember { mutableStateOf("All") }
-    val base by produceState<Bitmap?>(null, clip?.uri) {
-        val c = clip ?: return@produceState
-        value = withContext(Dispatchers.IO) { vm.thumbnails.frame(c.uri, c.trimStartUs, 96, c.kind == ClipKind.PHOTO)?.let { Bitmap.createScaledBitmap(it, (it.width * 96f / it.height).roundToInt().coerceAtLeast(1), 96, true) } }
+    val base by produceState<Bitmap?>(null) {
+        // Looks preview on the bundled sunset, not the timeline video.
+        value = withContext(Dispatchers.IO) { Samples.bitmap(ctx, Samples.SCENE)?.let { Bitmap.createScaledBitmap(it, (it.width * 96f / it.height).roundToInt().coerceAtLeast(1), 96, true) } }
     }
     val currentLook = timed?.lookId ?: clip?.lookId
     val currentShader = timed?.shaderFx?.id ?: clip?.filter?.id
@@ -143,10 +146,22 @@ fun FiltersPanel(vm: EditorViewModel, onClose: () -> Unit) {
                 }
             }
             if (currentLook != null) {
-                val amount = timed?.amount ?: clip?.lookAmount ?: 1f
-                ValueSlider(Icons.Rounded.Tune, "Intensity", amount * 100, 0f..100f, { "${it.roundToInt()}" }, C.Accent, default = 100f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
+                val pos by vm.preview.positionUs.collectAsStateCompat()
+                val clipStart = clip?.let { c -> com.reel.editor.model.TimelineMath.place(project.clips).firstOrNull { it.clip.id == c.id }?.startUs } ?: 0L
+                val local = pos - clipStart
+                val inside = clip != null && local in 0..clip.timelineDurationUs
+                val amount = timed?.amount ?: clip?.let { com.reel.editor.model.interpolateValue(it.lookAmount, it.lookKeys, local) } ?: 1f
+                // Clip looks can be keyframed; a timed filter fades with its bar instead.
+                val key = if (timed == null && clip != null) SliderKey(inside && clip.lookKeys.keyAt(local) != null, clip.lookKeys.isNotEmpty()) {
+                    if (!inside) return@SliderKey
+                    vm.updateClip(clip.id) { c ->
+                        val ex = c.lookKeys.keyAt(local)
+                        if (ex != null) c.copy(lookKeys = c.lookKeys - ex) else c.copy(lookKeys = c.lookKeys.setKey(local, com.reel.editor.model.interpolateValue(c.lookAmount, c.lookKeys, local)))
+                    }
+                } else null
+                ValueSlider(Icons.Rounded.Tune, "Intensity", amount * 100, 0f..100f, { "${it.roundToInt()}" }, C.Accent, default = 100f, key = key, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
                     if (timed != null) vm.live { p -> p.copy(filters = p.filters.map { if (it.id == timed.id) it.copy(amount = v / 100f) else it }) }
-                    else if (clip != null) vm.updateClip(clip.id, true) { it.copy(lookAmount = v / 100f) }
+                    else if (clip != null) vm.updateClip(clip.id, true) { c -> if (c.lookKeys.isEmpty() || !inside) c.copy(lookAmount = v / 100f) else c.copy(lookKeys = c.lookKeys.setKey(local, v / 100f)) }
                 }
             }
         } else {
