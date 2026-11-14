@@ -53,6 +53,9 @@ import com.reel.editor.edit.EditorViewModel
 import com.reel.editor.engine.ExportState
 import com.reel.editor.engine.Exporter
 import com.reel.editor.fx.RenderPlans
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.rounded.Warning
 import com.reel.editor.model.BitrateLevel
 import com.reel.editor.model.ClipKind
 import com.reel.editor.model.ExportSettings
@@ -60,6 +63,16 @@ import com.reel.editor.model.TimelineMath
 
 private val HEIGHTS = listOf(720 to "720p", 1080 to "1080p", 1440 to "2K", 2160 to "4K")
 private val RATES = listOf(24, 25, 30, 50, 60)
+
+/** One tap: what each platform plays best. Short-video apps want 9:16 at 1080p, plain H.264. */
+private class Preset(val name: String, val settings: ExportSettings, val vertical: Boolean)
+private val PRESETS = listOf(
+    Preset("TikTok", ExportSettings(1080, 30, BitrateLevel.RECOMMENDED, false), true),
+    Preset("Reels", ExportSettings(1080, 30, BitrateLevel.RECOMMENDED, false), true),
+    Preset("Shorts", ExportSettings(1080, 30, BitrateLevel.HIGHER, false), true),
+    Preset("YouTube", ExportSettings(2160, 30, BitrateLevel.HIGHER, false), false),
+    Preset("Small", ExportSettings(720, 30, BitrateLevel.LOWER, true), false),
+)
 
 @Composable
 fun ExportSheet(vm: EditorViewModel, onClose: () -> Unit, onStart: () -> Unit) {
@@ -72,6 +85,15 @@ fun ExportSheet(vm: EditorViewModel, onClose: () -> Unit, onStart: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Export", style = Title.copy(fontSize = 18.sp), modifier = Modifier.weight(1f).padding(top = 12.dp))
             IconBtn(Icons.Rounded.Close, "Close", iconSize = 20.dp, onClick = onClose)
+        }
+        var preset by remember { mutableStateOf<String?>(null) }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PRESETS.forEach { pr -> Chip(pr.name, preset == pr.name) { preset = pr.name; s = pr.settings } }
+        }
+        val needsVertical = PRESETS.firstOrNull { it.name == preset }?.vertical == true && project.canvas.ratio != com.reel.editor.model.AspectRatio.R9_16
+        if (needsVertical) {
+            // These apps fill the phone screen: offer to switch the canvas.
+            Chip("9:16", false, icon = Icons.Rounded.Warning) { vm.edit { p -> p.copy(canvas = p.canvas.copy(ratio = com.reel.editor.model.AspectRatio.R9_16)) } }
         }
         Stepper("Resolution", "$w × $h", HEIGHTS.map { it.second }, HEIGHTS.indexOfFirst { it.first == s.height }) { s = s.copy(height = HEIGHTS[it].first) }
         Stepper("Frame rate", "${s.fps} fps", RATES.map { "$it" }, RATES.indexOf(s.fps)) { s = s.copy(fps = RATES[it]) }

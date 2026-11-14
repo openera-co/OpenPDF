@@ -57,6 +57,8 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ContentCut
+import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Brush
 import androidx.compose.material.icons.rounded.Checklist
@@ -149,6 +151,7 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
     val waveforms by vm.waveforms.collectAsStateCompat()
     val previewError by vm.preview.error.collectAsStateCompat()
     var fullscreen by remember { mutableStateOf(false) }
+    var safeMode by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var showExport by remember { mutableStateOf(false) }
     var transitionFor by remember { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }
@@ -206,7 +209,7 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
                     onRelease = { vm.preview.detach(it) },
                     modifier = Modifier.requiredSize(baseWdp, baseWdp / aspect).graphicsLayer { scaleX = scale; scaleY = scale },
                 )
-                PreviewOverlay(vm, selection, project, pos, aspect, picking) { uv ->
+                PreviewOverlay(vm, selection, project, pos, aspect, picking, safeMode) { uv ->
                     picking = false
                     (selection as? Selection.OverlaySel)?.let { os ->
                         val o = project.overlays.firstOrNull { it.id == os.id } ?: return@PreviewOverlay
@@ -256,7 +259,21 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
             }
             IconBtn(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play", iconSize = 28.dp, enabled = project.clips.isNotEmpty()) { vm.preview.toggle() }
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
-                if (selection is Selection.ClipSel || selection is Selection.TextSel || selection is Selection.StickerSel) {
+                // Save frame needs the storage permission on Android 9 and older.
+                val askWrite = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+                    if (ok) vm.saveFrame() else vm.toast("Allow storage to save frames")
+                }
+                IconBtn(Icons.Rounded.PhotoCamera, "Save frame", iconSize = 20.dp) {
+                    val needs = android.os.Build.VERSION.SDK_INT < 29 && androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    if (needs) askWrite.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) else vm.saveFrame()
+                }
+                IconBtn(Icons.Rounded.Smartphone, "Safe area", tint = if (safeMode > 0) C.Accent else C.Text, iconSize = 20.dp) {
+                    val (sw, sh) = com.reel.editor.fx.RenderPlans.canvasSize(project, 1280)
+                    if (sw.toFloat() / sh > 0.7f) { vm.toast("Safe areas are for 9:16 videos"); return@IconBtn }
+                    safeMode = (safeMode + 1) % SAFE_AREAS.size.plus(1)
+                    vm.toast(if (safeMode == 0) "Safe area off" else SAFE_AREAS[safeMode - 1].name)
+                }
+                if (transformInfo(project, selection, pos) != null) {
                     val keys = transformInfo(project, selection, pos)
                     val on = keys?.let { (_, k, s) -> k.any { abs(s + it.timeUs - pos) < 40_000 } } ?: false
                     IconBtn(Icons.Rounded.Diamond, if (on) "Remove keyframe" else "Add keyframe", tint = if (on) C.Key else C.Text, iconSize = 20.dp) { vm.toggleKeyframe() }
@@ -637,12 +654,18 @@ private fun PreviewOverlay(
     pos: Long,
     aspect: Float,
     picking: Boolean,
+    safeMode: Int,
     onPickColor: (Offset) -> Unit,
 ) {
     val density = LocalDensity.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val sel by androidx.compose.runtime.rememberUpdatedState(selection)
     val pick by androidx.compose.runtime.rememberUpdatedState(picking)
+    val proj by androidx.compose.runtime.rememberUpdatedState(project)
+    val now by androidx.compose.runtime.rememberUpdatedState(pos)
+    // Snap guides shown while a layer is held on a centre line.
+    var guideV by remember { mutableStateOf(false) }
+    var guideH by remember { mutableStateOf(false) }
     Canvas(
         Modifier.fillMaxSize().pointerInput(Unit) {
             awaitEachGesture {
@@ -653,6 +676,10 @@ private fun PreviewOverlay(
                 var holding = false
                 var maxPointers = 1
                 var totalMove = Offset.Zero
+                var startT: com.reel.editor.model.Transform? = null
+                var accX = 0f
+                var accY = 0f
+                var accRot = 0f
                 while (true) {
                     // A still finger for a moment shows the original, without effects.
                     val waitHold = !moved && !holding && maxPointers == 1 && !pick
@@ -679,17 +706,42 @@ private fun PreviewOverlay(
                         pan = totalMove
                     }
                     if (moved && movable && !pick && !holding) {
-                        if (!started) { vm.beginGesture(); started = true }
-                        val dx = pan.x / size.width
-                        val dy = pan.y / size.height
-                        vm.setTransformAtPlayhead(gesture = true) { t ->
-                            t.copy(x = (t.x + dx).coerceIn(-0.5f, 1.5f), y = (t.y + dy).coerceIn(-0.5f, 1.5f), scale = (t.scale * zoom).coerceIn(0.05f, 8f), rotation = t.rotation + rot)
+                        if (!started) {
+                            vm.beginGesture(); started = true
+                            startT = transformInfo(proj, sel, now)?.first
+                        }
+                        accX += pan.x / size.width
+                        accY += pan.y / size.height
+                        accRot += rot
+                        val st = startT
+                        if (st != null) {
+                            // Free position from the finger, then pulled onto the centre lines when close.
+                            val thrX = 10 * density.density / size.width
+                            val thrY = 10 * density.density / size.height
+                            val rawX = st.x + accX
+                            val rawY = st.y + accY
+                            val snapX = kotlin.math.abs(rawX - 0.5f) < thrX
+                            val snapY = kotlin.math.abs(rawY - 0.5f) < thrY
+                            val rawR = st.rotation + accRot
+                            val nearest = Math.round(rawR / 90f) * 90f
+                            val snapR = kotlin.math.abs(rawR - nearest) < 4f
+                            if ((snapX && !guideV) || (snapY && !guideH)) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            guideV = snapX; guideH = snapY
+                            vm.setTransformAtPlayhead(gesture = true) { t ->
+                                t.copy(
+                                    x = (if (snapX) 0.5f else rawX).coerceIn(-0.5f, 1.5f),
+                                    y = (if (snapY) 0.5f else rawY).coerceIn(-0.5f, 1.5f),
+                                    scale = (t.scale * zoom).coerceIn(0.05f, 8f),
+                                    rotation = if (snapR) nearest else rawR,
+                                )
+                            }
                         }
                         e.changes.forEach { it.consume() }
                     }
                     if (e.changes.none { it.pressed }) break
                 }
                 if (started) vm.endGesture()
+                guideV = false; guideH = false
                 when {
                     holding -> vm.preview.showOriginal(false)
                     // Two-finger tap undoes, three-finger tap redoes.
@@ -742,9 +794,41 @@ private fun PreviewOverlay(
         if (selection is Selection.TextSel || selection is Selection.StickerSel) {
             drawLine(C.TextTrack.copy(alpha = 0.0f), Offset(size.width / 2, 0f), Offset(size.width / 2, size.height))
         }
+        // Where the app's own buttons and captions will cover the video.
+        if (safeMode > 0) SAFE_AREAS.getOrNull(safeMode - 1)?.let { sa ->
+            val shade = Color.Black.copy(alpha = 0.45f)
+            for (r in sa.covered) drawRect(shade, Offset(r.left * size.width, r.top * size.height), Size(r.width * size.width, r.height * size.height))
+            val k = sa.safe
+            drawRect(C.Good, Offset(k.left * size.width, k.top * size.height), Size(k.width * size.width, k.height * size.height),
+                style = Stroke(1.5f * density.density, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))))
+        }
+        // Centre guides while snapped.
+        if (guideV) drawLine(C.Overlay, Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), 1.5f * density.density)
+        if (guideH) drawLine(C.Overlay, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 1.5f * density.density)
         aspect.hashCode()
     }
 }
+
+/** What a platform's app draws over a 9:16 video, as fractions of the frame (approximate). */
+private class SafeArea(val name: String, val covered: List<androidx.compose.ui.geometry.Rect>, val safe: androidx.compose.ui.geometry.Rect)
+
+private val SAFE_AREAS = listOf(
+    SafeArea("TikTok", listOf(
+        androidx.compose.ui.geometry.Rect(0f, 0f, 1f, 0.07f),          // top tabs
+        androidx.compose.ui.geometry.Rect(0.85f, 0.38f, 1f, 0.84f),    // like, comment, share
+        androidx.compose.ui.geometry.Rect(0f, 0.80f, 1f, 1f),          // name, caption, sound
+    ), androidx.compose.ui.geometry.Rect(0.06f, 0.08f, 0.84f, 0.79f)),
+    SafeArea("Reels", listOf(
+        androidx.compose.ui.geometry.Rect(0f, 0f, 1f, 0.07f),
+        androidx.compose.ui.geometry.Rect(0.86f, 0.46f, 1f, 0.90f),
+        androidx.compose.ui.geometry.Rect(0f, 0.82f, 1f, 1f),
+    ), androidx.compose.ui.geometry.Rect(0.06f, 0.08f, 0.85f, 0.81f)),
+    SafeArea("Shorts", listOf(
+        androidx.compose.ui.geometry.Rect(0f, 0f, 1f, 0.06f),
+        androidx.compose.ui.geometry.Rect(0.85f, 0.40f, 1f, 0.88f),
+        androidx.compose.ui.geometry.Rect(0f, 0.79f, 1f, 1f),
+    ), androidx.compose.ui.geometry.Rect(0.06f, 0.07f, 0.84f, 0.78f)),
+)
 
 /** Reads the overlay's pixel under a preview tap, undoing its placement. */
 private fun sampleOverlayColor(ctx: android.content.Context, o: com.reel.editor.model.OverlayClip, pos: Long, uv: Offset, canvasAspect: Float): Long? {

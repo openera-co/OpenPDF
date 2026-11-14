@@ -115,7 +115,13 @@ class PreviewController(context: Context) {
      * The preview draws into a TextureView: it is composited with the rest of the UI, so it resizes
      * and animates with panels without the stale buffers a SurfaceView can show.
      */
+    private var attached: java.lang.ref.WeakReference<TextureView>? = null
+
+    /** The frame on screen, effects and layers included, at the preview's own resolution. */
+    fun snapshot(): android.graphics.Bitmap? = attached?.get()?.takeIf { it.isAvailable }?.bitmap
+
     fun attach(view: TextureView) {
+        attached = java.lang.ref.WeakReference(view)
         view.surfaceTextureListener = textureListener
         view.surfaceTexture?.let { textureListener.onSurfaceTextureAvailable(it, view.width, view.height) }
     }

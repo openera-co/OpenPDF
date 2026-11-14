@@ -790,6 +790,45 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Saves the frame under the playhead to the gallery (Pictures/Reel), as shown in the preview. */
+    fun saveFrame() {
+        preview.pause()
+        com.reel.editor.fx.PreviewOriginal.on = false
+        val bmp = preview.snapshot() ?: run { toast("Preview isn't ready"); return }
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    val name = "Reel_${System.currentTimeMillis()}.jpg"
+                    val values = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name)
+                        put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                        if (android.os.Build.VERSION.SDK_INT >= 29) {
+                            put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Reel")
+                            put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+                        }
+                    }
+                    val uri = if (android.os.Build.VERSION.SDK_INT >= 29) {
+                        ctx.contentResolver.insert(android.provider.MediaStore.Images.Media.getContentUri(android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
+                    } else {
+                        // Older Android: write the file ourselves, then index it.
+                        val dir = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES), "Reel").apply { mkdirs() }
+                        val f = java.io.File(dir, name)
+                        f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it) }
+                        android.media.MediaScannerConnection.scanFile(ctx, arrayOf(f.absolutePath), arrayOf("image/jpeg"), null)
+                        null
+                    }
+                    if (uri != null) {
+                        ctx.contentResolver.openOutputStream(uri)?.use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, it) }
+                        if (android.os.Build.VERSION.SDK_INT >= 29) ctx.contentResolver.update(uri, android.content.ContentValues().apply { put(android.provider.MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+                    }
+                    true
+                }.getOrDefault(false)
+            }
+            toast(if (ok) "Frame saved to Pictures" else "Couldn't save the frame")
+        }
+    }
+
     /** Turns the selected clip a quarter turn clockwise. */
     fun rotateClip() {
         val sel = _selection.value as? Selection.ClipSel ?: return
