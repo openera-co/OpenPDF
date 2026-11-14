@@ -1,6 +1,7 @@
 // Places the clip on the project canvas: fit/fill, keyframed transform, flip,
 // chroma key, person cutout, and a blur / color background behind it.
 uniform sampler2D uTex;
+uniform vec4 uCrop;            // visible part of the source: x, y (GL, y up), width, height
 uniform float uCanvasAspect;   // width / height of the output
 uniform float uContentAspect;  // width / height of the clip
 uniform float uFill;           // 0 fit, 1 fill
@@ -109,9 +110,11 @@ void main() {
   vec2 uv = d / size * uFlip + 0.5;
   vec3 bg = background(p);
   float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
-  vec3 c = texture2D(uTex, clamp(uv, 0.0, 1.0)).rgb;
-  if (uMaskOn > 0.5) bg = cutBackground(p, uv, bg, inside);
-  float a = keyAlpha(c) * personAlpha(uv) * inside * uOpacity;
+  // uv spans the cropped picture; suv is the same point in the whole source frame.
+  vec2 suv = uCrop.xy + clamp(uv, 0.0, 1.0) * uCrop.zw;
+  vec3 c = texture2D(uTex, suv).rgb;
+  if (uMaskOn > 0.5) bg = cutBackground(p, suv, bg, inside);
+  float a = keyAlpha(c) * personAlpha(suv) * inside * uOpacity;
   if (uKeyOn > 0.5) c = despill(c);
   gl_FragColor = vec4(mix(bg, c, a), 1.0);
 }

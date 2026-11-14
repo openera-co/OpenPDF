@@ -71,6 +71,9 @@ data class RenderPlan(
     val keyframes: List<Keyframe>,
     val flipH: Boolean,
     val flipV: Boolean,
+    /** The video track's eye is off: draw only the layers above it, on black. */
+    val hideVideo: Boolean = false,
+    val crop: com.reel.editor.model.CropRect = com.reel.editor.model.CropRect(),
     val chroma: ChromaKey,
     val cutout: com.reel.editor.model.Cutout,
     val adjust: Adjustments,
@@ -129,7 +132,23 @@ object RenderPlans {
 
     fun build(project: Project, catalog: FxCatalog, canvasW: Int, canvasH: Int): List<RenderPlan> {
         val placed = TimelineMath.place(project.clips)
-        return placed.map { p -> plan(project, catalog, p, placed, canvasW, canvasH) }
+        val shown = visible(project)
+        return placed.map { p -> plan(shown, catalog, p, placed, canvasW, canvasH) }
+    }
+
+    /** The project as the eye switches on the timeline leave it: hidden tracks are dropped. */
+    fun visible(project: Project): Project {
+        val t = project.tracks
+        if (t.hidden.isEmpty()) return project
+        return project.copy(
+            texts = if (t.isHidden(com.reel.editor.model.TrackFlags.TEXT)) emptyList() else project.texts,
+            stickers = if (t.isHidden(com.reel.editor.model.TrackFlags.STICKERS)) emptyList() else project.stickers,
+            shapes = if (t.isHidden(com.reel.editor.model.TrackFlags.STICKERS)) emptyList() else project.shapes,
+            effects = if (t.isHidden(com.reel.editor.model.TrackFlags.EFFECTS)) emptyList() else project.effects,
+            filters = if (t.isHidden(com.reel.editor.model.TrackFlags.EFFECTS)) emptyList() else project.filters,
+            adjustments = if (t.isHidden(com.reel.editor.model.TrackFlags.EFFECTS)) emptyList() else project.adjustments,
+            overlays = if (t.isHidden(com.reel.editor.model.TrackFlags.OVERLAYS)) emptyList() else project.overlays,
+        )
     }
 
     private fun overlaps(s: Long, e: Long, a: Long, b: Long) = s < b && e > a
@@ -171,12 +190,14 @@ object RenderPlans {
             clipDurationUs = p.durationUs,
             canvasWidth = w,
             canvasHeight = h,
-            contentAspect = dw.toFloat() / dh.coerceAtLeast(1),
+            contentAspect = dw * c.crop.w / (dh.coerceAtLeast(1) * c.crop.h),
             fit = c.fit,
             background = if (c.kind == ClipKind.PHOTO && project.canvas.background.mode == BackgroundMode.BLUR) project.canvas.background else project.canvas.background,
             baseTransform = c.transform,
             keyframes = c.keyframes,
             flipH = c.flipH,
+            hideVideo = project.tracks.isHidden(com.reel.editor.model.TrackFlags.VIDEO),
+            crop = c.crop,
             flipV = c.flipV,
             chroma = c.chroma,
             cutout = c.cutout,

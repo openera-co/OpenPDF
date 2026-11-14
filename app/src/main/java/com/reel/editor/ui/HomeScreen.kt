@@ -58,6 +58,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.rounded.SystemUpdate
 import com.reel.editor.edit.ProjectStore
 import com.reel.editor.media.Thumbnails
 import com.reel.editor.model.ClipKind
@@ -76,6 +77,11 @@ fun HomeScreen(store: ProjectStore, thumbnails: Thumbnails, onNew: () -> Unit, o
     var menuFor by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<Project?>(null) }
     var confirmDelete by remember { mutableStateOf<Project?>(null) }
+    var updates by remember { mutableStateOf(false) }
+    if (updates) UpdateSourceDialog { updates = false }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    // Quiet check on launch: the card only appears when there is an update.
+    androidx.compose.runtime.LaunchedEffect(Unit) { com.reel.editor.update.Updater.check(ctx, quiet = true) }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -90,8 +96,11 @@ fun HomeScreen(store: ProjectStore, thumbnails: Thumbnails, onNew: () -> Unit, o
                     Icon(Icons.Rounded.PlayArrow, null, tint = C.Bg, modifier = Modifier.size(20.dp))
                 }
                 Text("Reel", style = Title.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold), modifier = Modifier.padding(start = 10.dp))
+                Spacer(Modifier.weight(1f))
+                IconBtn(Icons.Rounded.SystemUpdate, "Updates", size = 44.dp) { updates = true }
             }
         }
+        item(span = { GridItemSpan(2) }) { UpdateCard() }
         item(span = { GridItemSpan(2) }) {
             Row(
                 Modifier.fillMaxWidth().height(76.dp).clip(RoundedCornerShape(20.dp)).background(C.Accent).clickable(onClick = onNew),

@@ -43,9 +43,19 @@ sealed interface Selection {
     data class OverlaySel(val id: String) : Selection
 }
 
+/** Which timeline track a selection lives on, for the eye, speaker and lock switches. */
+fun trackKeyOf(s: Selection): String? = when (s) {
+    is Selection.ClipSel -> com.reel.editor.model.TrackFlags.VIDEO
+    is Selection.TextSel -> com.reel.editor.model.TrackFlags.TEXT
+    is Selection.StickerSel, is Selection.ShapeSel -> com.reel.editor.model.TrackFlags.STICKERS
+    is Selection.EffectSel, is Selection.FilterSel, is Selection.AdjustSel -> com.reel.editor.model.TrackFlags.EFFECTS
+    is Selection.OverlaySel -> com.reel.editor.model.TrackFlags.OVERLAYS
+    else -> null
+}
+
 enum class Panel {
     SPEED, VOLUME, ANIMATION, FILTERS, ADJUST, EFFECTS, TRANSITION, TEXT_EDIT, TEXT_STYLE, TEXT_ANIM,
-    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE, SHAPE, ADJUST_LAYER, OVERLAY, MASK, ADD_LAYER
+    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE, SHAPE, ADJUST_LAYER, OVERLAY, MASK, ADD_LAYER, TRACK
 }
 
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
@@ -490,7 +500,18 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
      * Sets the transform of the selected item at the playhead. If it has keyframes, the change
      * lands on (or creates) the keyframe under the playhead, like desktop editors do.
      */
+    fun isLocked(s: Selection): Boolean = trackKeyOf(s)?.let { _project.value.tracks.isLocked(it) } == true
+
+    fun toggleTrack(kind: com.reel.editor.model.TrackFlags.Kind, key: String) {
+        edit { p -> p.copy(tracks = p.tracks.toggle(kind, key)) }
+        // Nothing hidden or locked stays selected.
+        if (kind != com.reel.editor.model.TrackFlags.Kind.MUTE && trackKeyOf(_selection.value) == key) select(Selection.None)
+    }
+
+    fun muteAudio(ids: List<String>, muted: Boolean) = edit { p -> p.copy(audio = p.audio.map { if (it.id in ids) it.copy(muted = muted) else it }) }
+
     fun setTransformAtPlayhead(gesture: Boolean, change: (Transform) -> Transform) {
+        if (isLocked(_selection.value)) { if (!gesture) toast("Track is locked"); return }
         val t = preview.positionUs.value
         val p = _project.value
         fun apply(base: Transform, keys: List<Keyframe>, local: Long): Pair<Transform, List<Keyframe>> {
@@ -577,6 +598,178 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun updateOverlay(id: String, gesture: Boolean = false, change: (com.reel.editor.model.OverlayClip) -> com.reel.editor.model.OverlayClip) {
         val f: (Project) -> Project = { p -> p.copy(overlays = p.overlays.map { if (it.id == id) change(it) else it }) }
         if (gesture) live(f) else edit(f)
+    }
+
+    // ------------------------------------------------------------------ clip tools
+
+    /** Moves the selected clip's sound to its own audio track (and mutes the clip). */
+    fun extractAudio() {
+        val sel = _selection.value as? Selection.ClipSel ?: return
+        val pc = TimelineMath.place(_project.value.clips).firstOrNull { it.clip.id == sel.id } ?: return
+        val c = pc.clip
+        if (c.kind == com.reel.editor.model.ClipKind.PHOTO || !c.hasAudio) { toast("This clip has no sound"); return }
+        if (!(c.speed.curve.isNullOrEmpty() && c.speed.constant == 1f)) { toast("Set speed to 1x first"); return }
+        val a = com.reel.editor.model.AudioItem(
+            uri = c.uri, title = "Clip sound", kind = com.reel.editor.model.AudioKind.VOICEOVER, sourceDurationUs = c.sourceDurationUs,
+            startUs = pc.startUs, trimStartUs = c.trimStartUs, trimEndUs = c.trimEndUs, volume = c.volume,
+            fadeInUs = c.fadeInUs, fadeOutUs = c.fadeOutUs, voice = c.voice, volumeKeys = c.volumeKeys,
+        )
+        edit { p -> p.copy(clips = p.clips.map { if (it.id == c.id) it.copy(muted = true) else it }, audio = p.audio + a) }
+        select(Selection.AudioSel(a.id))
+        toast("Sound moved to its own track")
+    }
+
+    /** Reads the selected text aloud into a voiceover that starts with it. */
+    fun speakText() {
+        val sel = _selection.value as? Selection.TextSel ?: return
+        val layer = _project.value.texts.firstOrNull { it.id == sel.id } ?: return
+        if (layer.text.isBlank()) return
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                val ctx = getApplication<Application>()
+                val f = java.io.File(ctx.filesDir, "voice/tts-${newIdLocal()}.wav")
+                com.reel.editor.media.Speech.synthesize(ctx, layer.text.replace('\n', ' '), f)
+                val dur = withContext(Dispatchers.IO) {
+                    val r = android.media.MediaMetadataRetriever()
+                    try { r.setDataSource(f.absolutePath); r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.times(1000) } finally { r.release() }
+                } ?: 0L
+                if (dur <= 0) throw IllegalStateException("Couldn't read that text")
+                val a = com.reel.editor.model.AudioItem(uri = Uri.fromFile(f).toString(), title = layer.text.take(24), kind = com.reel.editor.model.AudioKind.VOICEOVER, sourceDurationUs = dur, startUs = layer.startUs)
+                edit { p -> p.copy(audio = p.audio + a) }
+                toast("Voice added")
+            } catch (e: Exception) {
+                toast(e.message ?: "Couldn't read that text")
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    private fun newIdLocal() = java.util.UUID.randomUUID().toString().take(8)
+
+    /** Turns the selected clip a quarter turn clockwise. */
+    fun rotateClip() {
+        val sel = _selection.value as? Selection.ClipSel ?: return
+        setTransformAtPlayhead(false) { t -> t.copy(rotation = ((t.rotation + 90f) % 360f).let { if (it > 180f) it - 360f else it }) }
+        sel.hashCode()
+    }
+
+    // ------------------------------------------------------------------ head tracking
+
+    private val _trackProgress = MutableStateFlow<Float?>(null)
+    /** 0..1 while a head is being tracked, else null. */
+    val trackProgress: StateFlow<Float?> = _trackProgress
+    private var tracker: com.reel.editor.track.HeadTracker? = null
+
+    fun cancelTracking() { tracker?.cancelled = true }
+
+    /**
+     * Makes the selected layer follow the head in the video under it: one keyframe every 150 ms,
+     * keeping the layer's offset from the head. With [followSize] it also grows and shrinks with it.
+     */
+    fun trackHead(followSize: Boolean) {
+        val sel = _selection.value
+        if (_trackProgress.value != null) return
+        val p0 = _project.value
+        val span: Pair<Long, Long> = when (sel) {
+            is Selection.TextSel -> p0.texts.firstOrNull { it.id == sel.id }?.let { it.startUs to it.startUs + it.durationUs }
+            is Selection.StickerSel -> p0.stickers.firstOrNull { it.id == sel.id }?.let { it.startUs to it.startUs + it.durationUs }
+            is Selection.ShapeSel -> p0.shapes.firstOrNull { it.id == sel.id }?.let { it.startUs to it.startUs + it.durationUs }
+            is Selection.OverlaySel -> p0.overlays.firstOrNull { it.id == sel.id }?.let { it.startUs to it.endUs }
+            else -> null
+        } ?: return
+        preview.pause()
+        _trackProgress.value = 0f
+        viewModelScope.launch {
+            val t = com.reel.editor.track.HeadTracker(getApplication()).also { tracker = it }
+            try {
+                val (cw, chh) = com.reel.editor.fx.RenderPlans.canvasSize(p0, 1280)
+                val canvasAspect = cw.toFloat() / chh
+                // Head positions on the canvas, in timeline time, across every clip the layer spans.
+                val canvasPts = withContext(Dispatchers.Default) {
+                    val placed = TimelineMath.place(p0.clips).filter { it.startUs < span.second && it.endUs > span.first }
+                    val total = (span.second - span.first).coerceAtLeast(1)
+                    val list = ArrayList<Triple<Long, Pair<Float, Float>, Float>>()
+                    for (pc in placed) {
+                        val from = (span.first - pc.startUs).coerceAtLeast(0)
+                        val to = (span.second - pc.startUs).coerceAtMost(pc.durationUs - 1)
+                        val raw = t.track(pc.clip, from, to) { f -> _trackProgress.value = ((pc.startUs + from - span.first) + f * (to - from)) / total }
+                        val pts = com.reel.editor.model.HeadPath.smooth(raw)
+                        val (dw, dh) = com.reel.editor.fx.RenderPlans.displaySize(pc.clip)
+                        val cr = pc.clip.crop
+                        for (h in pts) {
+                            val ct = interpolate(pc.clip.transform, pc.clip.keyframes, h.timeUs)
+                            // Into the cropped picture's coordinates first.
+                            val pos = com.reel.editor.model.HeadPath.toCanvas((h.x - cr.x) / cr.w, (h.y - cr.y) / cr.h, ct, dw * cr.w / (dh.coerceAtLeast(1) * cr.h), canvasAspect, pc.clip.fit == com.reel.editor.model.Fit.FILL)
+                            list += Triple(pc.startUs + h.timeUs, pos, h.size * ct.scale)
+                        }
+                    }
+                    list
+                }
+                if (t.cancelled) return@launch
+                if (canvasPts.isEmpty()) { toast("No one found to follow"); return@launch }
+                fun keys(base: Transform, old: List<Keyframe>, start: Long): List<Keyframe> {
+                    val first = canvasPts.first()
+                    val at0 = interpolate(base, old, (first.first - start).coerceAtLeast(0))
+                    val dx = at0.x - first.second.first
+                    val dy = at0.y - first.second.second
+                    val s0 = first.third.coerceAtLeast(1e-3f)
+                    return com.reel.editor.model.HeadPath.simplify(canvasPts.map { (time, pos, size) ->
+                        val local = time - start
+                        val cur = interpolate(base, old, local)
+                        Keyframe(local, cur.copy(x = pos.first + dx, y = pos.second + dy, scale = if (followSize) (at0.scale * size / s0).coerceIn(0.05f, 8f) else cur.scale), com.reel.editor.model.Easing.LINEAR)
+                    })
+                }
+                edit { p ->
+                    when (sel) {
+                        is Selection.TextSel -> p.copy(texts = p.texts.map { if (it.id == sel.id) it.copy(keyframes = keys(it.transform, it.keyframes, it.startUs)) else it })
+                        is Selection.StickerSel -> p.copy(stickers = p.stickers.map { if (it.id == sel.id) it.copy(keyframes = keys(it.transform, it.keyframes, it.startUs)) else it })
+                        is Selection.ShapeSel -> p.copy(shapes = p.shapes.map { if (it.id == sel.id) it.copy(keyframes = keys(it.transform, it.keyframes, it.startUs)) else it })
+                        is Selection.OverlaySel -> p.copy(overlays = p.overlays.map { if (it.id == sel.id) it.copy(keyframes = keys(it.transform, it.keyframes, it.startUs)) else it })
+                        else -> p
+                    }
+                }
+                toast("Following the head")
+            } catch (e: Exception) {
+                com.reel.editor.CrashReports.error("track", e)
+                toast("Tracking failed")
+            } finally {
+                tracker = null
+                _trackProgress.value = null
+            }
+        }
+    }
+
+    /** Pans the selected clip so the head stays in the middle of the frame (auto reframe). */
+    fun reframeClip(targetX: Float = 0.5f) {
+        val sel = _selection.value as? Selection.ClipSel ?: return
+        if (_trackProgress.value != null) return
+        val p0 = _project.value
+        val pc = TimelineMath.place(p0.clips).firstOrNull { it.clip.id == sel.id } ?: return
+        preview.pause()
+        _trackProgress.value = 0f
+        viewModelScope.launch {
+            val t = com.reel.editor.track.HeadTracker(getApplication()).also { tracker = it }
+            try {
+                val raw = withContext(Dispatchers.Default) { t.track(pc.clip, 0, pc.durationUs - 1, 200_000) { _trackProgress.value = it } }
+                if (t.cancelled) return@launch
+                val cr = pc.clip.crop
+                val pts = com.reel.editor.model.HeadPath.smooth(raw, radius = 3).map { it.copy(x = (it.x - cr.x) / cr.w, y = (it.y - cr.y) / cr.h) }
+                if (pts.isEmpty()) { toast("No one found to follow"); return@launch }
+                val (cw, chh) = com.reel.editor.fx.RenderPlans.canvasSize(p0, 1280)
+                val (dw, dh) = com.reel.editor.fx.RenderPlans.displaySize(pc.clip)
+                val keys = com.reel.editor.model.HeadPath.reframe(pts, pc.clip.transform, dw * cr.w / (dh.coerceAtLeast(1) * cr.h), cw.toFloat() / chh, pc.clip.fit == com.reel.editor.model.Fit.FILL, targetX)
+                updateClip(pc.clip.id) { it.copy(keyframes = com.reel.editor.model.HeadPath.simplify(keys)) }
+                toast("Reframed")
+            } catch (e: Exception) {
+                com.reel.editor.CrashReports.error("reframe", e)
+                toast("Reframe failed")
+            } finally {
+                tracker = null
+                _trackProgress.value = null
+            }
+        }
     }
 
     // ------------------------------------------------------------------ voice

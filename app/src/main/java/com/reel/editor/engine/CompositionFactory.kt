@@ -50,8 +50,9 @@ object CompositionFactory {
             }
             val audio = ArrayList<AudioProcessor>()
             audio += voiceProcessors(clip.voice)
-            val volume = if (clip.muted) 0f else clip.volume
-            val keyed = !clip.muted && clip.volumeKeys.isNotEmpty()
+            val trackMuted = project.tracks.isMuted(com.reel.editor.model.TrackFlags.VIDEO)
+            val volume = if (clip.muted || trackMuted) 0f else clip.volume
+            val keyed = !clip.muted && !trackMuted && clip.volumeKeys.isNotEmpty()
             audio += VolumeFadeProcessor(if (keyed) 1f else volume, clip.fadeInUs, clip.fadeOutUs, p.durationUs, mediaToTimeline = { media ->
                 SpeedMath.mediaToTimeline(clip.speed, clip.trimmedDurationUs, media)
             }, extraGain = if (keyed) { off -> com.reel.editor.model.interpolateValue(clip.volume, clip.volumeKeys, off) } else null)
@@ -85,13 +86,14 @@ object CompositionFactory {
             else -> 1f to { off: Long -> com.reel.editor.model.interpolateValue(volume, keys, off) * duck(off) }
         }
         val srcs = ArrayList<Src>()
-        for (a in project.audio.filter { it.startUs < total && it.durationUs > 0 }) {
+        for (a in project.audio.filter { !it.muted && it.startUs < total && it.durationUs > 0 }) {
             val end = minOf(a.trimEndUs, a.trimStartUs + (total - a.startUs))
             val duck = if (a.duck && a.kind == com.reel.editor.model.AudioKind.MUSIC) { off: Long -> com.reel.editor.model.Ducking.gainAt(speech, a.startUs + off, a.duckDb) } else null
             val (vol, extra) = gainFn(a.volume, a.volumeKeys, duck)
             srcs += Src(a.uri, a.startUs, a.trimStartUs, end, a.sourceDurationUs, voiceProcessors(a.voice) + VolumeFadeProcessor(vol, a.fadeInUs, a.fadeOutUs, end - a.trimStartUs, extraGain = extra))
         }
-        for (o in project.overlays.filter { it.kind == ClipKind.VIDEO && it.hasAudio && !it.muted && it.startUs < total && it.timelineDurationUs > 0 }) {
+        val overlaysHeard = !project.tracks.isMuted(com.reel.editor.model.TrackFlags.OVERLAYS) && !project.tracks.isHidden(com.reel.editor.model.TrackFlags.OVERLAYS)
+        for (o in project.overlays.filter { overlaysHeard && it.kind == ClipKind.VIDEO && it.hasAudio && !it.muted && it.startUs < total && it.timelineDurationUs > 0 }) {
             val end = minOf(o.trimEndUs, o.trimStartUs + (total - o.startUs))
             val (vol, extra) = gainFn(o.volume, o.volumeKeys, null)
             srcs += Src(o.uri, o.startUs, o.trimStartUs, end, o.sourceDurationUs, listOf(VolumeFadeProcessor(vol, 0, 0, end - o.trimStartUs, extraGain = extra)))
@@ -147,6 +149,7 @@ object CompositionFactory {
         project.canvas.ratio,
         project.clips.map { listOf(it.id, it.uri, it.kind, it.trimStartUs, it.trimEndUs, it.speed, it.keepPitch, it.muted, it.volume, it.fadeInUs, it.fadeOutUs, it.voice, it.volumeKeys) },
         project.audio,
+        project.tracks.muted, project.tracks.hidden.contains(com.reel.editor.model.TrackFlags.OVERLAYS),
         project.overlays.filter { it.kind == ClipKind.VIDEO && it.hasAudio }.map { listOf(it.id, it.uri, it.startUs, it.trimStartUs, it.trimEndUs, it.volume, it.muted, it.volumeKeys) },
         if (project.audio.any { it.duck }) analyzed else emptySet<String>(),
     )

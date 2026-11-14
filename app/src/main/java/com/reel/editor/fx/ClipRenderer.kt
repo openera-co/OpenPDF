@@ -287,10 +287,13 @@ class ClipRenderer(
         p.set("uScale", t.scale)
         p.set("uRotation", Math.toRadians(t.rotation.toDouble()).toFloat())
         p.set("uFlip", if (plan.flipH) -1f else 1f, if (plan.flipV) -1f else 1f)
-        p.set("uOpacity", t.opacity)
+        val cr = plan.crop
+        p.set("uCrop", cr.x, 1f - cr.y - cr.h, cr.w, cr.h)
+        p.set("uOpacity", if (plan.hideVideo) 0f else t.opacity)
         val bg = plan.background
-        p.set("uBgMode", if (bg.mode == BackgroundMode.BLUR) 1f else 0f)
-        p.set("uBgColor", ((bg.color shr 16) and 0xff) / 255f, ((bg.color shr 8) and 0xff) / 255f, (bg.color and 0xff) / 255f)
+        p.set("uBgMode", if (bg.mode == BackgroundMode.BLUR && !plan.hideVideo) 1f else 0f)
+        if (plan.hideVideo) p.set("uBgColor", 0f, 0f, 0f)
+        else p.set("uBgColor", ((bg.color shr 16) and 0xff) / 255f, ((bg.color shr 8) and 0xff) / 255f, (bg.color and 0xff) / 255f)
         p.set("uBlur", bg.blur)
         val k = plan.chroma
         p.set("uKeyOn", if (k.enabled) 1f else 0f)

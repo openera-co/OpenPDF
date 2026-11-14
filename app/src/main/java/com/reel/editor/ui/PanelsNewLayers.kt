@@ -46,6 +46,14 @@ import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.ZoomOutMap
+import androidx.compose.material.icons.rounded.Face
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CenterFocusStrong
+import androidx.compose.material.icons.automirrored.rounded.FormatAlignLeft
+import androidx.compose.material.icons.automirrored.rounded.FormatAlignRight
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material.icons.rounded.Crop
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -353,6 +361,81 @@ fun MaskPanel(vm: EditorViewModel, o: OverlayClip, onClose: () -> Unit) {
             ValueSlider(Icons.Rounded.OpenWith, "X", m.x * 100, 0f..100f, { "${it.roundToInt()}" }, C.Overlay, default = 50f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> set(true) { it.copy(x = v / 100f) } }
             ValueSlider(Icons.Rounded.OpenWith, "Y", m.y * 100, 0f..100f, { "${it.roundToInt()}" }, C.Overlay, default = 50f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> set(true) { it.copy(y = v / 100f) } }
             ValueSlider(Icons.Rounded.RotateRight, "Rotation", m.rotation, -180f..180f, { "${it.roundToInt()}°" }, C.Overlay, default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> set(true) { it.copy(rotation = v) } }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+// ---------------------------------------------------------------------------- head tracking
+
+/** Follow a head with the selected layer, or reframe the selected clip around it. */
+@Composable
+fun TrackPanel(vm: EditorViewModel, clipMode: Boolean, onClose: () -> Unit) {
+    val progress by vm.trackProgress.collectAsStateCompat()
+    var followSize by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SheetHeader(if (clipMode) "Reframe" else "Track", Icons.Rounded.Face, iconTint = C.Accent, onClose = { vm.cancelTracking(); onClose() }, onDone = onClose)
+        val p = progress
+        if (p != null) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.material3.LinearProgressIndicator(progress = { p }, modifier = Modifier.weight(1f).height(4.dp).clip(CircleShape), color = C.Accent, trackColor = C.Surface2)
+                Text("${(p * 100).roundToInt()}%", style = Mono)
+                IconBtn(Icons.Rounded.Close, "Stop", background = C.Surface2, size = 36.dp) { vm.cancelTracking() }
+            }
+        } else if (clipMode) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton(Icons.Rounded.CenterFocusStrong, "Center", accent = true) { vm.reframeClip(0.5f) }
+                PillButton(Icons.AutoMirrored.Rounded.FormatAlignLeft, "Left third") { vm.reframeClip(0.36f) }
+                PillButton(Icons.AutoMirrored.Rounded.FormatAlignRight, "Right third") { vm.reframeClip(0.64f) }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton(Icons.Rounded.Face, "Follow head", accent = true) { vm.trackHead(followSize) }
+                Spacer(Modifier.weight(1f))
+                Icon(Icons.Rounded.ZoomOutMap, "Follow size", tint = if (followSize) C.Accent else C.Muted)
+                Switch(followSize, { followSize = it }, colors = SwitchDefaults.colors(checkedTrackColor = C.Accent))
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+// ---------------------------------------------------------------------------- crop
+
+private val CROP_RATIOS = listOf("Free" to 0f, "1:1" to 1f, "9:16" to 9f / 16f, "4:5" to 0.8f, "3:4" to 0.75f, "16:9" to 16f / 9f, "4:3" to 4f / 3f)
+
+/** Crops the clip: a ratio sets the biggest crop of that shape, then zoom and move it. */
+@Composable
+fun CropPanel(vm: EditorViewModel, clip: com.reel.editor.model.Clip, onClose: () -> Unit) {
+    val (dw, dh) = com.reel.editor.fx.RenderPlans.displaySize(clip)
+    val srcAspect = dw.toFloat() / dh.coerceAtLeast(1)
+    val cr = clip.crop
+    var ratio by remember(clip.id) { mutableStateOf(-1f) }
+    // Zoom is measured against the ratio's own full-size crop.
+    val full = com.reel.editor.model.CropRect.forRatio(if (ratio > 0f) ratio else 0f, srcAspect).let { if (ratio > 0f) it else com.reel.editor.model.CropRect() }
+    val zoom = (full.w / cr.w.coerceAtLeast(0.01f)).coerceIn(1f, 8f)
+    fun set(g: Boolean = false, f: (com.reel.editor.model.CropRect) -> com.reel.editor.model.CropRect) = vm.updateClip(clip.id, g) { it.copy(crop = f(it.crop)) }
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SheetHeader("Crop", Icons.Rounded.Crop, onClose = onClose, onDone = onClose)
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            CROP_RATIOS.forEach { (label, r) ->
+                Chip(label, ratio == r) {
+                    ratio = r
+                    set { com.reel.editor.model.CropRect.forRatio(r, srcAspect) }
+                }
+            }
+        }
+        ValueSlider(Icons.Rounded.ZoomOutMap, "Zoom", zoom * 100, 100f..400f, { "${it.roundToInt()}%" }, C.Accent, default = 100f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
+            set(true) { c -> val k = v / 100f; val nw = full.w / k; val nh = full.h / k; com.reel.editor.model.CropRect(0f, 0f, nw, nh).centredAt(c.x + c.w / 2, c.y + c.h / 2) }
+        }
+        if (cr.w < 0.999f) ValueSlider(Icons.Rounded.OpenWith, "X", (cr.x + cr.w / 2) * 100, (cr.w / 2 * 100)..((1 - cr.w / 2) * 100), { "${it.roundToInt()}" }, C.Accent, default = 50f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
+            set(true) { it.centredAt(v / 100f, it.y + it.h / 2) }
+        }
+        if (cr.h < 0.999f) ValueSlider(Icons.Rounded.OpenWith, "Y", (cr.y + cr.h / 2) * 100, (cr.h / 2 * 100)..((1 - cr.h / 2) * 100), { "${it.roundToInt()}" }, C.Accent, default = 50f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
+            set(true) { it.centredAt(it.x + it.w / 2, v / 100f) }
+        }
+        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PillButton(Icons.Rounded.Refresh, "Reset") { ratio = -1f; set { com.reel.editor.model.CropRect() } }
         }
         Spacer(Modifier.height(8.dp))
     }

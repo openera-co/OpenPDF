@@ -24,7 +24,37 @@ data class Project(
     val shapes: List<ShapeLayer> = emptyList(),
     val adjustments: List<AdjustmentLayer> = emptyList(),
     val overlays: List<OverlayClip> = emptyList(),
+    val tracks: TrackFlags = TrackFlags(),
 )
+
+/**
+ * Switches on the timeline's left column. Track keys: "video", "effects", "text", "stickers",
+ * "overlays". Hidden tracks are left out of the preview and the export; locked ones can't be moved.
+ */
+@Serializable
+data class TrackFlags(
+    val hidden: Set<String> = emptySet(),
+    val muted: Set<String> = emptySet(),
+    val locked: Set<String> = emptySet(),
+) {
+    fun isHidden(k: String) = k in hidden
+    fun isMuted(k: String) = k in muted
+    fun isLocked(k: String) = k in locked
+    fun toggle(kind: Kind, k: String): TrackFlags = when (kind) {
+        Kind.HIDE -> copy(hidden = if (k in hidden) hidden - k else hidden + k)
+        Kind.MUTE -> copy(muted = if (k in muted) muted - k else muted + k)
+        Kind.LOCK -> copy(locked = if (k in locked) locked - k else locked + k)
+    }
+    enum class Kind { HIDE, MUTE, LOCK }
+
+    companion object {
+        const val VIDEO = "video"
+        const val EFFECTS = "effects"
+        const val TEXT = "text"
+        const val STICKERS = "stickers"
+        const val OVERLAYS = "overlays"
+    }
+}
 
 @Serializable
 data class CanvasSettings(
@@ -80,6 +110,8 @@ data class Clip(
     val keyframes: List<Keyframe> = emptyList(),
     val flipH: Boolean = false,
     val flipV: Boolean = false,
+    /** Visible part of the source frame, as fractions with a top-left origin. */
+    val crop: CropRect = CropRect(),
     val adjust: Adjustments = Adjustments(),
     val lookId: String? = null,
     val lookAmount: Float = 1f,
@@ -103,6 +135,30 @@ data class Clip(
 
 @Serializable
 enum class Fit { FIT, FILL }
+
+@Serializable
+data class CropRect(val x: Float = 0f, val y: Float = 0f, val w: Float = 1f, val h: Float = 1f) {
+    val isFull: Boolean get() = x <= 0f && y <= 0f && w >= 1f && h >= 1f
+
+    companion object {
+        /** The biggest centred crop of [ratio] (w/h) from a source of [srcAspect]. */
+        fun forRatio(ratio: Float, srcAspect: Float): CropRect =
+            if (ratio <= 0f) CropRect()
+            else if (ratio < srcAspect) { val w = ratio / srcAspect; CropRect((1 - w) / 2, 0f, w, 1f) }
+            else { val h = srcAspect / ratio; CropRect(0f, (1 - h) / 2, 1f, h) }
+    }
+
+    /** Zooms around the centre of this crop by [k] (>= 1), keeping it inside the frame. */
+    fun zoomed(k: Float): CropRect {
+        val nw = (w / k).coerceIn(0.05f, 1f)
+        val nh = (h / k).coerceIn(0.05f, 1f)
+        val cx = x + w / 2; val cy = y + h / 2
+        return CropRect((cx - nw / 2).coerceIn(0f, 1f - nw), (cy - nh / 2).coerceIn(0f, 1f - nh), nw, nh)
+    }
+
+    /** Moves the crop to centre ([cx], [cy]), kept inside the frame. */
+    fun centredAt(cx: Float, cy: Float) = copy(x = (cx - w / 2).coerceIn(0f, 1f - w), y = (cy - h / 2).coerceIn(0f, 1f - h))
+}
 
 @Serializable
 data class Transform(
@@ -435,6 +491,7 @@ data class AudioItem(
     val markersUs: List<Long> = emptyList(),
     val voice: VoiceFx = VoiceFx(),
     val volumeKeys: List<ValueKey> = emptyList(),
+    val muted: Boolean = false,
     /** Lower this item while someone speaks (clip audio and voiceovers). */
     val duck: Boolean = false,
     val duckDb: Float = -14f,

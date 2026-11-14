@@ -26,6 +26,9 @@ android {
         versionCode = 5
         versionName = "1.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Where the app looks for updates (an update.json from tools/update/make_update.py).
+        // Set with -Preel.updateUrl=... or in gradle.properties; users can also enter one in the app.
+        buildConfigField("String", "UPDATE_URL", "\"${(project.findProperty("reel.updateUrl") as String?) ?: ""}\"")
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild {
             cmake {

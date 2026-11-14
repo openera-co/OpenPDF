@@ -57,6 +57,10 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ContentCut
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.RotateRight
+import androidx.compose.material.icons.rounded.Crop
+import androidx.compose.material.icons.rounded.Face
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Category
@@ -316,12 +320,13 @@ private fun actionsFor(vm: EditorViewModel, addClips: () -> Unit, openTransition
     override fun gestureStart() = vm.beginGesture()
     override fun gestureEnd() = vm.endGesture()
     override fun trimClip(clipId: String, left: Boolean, deltaUs: Long) {
+        if (locked(Selection.ClipSel(clipId))) return
         vm.live { p -> TimelineMath.trim(p, clipId, left, deltaUs) }
         // Show the frame at the edge being trimmed.
         val placed = TimelineMath.place(vm.project.value.clips).firstOrNull { it.clip.id == clipId } ?: return
         vm.preview.seekTo(if (left) placed.startUs else placed.endUs - 33_000)
     }
-    override fun moveBar(sel: Selection, startUs: Long) = vm.live { p ->
+    override fun moveBar(sel: Selection, startUs: Long) = if (locked(sel)) Unit else vm.live { p ->
         when (sel) {
             is Selection.TextSel -> p.copy(texts = p.texts.map { if (it.id == sel.id) it.copy(startUs = startUs, anchorClipId = null) else it })
             is Selection.StickerSel -> p.copy(stickers = p.stickers.map { if (it.id == sel.id) it.copy(startUs = startUs) else it })
@@ -334,7 +339,7 @@ private fun actionsFor(vm: EditorViewModel, addClips: () -> Unit, openTransition
             else -> p
         }
     }
-    override fun resizeBar(sel: Selection, left: Boolean, timeUs: Long) = vm.live { p ->
+    override fun resizeBar(sel: Selection, left: Boolean, timeUs: Long) = if (locked(sel)) Unit else vm.live { p ->
         fun span(start: Long, dur: Long): Pair<Long, Long> {
             val end = start + dur
             return if (left) { val s = timeUs.coerceIn(0, end - 200_000); s to end - s } else start to (timeUs - start).coerceAtLeast(200_000)
@@ -365,7 +370,17 @@ private fun actionsFor(vm: EditorViewModel, addClips: () -> Unit, openTransition
             else -> p
         }
     }
-    override fun reorder(from: Int, to: Int) = vm.edit { TimelineMath.move(it, from, to) }
+    override fun reorder(from: Int, to: Int) { if (!locked(Selection.ClipSel(""))) vm.edit { TimelineMath.move(it, from, to) } }
+    override fun toggleTrack(kind: com.reel.editor.model.TrackFlags.Kind, key: String) = vm.toggleTrack(kind, key)
+    override fun muteAudio(ids: List<String>, muted: Boolean) = vm.muteAudio(ids, muted)
+    private var warned = 0L
+    /** Locked tracks ignore moves and trims; one short note per gesture. */
+    private fun locked(s: Selection): Boolean {
+        if (!vm.isLocked(s)) return false
+        val now = System.currentTimeMillis()
+        if (now - warned > 1500) { warned = now; vm.toast("Track is locked") }
+        return true
+    }
     override fun addClips() = addClips()
 }
 
@@ -403,10 +418,14 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.Tune, "Adjust") { vm.openPanel(Panel.ADJUST) }
                 ToolButton(Icons.Rounded.AutoAwesome, "Effects") { vm.openPanel(Panel.EFFECTS) }
                 ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
+                ToolButton(Icons.Rounded.Face, "Reframe") { vm.openPanel(Panel.TRACK) }
                 ToolButton(Icons.Rounded.InvertColors, "Chroma") { vm.openPanel(Panel.CHROMA) }
                 ToolButton(Icons.Rounded.ContentCut, "Cutout", active = vm.targetClip()?.cutout?.enabled == true) { vm.openPanel(Panel.CUTOUT) }
+                ToolButton(Icons.Rounded.Crop, "Crop") { vm.openPanel(Panel.CROP) }
+                ToolButton(Icons.Rounded.RotateRight, "Rotate") { vm.rotateClip() }
                 ToolButton(Icons.Rounded.AspectRatio, "Canvas") { vm.openPanel(Panel.CANVAS) }
                 ToolButton(Icons.Rounded.AcUnit, "Freeze") { vm.freezeFrame() }
+                ToolButton(Icons.Rounded.MusicNote, "Extract audio") { vm.extractAudio() }
                 ToolButton(Icons.Rounded.FindReplace, "Replace") { replace() }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
@@ -416,12 +435,15 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.Palette, "Style") { vm.openPanel(Panel.TEXT_STYLE) }
                 ToolButton(Icons.Rounded.Animation, "Animate") { vm.openPanel(Panel.TEXT_ANIM) }
                 ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
+                ToolButton(Icons.Rounded.Face, "Track") { vm.openPanel(Panel.TRACK) }
+                ToolButton(Icons.Rounded.RecordVoiceOver, "Read aloud") { vm.speakText() }
                 ToolButton(Icons.Rounded.ContentCut, "Split") { vm.split() }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
             is Selection.StickerSel -> {
                 ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
+                ToolButton(Icons.Rounded.Face, "Track") { vm.openPanel(Panel.TRACK) }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
@@ -446,6 +468,7 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.Category, "Shape") { vm.openPanel(Panel.SHAPE) }
                 ToolButton(Icons.Rounded.Animation, "Animate") { vm.openPanel(Panel.TEXT_ANIM) }
                 ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
+                ToolButton(Icons.Rounded.Face, "Track") { vm.openPanel(Panel.TRACK) }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
@@ -458,6 +481,7 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.Layers, "Blend") { vm.openPanel(Panel.OVERLAY) }
                 ToolButton(Icons.Rounded.Star, "Mask") { vm.openPanel(Panel.MASK) }
                 ToolButton(Icons.Rounded.InvertColors, "Chroma") { vm.openPanel(Panel.CHROMA) }
+                ToolButton(Icons.Rounded.Face, "Track") { vm.openPanel(Panel.TRACK) }
                 ToolButton(Icons.Rounded.Animation, "Animate") { vm.openPanel(Panel.TEXT_ANIM) }
                 ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
@@ -500,6 +524,8 @@ private fun PanelHost(vm: EditorViewModel, panel: Panel, picking: Boolean, onPic
             else -> clip?.let { ChromaPanel(vm, it, picking, onPick, onClose) }
         }
         Panel.ADD_LAYER -> AddLayerPanel(vm, onClose)
+        Panel.CROP -> clip?.let { CropPanel(vm, it, onClose) }
+        Panel.TRACK -> TrackPanel(vm, clipMode = selection is Selection.ClipSel, onClose = onClose)
         Panel.SHAPE -> shape?.let { ShapePanel(vm, it, onClose) }
         Panel.ADJUST_LAYER -> adjustLayer?.let { AdjustLayerPanel(vm, it, onClose) }
         Panel.OVERLAY -> overlay?.let { OverlayPanel(vm, it, onClose) }
