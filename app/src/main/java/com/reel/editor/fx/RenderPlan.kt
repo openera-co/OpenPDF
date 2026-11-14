@@ -74,6 +74,8 @@ data class RenderPlan(
     /** The video track's eye is off: draw only the layers above it, on black. */
     val hideVideo: Boolean = false,
     val crop: com.reel.editor.model.CropRect = com.reel.editor.model.CropRect(),
+    val mask: com.reel.editor.model.Mask = com.reel.editor.model.Mask(),
+    val privacy: com.reel.editor.model.Privacy? = null,
     val chroma: ChromaKey,
     val cutout: com.reel.editor.model.Cutout,
     val adjust: Adjustments,
@@ -198,6 +200,8 @@ object RenderPlans {
             flipH = c.flipH,
             hideVideo = project.tracks.isHidden(com.reel.editor.model.TrackFlags.VIDEO),
             crop = c.crop,
+            mask = c.mask,
+            privacy = c.privacy,
             flipV = c.flipV,
             chroma = c.chroma,
             cutout = c.cutout,

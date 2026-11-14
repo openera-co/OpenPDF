@@ -49,7 +49,7 @@ class ExportService : Service() {
 
     private fun notification(progress: Int, ongoing: Boolean): Notification =
         NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setSmallIcon(com.reel.editor.R.drawable.ic_stat_reel)
             .setContentTitle("Exporting video")
             .setProgress(100, progress, progress == 0)
             .setOngoing(ongoing)

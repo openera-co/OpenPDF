@@ -57,7 +57,7 @@ class FxCatalog private constructor(
 
     fun fx(id: String): FxDef? = byId[id]
     fun transition(id: String): TransitionDef? = transitionById[id]
-    fun look(id: String): LookDef? = lookById[id]
+    fun look(id: String): LookDef? = lookById[id] ?: UserLuts.find(id)
 
     fun singleSource(def: FxDef): String {
         val params = def.params.joinToString("\n") { "uniform ${glslType(it.type)} ${it.name};" }

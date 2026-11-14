@@ -54,6 +54,10 @@ import androidx.compose.material.icons.automirrored.rounded.FormatAlignRight
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.BlurOn
+import androidx.compose.material.icons.rounded.GridOn
+import androidx.compose.material.icons.rounded.Square
+import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -337,9 +341,14 @@ private fun MaskTile(m: MaskShape, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun MaskPanel(vm: EditorViewModel, o: OverlayClip, onClose: () -> Unit) {
-    val m = o.mask
-    fun set(g: Boolean = false, f: (com.reel.editor.model.Mask) -> com.reel.editor.model.Mask) = vm.updateOverlay(o.id, g) { it.copy(mask = f(it.mask)) }
+fun MaskPanel(vm: EditorViewModel, o: OverlayClip, onClose: () -> Unit) =
+    MaskBody(vm, o.mask, onClose) { g, f -> vm.updateOverlay(o.id, g) { it.copy(mask = f(it.mask)) } }
+
+/** Mask editor for any picture: overlays and main clips. */
+@Composable
+fun MaskBody(vm: EditorViewModel, mask: com.reel.editor.model.Mask, onClose: () -> Unit, update: (Boolean, (com.reel.editor.model.Mask) -> com.reel.editor.model.Mask) -> Unit) {
+    val m = mask
+    fun set(g: Boolean = false, f: (com.reel.editor.model.Mask) -> com.reel.editor.model.Mask) = update(g, f)
     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         var tab by remember { mutableIntStateOf(0) }
         SheetHeader("Mask", onClose = onClose, onDone = onClose, center = { Segmented(listOf("Shape", "Place"), tab, { tab = it }) })
@@ -436,6 +445,45 @@ fun CropPanel(vm: EditorViewModel, clip: com.reel.editor.model.Clip, onClose: ()
         }
         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PillButton(Icons.Rounded.Refresh, "Reset") { ratio = -1f; set { com.reel.editor.model.CropRect() } }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+// ---------------------------------------------------------------------------- face blur
+
+/** Hides a face or a plate: blur, pixelate or a solid block, fixed or following the face. */
+@Composable
+fun PrivacyPanel(vm: EditorViewModel, clip: com.reel.editor.model.Clip, onClose: () -> Unit) {
+    val pr = clip.privacy
+    val progress by vm.trackProgress.collectAsStateCompat()
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SheetHeader("Blur", Icons.Rounded.BlurOn, iconTint = C.Accent, onClose = { vm.cancelTracking(); onClose() }, onDone = onClose)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Chip("Off", pr == null) { vm.updatePrivacy { null } }
+            Chip("Blur", pr?.mode == com.reel.editor.model.PrivacyMode.BLUR, icon = Icons.Rounded.BlurOn) { vm.updatePrivacy { it.copy(mode = com.reel.editor.model.PrivacyMode.BLUR) } }
+            Chip("Pixels", pr?.mode == com.reel.editor.model.PrivacyMode.PIXELATE, icon = Icons.Rounded.GridOn) { vm.updatePrivacy { it.copy(mode = com.reel.editor.model.PrivacyMode.PIXELATE) } }
+            Chip("Block", pr?.mode == com.reel.editor.model.PrivacyMode.SOLID, icon = Icons.Rounded.Square) { vm.updatePrivacy { it.copy(mode = com.reel.editor.model.PrivacyMode.SOLID) } }
+        }
+        val p = progress
+        if (p != null) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.material3.LinearProgressIndicator(progress = { p }, modifier = Modifier.weight(1f).height(4.dp).clip(CircleShape), color = C.Accent, trackColor = C.Surface2)
+                IconBtn(Icons.Rounded.Close, "Stop", background = C.Surface2, size = 36.dp) { vm.cancelTracking() }
+            }
+        } else if (pr != null) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton(Icons.Rounded.Face, if (pr.keys.isEmpty()) "Follow face" else "Track again", accent = pr.keys.isEmpty()) { vm.trackPrivacy() }
+                if (pr.keys.isNotEmpty()) PillButton(Icons.Rounded.PushPin, "Hold still") { vm.updatePrivacy { it.copy(keys = emptyList()) } }
+            }
+            ValueSlider(Icons.Rounded.Tune, "Strength", pr.strength * 100, 0f..100f, { "${it.roundToInt()}" }, C.Accent, default = 60f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.updatePrivacy(true) { it.copy(strength = v / 100f) } }
+            if (pr.keys.isEmpty()) {
+                ValueSlider(Icons.Rounded.ZoomOutMap, "Size", pr.size * 100, 3f..100f, { "${it.roundToInt()}" }, C.Accent, default = 25f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.updatePrivacy(true) { it.copy(size = v / 100f) } }
+                ValueSlider(Icons.Rounded.OpenWith, "X", pr.x * 100, 0f..100f, { "${it.roundToInt()}" }, C.Accent, default = 50f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.updatePrivacy(true) { it.copy(x = v / 100f) } }
+                ValueSlider(Icons.Rounded.OpenWith, "Y", pr.y * 100, 0f..100f, { "${it.roundToInt()}" }, C.Accent, default = 40f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.updatePrivacy(true) { it.copy(y = v / 100f) } }
+            } else {
+                ValueSlider(Icons.Rounded.ZoomOutMap, "Size", pr.grow * 100, 60f..250f, { "${it.roundToInt()}%" }, C.Accent, default = 130f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.updatePrivacy(true) { it.copy(grow = v / 100f) } }
+            }
         }
         Spacer(Modifier.height(8.dp))
     }

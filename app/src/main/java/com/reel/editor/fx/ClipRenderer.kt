@@ -246,7 +246,7 @@ class ClipRenderer(
         lutTexCache[key]?.let { return it }
         val tex = GlCache.texture("lut:$key") {
             if (look == null) Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
-            else NativeCore.renderLut(look.index, LUT_SIZE)?.let { px ->
+            else (if (look.index < 0) UserLuts.pixels(look.id, LUT_SIZE) else NativeCore.renderLut(look.index, LUT_SIZE))?.let { px ->
                 Bitmap.createBitmap(px, LUT_SIZE, LUT_SIZE * LUT_SIZE, Bitmap.Config.ARGB_8888)
             }
         }?.id ?: 0
@@ -289,6 +289,13 @@ class ClipRenderer(
         p.set("uFlip", if (plan.flipH) -1f else 1f, if (plan.flipV) -1f else 1f)
         val cr = plan.crop
         p.set("uCrop", cr.x, 1f - cr.y - cr.h, cr.w, cr.h)
+        val m = plan.mask
+        p.set("uCmShape", if (m.shape == com.reel.editor.model.MaskShape.NONE) 0f else m.shape.ordinal.toFloat())
+        p.set("uCmCenter", m.x, 1f - m.y)
+        p.set("uCmSize", m.w, m.h)
+        p.set("uCmRot", Math.toRadians(m.rotation.toDouble()).toFloat())
+        p.set("uCmFeather", m.feather)
+        p.set("uCmInvert", if (m.invert) 1f else 0f)
         p.set("uOpacity", if (plan.hideVideo) 0f else t.opacity)
         val bg = plan.background
         p.set("uBgMode", if (bg.mode == BackgroundMode.BLUR && !plan.hideVideo) 1f else 0f)
@@ -395,6 +402,8 @@ class ClipRenderer(
     // ------------------------------------------------------------------ post-canvas
 
     private fun buildClipPasses(out: MutableList<Pass>, local: Long) {
+        // The hidden region moves with the picture, so it comes before animations and transitions.
+        plan.privacy?.let { pr -> out += Pass({ src, _, _ -> privacyPass(pr, src, local) }, true) }
         plan.animIn?.let { (def, ref) ->
             val d = min(ref.durationUs, plan.clipDurationUs / 2)
             if (local < d && d > 0) out += Pass({ src, w, h -> animPass(def, src, w, h, smooth(local.toFloat() / d), local) }, true)
@@ -407,6 +416,21 @@ class ClipRenderer(
         plan.transition?.let { tr ->
             if (local < tr.durationUs) out += Pass({ src, _, _ -> transitionPass(tr, src, local.toFloat() / tr.durationUs) }, true)
         }
+    }
+
+    private fun privacyPass(pr: com.reel.editor.model.Privacy, src: Int, local: Long) {
+        val p = prog("internal:privacy") { catalog.internalSource("privacy") } ?: return passthrough(src)
+        val (cx, cy, h) = if (pr.keys.isEmpty()) Triple(pr.x, pr.y, pr.size)
+            else interpolate(com.reel.editor.model.Transform(pr.x, pr.y, pr.size), pr.keys, local).let { Triple(it.x, it.y, it.scale * pr.grow) }
+        p.use()
+        p.texture("uTex", src, 0)
+        p.set("uCanvasAspect", plan.canvasWidth.toFloat() / plan.canvasHeight)
+        p.set("uCenter", cx, 1f - cy)
+        // Faces are a little taller than wide.
+        p.set("uSize", h * 0.8f, h)
+        p.set("uMode", pr.mode.ordinal.toFloat())
+        p.set("uStrength", pr.strength)
+        p.draw()
     }
 
     private fun buildGlobalPasses(out: MutableList<Pass>, local: Long, global: Long) {

@@ -57,6 +57,11 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ContentCut
+import androidx.compose.material.icons.rounded.ContentPaste
+import androidx.compose.material.icons.rounded.Brush
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.SettingsBackupRestore
+import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.RotateRight
 import androidx.compose.material.icons.rounded.Crop
@@ -224,6 +229,19 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
                 }
             }
             if (busy) CircularProgressIndicator(color = C.Accent)
+            // Long clip jobs (reverse) show their progress over the video.
+            val work by vm.work.collectAsStateCompat()
+            work?.let { (label, f) ->
+                Row(
+                    Modifier.align(Alignment.BottomCenter).padding(12.dp).clip(RoundedCornerShape(16.dp)).background(C.Bg.copy(alpha = 0.85f)).padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(androidx.compose.material.icons.Icons.Rounded.SettingsBackupRestore, label, tint = C.Accent)
+                    androidx.compose.material3.LinearProgressIndicator(progress = { f }, modifier = Modifier.width(140.dp).height(4.dp).clip(RoundedCornerShape(2.dp)), color = C.Accent, trackColor = C.Surface2)
+                    Text("${(f * 100).toInt()}%", style = Mono)
+                    IconBtn(androidx.compose.material.icons.Icons.Rounded.Close, "Stop", size = 32.dp) { vm.cancelWork() }
+                }
+            }
             if (picking) Box(Modifier.align(Alignment.TopCenter).padding(10.dp).clip(RoundedCornerShape(14.dp)).background(C.Bg.copy(alpha = 0.8f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
                 Icon(Icons.Rounded.InvertColors, "Tap a color", tint = C.Good)
             }
@@ -315,9 +333,11 @@ private fun actionsFor(vm: EditorViewModel, addClips: () -> Unit, openTransition
     override fun scrubStart() = vm.preview.setScrubbing(true)
     override fun scrub(timeUs: Long) = vm.preview.seekTo(timeUs)
     override fun scrubEnd() = vm.preview.setScrubbing(false)
-    override fun select(s: Selection) { vm.select(s); vm.openPanel(null) }
+    override fun select(s: Selection) { vm.tapSelect(s); vm.openPanel(null) }
     override fun openTransition(clipId: String) { vm.preview.pause(); openTransition(clipId) }
-    override fun gestureStart() = vm.beginGesture()
+    /** The project as it was when a group drag began; each move offsets from it. */
+    private var groupBase: com.reel.editor.model.Project? = null
+    override fun gestureStart() { groupBase = vm.project.value; vm.beginGesture() }
     override fun gestureEnd() = vm.endGesture()
     override fun trimClip(clipId: String, left: Boolean, deltaUs: Long) {
         if (locked(Selection.ClipSel(clipId))) return
@@ -326,7 +346,44 @@ private fun actionsFor(vm: EditorViewModel, addClips: () -> Unit, openTransition
         val placed = TimelineMath.place(vm.project.value.clips).firstOrNull { it.clip.id == clipId } ?: return
         vm.preview.seekTo(if (left) placed.startUs else placed.endUs - 33_000)
     }
-    override fun moveBar(sel: Selection, startUs: Long) = if (locked(sel)) Unit else vm.live { p ->
+    private fun startOf(p: com.reel.editor.model.Project, s: Selection): Long? = when (s) {
+        is Selection.TextSel -> p.texts.firstOrNull { it.id == s.id }?.startUs
+        is Selection.StickerSel -> p.stickers.firstOrNull { it.id == s.id }?.startUs
+        is Selection.EffectSel -> p.effects.firstOrNull { it.id == s.id }?.startUs
+        is Selection.FilterSel -> p.filters.firstOrNull { it.id == s.id }?.startUs
+        is Selection.AudioSel -> p.audio.firstOrNull { it.id == s.id }?.startUs
+        is Selection.ShapeSel -> p.shapes.firstOrNull { it.id == s.id }?.startUs
+        is Selection.AdjustSel -> p.adjustments.firstOrNull { it.id == s.id }?.startUs
+        is Selection.OverlaySel -> p.overlays.firstOrNull { it.id == s.id }?.startUs
+        else -> null
+    }
+
+    /** Moves every picked item by the same amount as the one being dragged (clips stay in sequence). */
+    private fun moveGroup(group: Selection.MultiSel, dragged: Selection, startUs: Long) {
+        val base = groupBase ?: return
+        val delta = startUs - (startOf(base, dragged) ?: return)
+        // No item may go before the start.
+        val minStart = group.items.mapNotNull { startOf(base, it) }.minOrNull() ?: return
+        val d = maxOf(delta, -minStart)
+        val items = group.items.filterNot { locked(it) }.toSet()
+        fun <T> List<T>.shift(sel: (T) -> Selection, start: (T) -> Long, set: (T, Long) -> T, baseList: List<T>): List<T> =
+            map { cur -> if (sel(cur) in items) baseList.firstOrNull { sel(it) == sel(cur) }?.let { b -> set(cur, start(b) + d) } ?: cur else cur }
+        vm.live { p ->
+            p.copy(
+                texts = p.texts.shift({ Selection.TextSel(it.id) }, { it.startUs }, { t, v -> t.copy(startUs = v, anchorClipId = null) }, base.texts),
+                stickers = p.stickers.shift({ Selection.StickerSel(it.id) }, { it.startUs }, { t, v -> t.copy(startUs = v) }, base.stickers),
+                effects = p.effects.shift({ Selection.EffectSel(it.id) }, { it.startUs }, { t, v -> t.copy(startUs = v) }, base.effects),
+                filters = p.filters.shift({ Selection.FilterSel(it.id) }, { it.startUs }, { t, v -> t.copy(startUs = v) }, base.filters),
+                audio = p.audio.shift({ Selection.AudioSel(it.id) }, { it.startUs }, { t, v -> t.copy(startUs = v) }, base.audio),
+                shapes = p.shapes.shift({ Selection.ShapeSel(it.id) }, { it.startUs }, { t, v -> t.copy(startUs = v) }, base.shapes),
+                adjustments = p.adjustments.shift({ Selection.AdjustSel(it.id) }, { it.startUs }, { t, v -> t.copy(startUs = v) }, base.adjustments),
+                overlays = p.overlays.shift({ Selection.OverlaySel(it.id) }, { it.startUs }, { t, v -> t.copy(startUs = v) }, base.overlays),
+            )
+        }
+    }
+
+    override fun moveBar(sel: Selection, startUs: Long) = (vm.selection.value as? Selection.MultiSel)?.takeIf { sel in it.items }?.let { moveGroup(it, sel, startUs) }
+        ?: if (locked(sel)) Unit else vm.live { p ->
         when (sel) {
             is Selection.TextSel -> p.copy(texts = p.texts.map { if (it.id == sel.id) it.copy(startUs = startUs, anchorClipId = null) else it })
             is Selection.StickerSel -> p.copy(stickers = p.stickers.map { if (it.id == sel.id) it.copy(startUs = startUs) else it })
@@ -391,6 +448,7 @@ private fun Toolbar(
     addClips: () -> Unit,
     replace: () -> Unit,
 ) {
+    val canPaste by vm.canPaste.collectAsStateCompat()
     Row(Modifier.fillMaxWidth().height(72.dp).horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         if (selection != Selection.None) {
             IconBtn(Icons.AutoMirrored.Rounded.ArrowBack, "Done", size = 52.dp) { vm.select(Selection.None) }
@@ -422,11 +480,17 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.InvertColors, "Chroma") { vm.openPanel(Panel.CHROMA) }
                 ToolButton(Icons.Rounded.ContentCut, "Cutout", active = vm.targetClip()?.cutout?.enabled == true) { vm.openPanel(Panel.CUTOUT) }
                 ToolButton(Icons.Rounded.Crop, "Crop") { vm.openPanel(Panel.CROP) }
+                ToolButton(Icons.Rounded.Star, "Mask") { vm.openPanel(Panel.MASK) }
+                ToolButton(Icons.Rounded.BlurOn, "Blur face", active = vm.targetClip()?.privacy != null) { vm.openPanel(Panel.PRIVACY) }
                 ToolButton(Icons.Rounded.RotateRight, "Rotate") { vm.rotateClip() }
+                ToolButton(Icons.Rounded.SettingsBackupRestore, "Reverse", active = vm.targetClip()?.reversedFrom != null) { vm.reverseClip() }
                 ToolButton(Icons.Rounded.AspectRatio, "Canvas") { vm.openPanel(Panel.CANVAS) }
                 ToolButton(Icons.Rounded.AcUnit, "Freeze") { vm.freezeFrame() }
                 ToolButton(Icons.Rounded.MusicNote, "Extract audio") { vm.extractAudio() }
                 ToolButton(Icons.Rounded.FindReplace, "Replace") { replace() }
+                ToolButton(Icons.Rounded.Checklist, "Select") { vm.startMultiSelect() }
+                ToolButton(Icons.Rounded.Brush, "Copy style") { vm.copyStyle() }
+                if (canPaste) ToolButton(Icons.Rounded.ContentPaste, "Paste style") { vm.pasteStyle() }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
@@ -438,6 +502,9 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.Face, "Track") { vm.openPanel(Panel.TRACK) }
                 ToolButton(Icons.Rounded.RecordVoiceOver, "Read aloud") { vm.speakText() }
                 ToolButton(Icons.Rounded.ContentCut, "Split") { vm.split() }
+                ToolButton(Icons.Rounded.Checklist, "Select") { vm.startMultiSelect() }
+                ToolButton(Icons.Rounded.Brush, "Copy style") { vm.copyStyle() }
+                if (canPaste) ToolButton(Icons.Rounded.ContentPaste, "Paste style") { vm.pasteStyle() }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
@@ -445,6 +512,7 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
                 ToolButton(Icons.Rounded.Face, "Track") { vm.openPanel(Panel.TRACK) }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
+                ToolButton(Icons.Rounded.Checklist, "Select") { vm.startMultiSelect() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
             is Selection.AudioSel -> {
@@ -452,16 +520,19 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.RecordVoiceOver, "Voice") { vm.openPanel(Panel.VOICE) }
                 ToolButton(Icons.Rounded.GraphicEq, "Beats") { vm.openPanel(Panel.BEATS) }
                 ToolButton(Icons.Rounded.ContentCut, "Split") { vm.split() }
+                ToolButton(Icons.Rounded.Checklist, "Select") { vm.startMultiSelect() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
             is Selection.EffectSel -> {
                 ToolButton(Icons.Rounded.SwapHoriz, "Replace") { vm.openPanel(Panel.EFFECTS) }
                 ToolButton(Icons.Rounded.Tune, "Adjust") { vm.openPanel(Panel.EFFECTS) }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
+                ToolButton(Icons.Rounded.Checklist, "Select") { vm.startMultiSelect() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
             is Selection.FilterSel -> {
                 ToolButton(Icons.Rounded.FilterVintage, "Filter") { vm.openPanel(Panel.FILTERS) }
+                ToolButton(Icons.Rounded.Checklist, "Select") { vm.startMultiSelect() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
             is Selection.ShapeSel -> {
@@ -469,12 +540,21 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.Animation, "Animate") { vm.openPanel(Panel.TEXT_ANIM) }
                 ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
                 ToolButton(Icons.Rounded.Face, "Track") { vm.openPanel(Panel.TRACK) }
+                ToolButton(Icons.Rounded.Checklist, "Select") { vm.startMultiSelect() }
+                ToolButton(Icons.Rounded.Brush, "Copy style") { vm.copyStyle() }
+                if (canPaste) ToolButton(Icons.Rounded.ContentPaste, "Paste style") { vm.pasteStyle() }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
             is Selection.AdjustSel -> {
                 ToolButton(Icons.Rounded.Tune, "Adjust") { vm.openPanel(Panel.ADJUST_LAYER) }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
+                ToolButton(Icons.Rounded.Checklist, "Select") { vm.startMultiSelect() }
+                ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
+            }
+            is Selection.MultiSel -> {
+                Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) { Text("${selection.items.size}", style = Title.copy(color = C.Accent)) }
+                if (canPaste) ToolButton(Icons.Rounded.ContentPaste, "Paste style") { vm.pasteStyle() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
             is Selection.OverlaySel -> {
@@ -484,6 +564,9 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.Face, "Track") { vm.openPanel(Panel.TRACK) }
                 ToolButton(Icons.Rounded.Animation, "Animate") { vm.openPanel(Panel.TEXT_ANIM) }
                 ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
+                ToolButton(Icons.Rounded.Checklist, "Select") { vm.startMultiSelect() }
+                ToolButton(Icons.Rounded.Brush, "Copy style") { vm.copyStyle() }
+                if (canPaste) ToolButton(Icons.Rounded.ContentPaste, "Paste style") { vm.pasteStyle() }
                 ToolButton(Icons.Rounded.ContentCopy, "Duplicate") { vm.duplicateSelected() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
@@ -525,11 +608,15 @@ private fun PanelHost(vm: EditorViewModel, panel: Panel, picking: Boolean, onPic
         }
         Panel.ADD_LAYER -> AddLayerPanel(vm, onClose)
         Panel.CROP -> clip?.let { CropPanel(vm, it, onClose) }
+        Panel.PRIVACY -> clip?.let { PrivacyPanel(vm, it, onClose) }
         Panel.TRACK -> TrackPanel(vm, clipMode = selection is Selection.ClipSel, onClose = onClose)
         Panel.SHAPE -> shape?.let { ShapePanel(vm, it, onClose) }
         Panel.ADJUST_LAYER -> adjustLayer?.let { AdjustLayerPanel(vm, it, onClose) }
         Panel.OVERLAY -> overlay?.let { OverlayPanel(vm, it, onClose) }
-        Panel.MASK -> overlay?.let { MaskPanel(vm, it, onClose) }
+        Panel.MASK -> when {
+            overlay != null -> MaskPanel(vm, overlay, onClose)
+            else -> clip?.let { c -> MaskBody(vm, c.mask, onClose) { g, f -> vm.updateClip(c.id, g) { it.copy(mask = f(it.mask)) } } }
+        }
         Panel.CAPTIONS -> CaptionsPanel(vm, onClose)
         Panel.CUTOUT -> clip?.let { CutoutPanel(vm, it, onClose) }
         Panel.VOICE -> when (val sel = selection) {

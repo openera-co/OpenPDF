@@ -112,6 +112,10 @@ data class Clip(
     val flipV: Boolean = false,
     /** Visible part of the source frame, as fractions with a top-left origin. */
     val crop: CropRect = CropRect(),
+    /** Set while the clip plays a reversed copy: what to go back to. */
+    val reversedFrom: ReverseSource? = null,
+    /** A blurred or pixelated region (usually a face), fixed or following tracked keyframes. */
+    val privacy: Privacy? = null,
     val adjust: Adjustments = Adjustments(),
     val lookId: String? = null,
     val lookAmount: Float = 1f,
@@ -135,6 +139,28 @@ data class Clip(
 
 @Serializable
 enum class Fit { FIT, FILL }
+
+@Serializable
+data class ReverseSource(val uri: String, val sourceDurationUs: Long, val trimStartUs: Long, val trimEndUs: Long, val hasAudio: Boolean)
+
+@Serializable
+enum class PrivacyMode { BLUR, PIXELATE, SOLID }
+
+/**
+ * An oval hidden on the canvas. Without [keys] it sits at [x], [y] with height [size] (canvas
+ * fractions); with keys (from tracking, offsets from the clip start) each key's transform holds
+ * the centre in x, y and the height in scale. [grow] enlarges the tracked oval.
+ */
+@Serializable
+data class Privacy(
+    val mode: PrivacyMode = PrivacyMode.BLUR,
+    val strength: Float = 0.6f,
+    val x: Float = 0.5f,
+    val y: Float = 0.4f,
+    val size: Float = 0.25f,
+    val grow: Float = 1.3f,
+    val keys: List<Keyframe> = emptyList(),
+)
 
 @Serializable
 data class CropRect(val x: Float = 0f, val y: Float = 0f, val w: Float = 1f, val h: Float = 1f) {

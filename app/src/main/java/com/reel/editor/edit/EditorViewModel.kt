@@ -41,6 +41,16 @@ sealed interface Selection {
     data class ShapeSel(val id: String) : Selection
     data class AdjustSel(val id: String) : Selection
     data class OverlaySel(val id: String) : Selection
+    /** Several items picked on the timeline; moved, deleted or styled together. */
+    data class MultiSel(val items: List<Selection>) : Selection
+}
+
+/** What "Copy style" holds: the look of one kind of item, pasted onto items of the same kind. */
+sealed interface StyleClip {
+    data class OfClip(val c: com.reel.editor.model.Clip) : StyleClip
+    data class OfText(val t: com.reel.editor.model.TextLayer) : StyleClip
+    data class OfShape(val s: com.reel.editor.model.ShapeLayer) : StyleClip
+    data class OfOverlay(val o: com.reel.editor.model.OverlayClip) : StyleClip
 }
 
 /** Which timeline track a selection lives on, for the eye, speaker and lock switches. */
@@ -55,7 +65,7 @@ fun trackKeyOf(s: Selection): String? = when (s) {
 
 enum class Panel {
     SPEED, VOLUME, ANIMATION, FILTERS, ADJUST, EFFECTS, TRANSITION, TEXT_EDIT, TEXT_STYLE, TEXT_ANIM,
-    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE, SHAPE, ADJUST_LAYER, OVERLAY, MASK, ADD_LAYER, TRACK
+    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE, SHAPE, ADJUST_LAYER, OVERLAY, MASK, ADD_LAYER, TRACK, PRIVACY
 }
 
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
@@ -174,6 +184,67 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         if (s == Selection.None) _panel.value = null
     }
 
+    /** Timeline taps: while several items are picked, a tap adds or removes one. */
+    fun tapSelect(s: Selection) {
+        val cur = _selection.value
+        if (cur is Selection.MultiSel && s != Selection.None && s !is Selection.MultiSel) {
+            val items = if (s in cur.items) cur.items - s else cur.items + s
+            select(if (items.isEmpty()) Selection.None else Selection.MultiSel(items))
+        } else select(s)
+    }
+
+    /** Starts picking several items, beginning with the selected one. */
+    fun startMultiSelect() {
+        val cur = _selection.value
+        if (cur == Selection.None || cur is Selection.MultiSel) return
+        select(Selection.MultiSel(listOf(cur)))
+        toast("Tap more items")
+    }
+
+    // ------------------------------------------------------------------ styles
+
+    private var clipboard: StyleClip? = null
+    private val _canPaste = MutableStateFlow(false)
+    val canPaste: StateFlow<Boolean> = _canPaste
+
+    fun copyStyle() {
+        val p = _project.value
+        clipboard = when (val s = _selection.value) {
+            is Selection.ClipSel -> p.clips.firstOrNull { it.id == s.id }?.let { StyleClip.OfClip(it) }
+            is Selection.TextSel -> p.texts.firstOrNull { it.id == s.id }?.let { StyleClip.OfText(it) }
+            is Selection.ShapeSel -> p.shapes.firstOrNull { it.id == s.id }?.let { StyleClip.OfShape(it) }
+            is Selection.OverlaySel -> p.overlays.firstOrNull { it.id == s.id }?.let { StyleClip.OfOverlay(it) }
+            else -> null
+        }
+        _canPaste.value = clipboard != null
+        toast(if (clipboard != null) "Style copied" else "Nothing to copy here")
+    }
+
+    /** Pastes the copied style onto the selected item(s) of the same kind. */
+    fun pasteStyle() {
+        val cb = clipboard ?: return
+        val targets = when (val s = _selection.value) { is Selection.MultiSel -> s.items; Selection.None -> emptyList(); else -> listOf(s) }
+        val ids = targets.mapNotNull { t -> when (t) { is Selection.ClipSel -> t.id; is Selection.TextSel -> t.id; is Selection.ShapeSel -> t.id; is Selection.OverlaySel -> t.id; else -> null } }.toSet()
+        var n = 0
+        edit { p ->
+            when (cb) {
+                is StyleClip.OfClip -> p.copy(clips = p.clips.map { c ->
+                    if (c.id !in ids || c.id == cb.c.id) c else { n++; c.copy(adjust = cb.c.adjust, lookId = cb.c.lookId, lookAmount = cb.c.lookAmount, filter = cb.c.filter, clipEffects = cb.c.clipEffects, animIn = cb.c.animIn, animOut = cb.c.animOut, chroma = cb.c.chroma, fit = cb.c.fit, voice = cb.c.voice) }
+                })
+                is StyleClip.OfText -> p.copy(texts = p.texts.map { t ->
+                    if (t.id !in ids || t.id == cb.t.id) t else { n++; t.copy(style = cb.t.style, animIn = cb.t.animIn, animOut = cb.t.animOut, loop = cb.t.loop) }
+                })
+                is StyleClip.OfShape -> p.copy(shapes = p.shapes.map { sh ->
+                    if (sh.id !in ids || sh.id == cb.s.id) sh else { n++; sh.copy(fill = cb.s.fill, stroke = cb.s.stroke, strokeWidth = cb.s.strokeWidth, corner = cb.s.corner, animIn = cb.s.animIn, animOut = cb.s.animOut) }
+                })
+                is StyleClip.OfOverlay -> p.copy(overlays = p.overlays.map { o ->
+                    if (o.id !in ids || o.id == cb.o.id) o else { n++; o.copy(blend = cb.o.blend, mask = cb.o.mask, chroma = cb.o.chroma, adjust = cb.o.adjust, lookId = cb.o.lookId, animIn = cb.o.animIn, animOut = cb.o.animOut) }
+                })
+            }
+        }
+        toast(if (n == 0) "Pick items of the same kind" else "Style pasted on $n")
+    }
+
     fun openPanel(p: Panel?) {
         _panel.value = p
         if (p != null) preview.pause()
@@ -191,6 +262,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             is Selection.ShapeSel -> p.shapes.any { it.id == s.id }
             is Selection.AdjustSel -> p.adjustments.any { it.id == s.id }
             is Selection.OverlaySel -> p.overlays.any { it.id == s.id }
+            is Selection.MultiSel -> s.items.isNotEmpty()
             Selection.None -> true
         }
         if (!ok) select(Selection.None)
@@ -316,6 +388,25 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             is Selection.ShapeSel -> edit { p -> p.copy(shapes = p.shapes.filter { it.id != s.id }) }
             is Selection.AdjustSel -> edit { p -> p.copy(adjustments = p.adjustments.filter { it.id != s.id }) }
             is Selection.OverlaySel -> edit { p -> p.copy(overlays = p.overlays.filter { it.id != s.id }) }
+            is Selection.MultiSel -> {
+                val ids = s.items.map { it.toString() }.toSet()
+                fun gone(sel: Selection) = sel.toString() in ids
+                if (s.items.any { it is Selection.ClipSel } && _project.value.clips.all { gone(Selection.ClipSel(it.id)) }) { toast("Keep at least one clip"); return }
+                edit { p ->
+                    p.copy(
+                        clips = p.clips.filterNot { gone(Selection.ClipSel(it.id)) },
+                        texts = p.texts.filterNot { gone(Selection.TextSel(it.id)) },
+                        stickers = p.stickers.filterNot { gone(Selection.StickerSel(it.id)) },
+                        audio = p.audio.filterNot { gone(Selection.AudioSel(it.id)) },
+                        effects = p.effects.filterNot { gone(Selection.EffectSel(it.id)) },
+                        filters = p.filters.filterNot { gone(Selection.FilterSel(it.id)) },
+                        shapes = p.shapes.filterNot { gone(Selection.ShapeSel(it.id)) },
+                        adjustments = p.adjustments.filterNot { gone(Selection.AdjustSel(it.id)) },
+                        overlays = p.overlays.filterNot { gone(Selection.OverlaySel(it.id)) },
+                    )
+                }
+                toast("${s.items.size} deleted")
+            }
             Selection.None -> return
         }
         select(Selection.None)
@@ -648,6 +739,57 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun newIdLocal() = java.util.UUID.randomUUID().toString().take(8)
 
+    private val _work = MutableStateFlow<Pair<String, Float>?>(null)
+    /** A long job on the selected clip (label, 0..1), shown over the preview. */
+    val work: StateFlow<Pair<String, Float>?> = _work
+    private var reverser: com.reel.editor.media.Reverser? = null
+
+    fun cancelWork() { reverser?.cancelled = true }
+
+    /** Plays the selected clip backwards (a reversed copy is made once), or back forwards. */
+    fun reverseClip() {
+        val sel = _selection.value as? Selection.ClipSel ?: return
+        val c = _project.value.clips.firstOrNull { it.id == sel.id } ?: return
+        if (c.kind == com.reel.editor.model.ClipKind.PHOTO) { toast("Photos look the same backwards"); return }
+        c.reversedFrom?.let { src ->
+            updateClip(c.id) { it.copy(uri = src.uri, sourceDurationUs = src.sourceDurationUs, trimStartUs = src.trimStartUs, trimEndUs = src.trimEndUs, hasAudio = src.hasAudio, reversedFrom = null) }
+            toast("Playing forwards")
+            return
+        }
+        if (_work.value != null) return
+        preview.pause()
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            val dir = java.io.File(ctx.filesDir, "reversed").apply { mkdirs() }
+            val key = "${c.uri}|${c.trimStartUs}|${c.trimEndUs}".hashCode().toUInt().toString(16)
+            val out = java.io.File(dir, "rev-$key.mp4")
+            val rv = com.reel.editor.media.Reverser(ctx).also { reverser = it }
+            _work.value = "Reverse" to 0f
+            try {
+                val ok = out.exists() || withContext(Dispatchers.IO) {
+                    // Needs room for the new file; a rough guess from the source's bitrate.
+                    if (ctx.filesDir.usableSpace < 200L shl 20) throw IllegalStateException("Not enough free space")
+                    rv.reverse(c.uri, c.trimStartUs, c.trimEndUs, c.hasAudio, out) { _work.value = "Reverse" to it }
+                }
+                if (!ok) return@launch
+                val dur = withContext(Dispatchers.IO) { MediaProbe.probeClip(ctx, Uri.fromFile(out))?.sourceDurationUs } ?: throw IllegalStateException("Reversed clip can't be read")
+                updateClip(c.id) {
+                    it.copy(
+                        uri = Uri.fromFile(out).toString(), sourceDurationUs = dur, trimStartUs = 0, trimEndUs = dur,
+                        reversedFrom = com.reel.editor.model.ReverseSource(it.uri, it.sourceDurationUs, it.trimStartUs, it.trimEndUs, it.hasAudio),
+                    )
+                }
+                toast("Playing backwards")
+            } catch (e: Exception) {
+                com.reel.editor.CrashReports.error("reverse", e)
+                toast(e.message ?: "Couldn't reverse this clip")
+            } finally {
+                reverser = null
+                _work.value = null
+            }
+        }
+    }
+
     /** Turns the selected clip a quarter turn clockwise. */
     fun rotateClip() {
         val sel = _selection.value as? Selection.ClipSel ?: return
@@ -733,6 +875,51 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 toast("Following the head")
             } catch (e: Exception) {
                 com.reel.editor.CrashReports.error("track", e)
+                toast("Tracking failed")
+            } finally {
+                tracker = null
+                _trackProgress.value = null
+            }
+        }
+    }
+
+    /** Sets or changes the selected clip's hidden region. */
+    fun updatePrivacy(gesture: Boolean = false, change: (com.reel.editor.model.Privacy) -> com.reel.editor.model.Privacy?) {
+        val sel = _selection.value as? Selection.ClipSel ?: return
+        updateClip(sel.id, gesture) { it.copy(privacy = change(it.privacy ?: com.reel.editor.model.Privacy())) }
+    }
+
+    /** Finds the face in the selected clip and makes its blur follow it. */
+    fun trackPrivacy() {
+        val sel = _selection.value as? Selection.ClipSel ?: return
+        if (_trackProgress.value != null) return
+        val p0 = _project.value
+        val pc = TimelineMath.place(p0.clips).firstOrNull { it.clip.id == sel.id } ?: return
+        preview.pause()
+        _trackProgress.value = 0f
+        viewModelScope.launch {
+            val t = com.reel.editor.track.HeadTracker(getApplication()).also { tracker = it }
+            try {
+                val raw = withContext(Dispatchers.Default) { t.track(pc.clip, 0, pc.durationUs - 1, 150_000) { _trackProgress.value = it } }
+                if (t.cancelled) return@launch
+                val cr = pc.clip.crop
+                val pts = com.reel.editor.model.HeadPath.smooth(raw, radius = 1)
+                if (pts.isEmpty()) { toast("No face found"); return@launch }
+                val (cw, chh) = com.reel.editor.fx.RenderPlans.canvasSize(p0, 1280)
+                val canvasAspect = cw.toFloat() / chh
+                val (dw, dh) = com.reel.editor.fx.RenderPlans.displaySize(pc.clip)
+                val contentAspect = dw * cr.w / (dh.coerceAtLeast(1) * cr.h)
+                val fill = pc.clip.fit == com.reel.editor.model.Fit.FILL
+                val (_, ch) = com.reel.editor.model.HeadPath.contentSize(contentAspect, canvasAspect, fill)
+                val keys = pts.map { h ->
+                    val ct = interpolate(pc.clip.transform, pc.clip.keyframes, h.timeUs)
+                    val (x, y) = com.reel.editor.model.HeadPath.toCanvas((h.x - cr.x) / cr.w, (h.y - cr.y) / cr.h, ct, contentAspect, canvasAspect, fill)
+                    Keyframe(h.timeUs, Transform(x = x, y = y, scale = (h.size / cr.h * ch * ct.scale).coerceIn(0.03f, 1.5f)), com.reel.editor.model.Easing.LINEAR)
+                }
+                updateClip(pc.clip.id) { it.copy(privacy = (it.privacy ?: com.reel.editor.model.Privacy()).copy(keys = com.reel.editor.model.HeadPath.simplify(keys, 0.004f))) }
+                toast("Blur follows the face")
+            } catch (e: Exception) {
+                com.reel.editor.CrashReports.error("privacy", e)
                 toast("Tracking failed")
             } finally {
                 tracker = null

@@ -102,9 +102,14 @@ fun HomeScreen(store: ProjectStore, thumbnails: Thumbnails, onNew: () -> Unit, o
     ) {
         item(span = { GridItemSpan(2) }) {
             Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(C.Accent), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.PlayArrow, null, tint = C.Bg, modifier = Modifier.size(20.dp))
-                }
+                // Same art as the launcher icon.
+                androidx.compose.foundation.Image(
+                    androidx.compose.ui.graphics.painter.BitmapPainter(
+                        androidx.core.content.res.ResourcesCompat.getDrawable(ctx.resources, com.reel.editor.R.mipmap.ic_launcher, null)!!
+                            .let { d -> android.graphics.Bitmap.createBitmap(96, 96, android.graphics.Bitmap.Config.ARGB_8888).also { b -> d.setBounds(0, 0, 96, 96); d.draw(android.graphics.Canvas(b)) }.asImageBitmap() },
+                    ),
+                    null, Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)),
+                )
                 Text("Reel", style = Title.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold), modifier = Modifier.padding(start = 10.dp))
                 Spacer(Modifier.weight(1f))
                 IconBtn(Icons.Rounded.SystemUpdate, "Updates", size = 44.dp) { updates = true }

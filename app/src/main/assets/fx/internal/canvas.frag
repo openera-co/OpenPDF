@@ -1,7 +1,13 @@
 // Places the clip on the project canvas: fit/fill, keyframed transform, flip,
 // chroma key, person cutout, and a blur / color background behind it.
 uniform sampler2D uTex;
-uniform vec4 uCrop;            // visible part of the source: x, y (GL, y up), width, height
+uniform vec4 uCrop;
+uniform float uCmShape;        // clip mask: 0 none, 1 circle, 2 rect, 3 linear, 4 heart, 5 star
+uniform vec2 uCmCenter;        // in the clip's picture, y up
+uniform vec2 uCmSize;
+uniform float uCmRot;
+uniform float uCmFeather;
+uniform float uCmInvert;            // visible part of the source: x, y (GL, y up), width, height
 uniform float uCanvasAspect;   // width / height of the output
 uniform float uContentAspect;  // width / height of the clip
 uniform float uFill;           // 0 fit, 1 fill
@@ -99,6 +105,46 @@ vec3 despill(vec3 c) {
   return c - dir * along * uKeySpill;
 }
 
+float sdHeart(vec2 p) {
+  p.x = abs(p.x);
+  p.y = -p.y + 0.5;
+  if (p.y + p.x > 1.0) return sqrt(dot(p - vec2(0.25, 0.75), p - vec2(0.25, 0.75))) - sqrt(2.0) / 4.0;
+  vec2 a = p - vec2(0.0, 1.0);
+  vec2 b = p - 0.5 * max(p.x + p.y, 0.0);
+  return sqrt(min(dot(a, a), dot(b, b))) * sign(p.x - p.y);
+}
+float sdStar(vec2 p, float r, float rf) {
+  const vec2 k1 = vec2(0.809016994375, -0.587785252292);
+  const vec2 k2 = vec2(-k1.x, k1.y);
+  p.x = abs(p.x);
+  p -= 2.0 * max(dot(k1, p), 0.0) * k1;
+  p -= 2.0 * max(dot(k2, p), 0.0) * k2;
+  p.x = abs(p.x);
+  p.y -= r;
+  vec2 ba = rf * vec2(-k1.y, k1.x) - vec2(0.0, 1.0);
+  float h = clamp(dot(p, ba) / dot(ba, ba), 0.0, r);
+  return length(p - ba * h) * sign(p.y * ba.x - p.x * ba.y);
+}
+
+/** Clip mask in the cropped picture's square units, so a circle stays round. */
+float clipMask(vec2 uv) {
+  if (uCmShape < 0.5) return 1.0;
+  float ca = uContentAspect;
+  vec2 d = (uv - uCmCenter) * vec2(ca, 1.0) / min(ca, 1.0);
+  float s = sin(uCmRot), co = cos(uCmRot);
+  d = vec2(co * d.x - s * d.y, s * d.x + co * d.y);
+  vec2 q = d / max(uCmSize * 0.5, vec2(0.001));
+  float dist;
+  if (uCmShape < 1.5) dist = length(q) - 1.0;
+  else if (uCmShape < 2.5) dist = max(abs(q.x), abs(q.y)) - 1.0;
+  else if (uCmShape < 3.5) dist = q.y;
+  else if (uCmShape < 4.5) dist = sdHeart(q * 0.75 + vec2(0.0, 0.1));
+  else dist = sdStar(q, 1.0, 0.45);
+  float f = 0.01 + uCmFeather * 0.6;
+  float a = 1.0 - smoothstep(-f, f, dist);
+  return uCmInvert > 0.5 ? 1.0 - a : a;
+}
+
 void main() {
   vec2 p = vTexSamplingCoord;
   vec2 P = vec2(p.x * uCanvasAspect, p.y);
@@ -114,7 +160,7 @@ void main() {
   vec2 suv = uCrop.xy + clamp(uv, 0.0, 1.0) * uCrop.zw;
   vec3 c = texture2D(uTex, suv).rgb;
   if (uMaskOn > 0.5) bg = cutBackground(p, suv, bg, inside);
-  float a = keyAlpha(c) * personAlpha(suv) * inside * uOpacity;
+  float a = keyAlpha(c) * personAlpha(suv) * inside * uOpacity * clipMask(uv);
   if (uKeyOn > 0.5) c = despill(c);
   gl_FragColor = vec4(mix(bg, c, a), 1.0);
 }

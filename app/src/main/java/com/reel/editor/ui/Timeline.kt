@@ -309,7 +309,7 @@ fun Timeline(
                         if (mode == 0 && moved.getDistance() > slop) {
                             mode = when (hit) {
                                 is Hit.ClipHandle -> { actions.gestureStart(); 3 }
-                                is Hit.Bar -> if (hit.sel == currentSel) { actions.gestureStart(); 4 } else { actions.scrubStart(); 1 }
+                                is Hit.Bar -> if (hit.sel == currentSel || (currentSel as? Selection.MultiSel)?.items?.contains(hit.sel) == true) { actions.gestureStart(); 4 } else { actions.scrubStart(); 1 }
                                 is Hit.BarHandle -> { actions.gestureStart(); 5 }
                                 else -> { actions.scrubStart(); 1 }
                             }
@@ -364,7 +364,8 @@ fun Timeline(
                 if (x1 < 0 || x0 > size.width) continue
                 val key = com.reel.editor.edit.trackKeyOf(b.sel)
                 val off = key != null && project.tracks.isHidden(key)
-                drawBar(measurer, x0, x1, y, barH, b.label, if (off) b.color.copy(alpha = 0.35f) else b.color, if (off) b.fill.copy(alpha = 0.35f) else b.fill, b.sel == selection, corner)
+                val picked = b.sel == selection || (selection as? Selection.MultiSel)?.items?.contains(b.sel) == true
+                drawBar(measurer, x0, x1, y, barH, b.label, if (off) b.color.copy(alpha = 0.35f) else b.color, if (off) b.fill.copy(alpha = 0.35f) else b.fill, picked, corner)
             }
             val r = reorder
             if (r != null) drawReorder(placed, thumbs, r, centerX, clipY, clipH, corner)
@@ -390,6 +391,12 @@ fun Timeline(
                         moveTo(x + s * 0.3f, clipY + clipH / 2 - s * 0.28f); lineTo(x, clipY + clipH / 2); lineTo(x + s * 0.3f, clipY + clipH / 2 + s * 0.28f); close()
                     }
                     drawPath(icon, C.Bg)
+                }
+                // Clips picked together with other items.
+                (selection as? Selection.MultiSel)?.items?.filterIsInstance<Selection.ClipSel>()?.forEach { s ->
+                    placed.firstOrNull { it.clip.id == s.id }?.let { p ->
+                        drawRoundRect(C.Accent, Offset(xOf(p.startUs), clipY), Size(xOf(p.endUs) - xOf(p.startUs), clipH), CornerRadius(corner), style = Stroke(3 * density.density))
+                    }
                 }
                 // Selection frame with handles and keyframes
                 (selection as? Selection.ClipSel)?.let { s ->

@@ -40,6 +40,7 @@ import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -76,11 +77,13 @@ import kotlin.math.roundToInt
 
 /** Applies a look to a small bitmap on the CPU for tile previews. */
 private object LookPreview {
-    private val luts = HashMap<Int, IntArray>()
+    private val luts = HashMap<String, IntArray>()
     private const val N = 17
 
     fun apply(src: Bitmap, look: LookDef): Bitmap {
-        val lut = synchronized(luts) { luts.getOrPut(look.index) { NativeCore.renderLut(look.index, N) ?: IntArray(N * N * N) } }
+        val lut = synchronized(luts) {
+            luts.getOrPut(look.id) { (if (look.index < 0) com.reel.editor.fx.UserLuts.pixels(look.id, N) else NativeCore.renderLut(look.index, N)) ?: IntArray(N * N * N) }
+        }
         val w = src.width
         val h = src.height
         val px = IntArray(w * h)
@@ -105,8 +108,20 @@ fun FiltersPanel(vm: EditorViewModel, onClose: () -> Unit) {
     val clip = vm.targetClip()
     val timed = (selection as? Selection.FilterSel)?.let { s -> project.filters.firstOrNull { it.id == s.id } }
     var tab by remember { mutableIntStateOf(if (clip?.filter != null || timed?.shaderFx != null) 1 else 0) }
-    val categories = remember { listOf("All") + catalog.looks.map { it.category }.distinct() }
+    var userVersion by remember { mutableIntStateOf(0) }
     var cat by remember { mutableStateOf("All") }
+    val applyLookRef = remember { mutableStateOf<((String?) -> Unit)?>(null) }
+    val userLooks = remember(userVersion) { com.reel.editor.fx.UserLuts.list() }
+    val allLooks = catalog.looks + userLooks
+    val categories = remember(userLooks.size) { listOf("All") + (if (userLooks.isNotEmpty()) listOf("Mine") else emptyList()) + catalog.looks.map { it.category }.distinct() }
+    val importLut = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val name = runCatching { ctx.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null } }.getOrNull()
+            runCatching { com.reel.editor.fx.UserLuts.import(ctx, uri, name) }
+                .onSuccess { d -> userVersion++; cat = "Mine"; applyLookRef.value?.invoke(d.id); vm.toast("Look added") }
+                .onFailure { vm.toast(it.message ?: "Not a .cube look") }
+        }
+    }
     val base by produceState<Bitmap?>(null) {
         // Looks preview on the bundled sunset, not the timeline video.
         value = withContext(Dispatchers.IO) { Samples.bitmap(ctx, Samples.SCENE)?.let { Bitmap.createScaledBitmap(it, (it.width * 96f / it.height).roundToInt().coerceAtLeast(1), 96, true) } }
@@ -137,12 +152,27 @@ fun FiltersPanel(vm: EditorViewModel, onClose: () -> Unit) {
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 categories.forEach { Chip(it, it == cat) { cat = it } }
             }
-            val looks = catalog.looks.filter { cat == "All" || it.category == cat }
+            val looks = allLooks.filter { cat == "All" || it.category == cat }
             LazyRow(Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 item { LookTile("None", base, currentLook == null) { applyLook(null) } }
+                item {
+                    // Import a .cube LUT.
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Box(Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)).background(C.Surface2).clickable { importLut.launch(arrayOf("*/*")) }, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Rounded.Add, "Import .cube look", tint = C.Accent)
+                        }
+                        Text(".cube", style = Label.copy(color = C.Muted))
+                    }
+                }
                 items(looks, key = { it.id }) { look ->
                     val img by produceState<Bitmap?>(null, base, look.id) { base?.let { b -> value = withContext(Dispatchers.Default) { LookPreview.apply(b, look) } } }
                     LookTile(look.name, img, currentLook == look.id) { applyLook(look.id) }
+                }
+            }
+            applyLookRef.value = ::applyLook
+            if (currentLook != null && currentLook.startsWith("user:")) {
+                Row(Modifier.padding(horizontal = 16.dp)) {
+                    PillButton(Icons.Rounded.Delete, "Remove look") { val id = currentLook; applyLook(null); com.reel.editor.fx.UserLuts.delete(id); userVersion++ }
                 }
             }
             if (currentLook != null) {
