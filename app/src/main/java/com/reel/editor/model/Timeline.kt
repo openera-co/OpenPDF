@@ -200,7 +200,7 @@ object TimelineMath {
         place(project.clips).forEach { pts += it.startUs; pts += it.endUs }
         project.texts.forEach { pts += it.startUs; pts += it.startUs + it.durationUs }
         project.effects.forEach { pts += it.startUs; pts += it.startUs + it.durationUs }
-        if (beats) project.audio.forEach { a -> a.beatsUs.forEach { b -> val t = a.startUs + b - a.trimStartUs; if (t >= a.startUs && t <= a.endUs) pts += t } }
+        if (beats) pts += Beats.markers(project)
         return pts
     }
 }

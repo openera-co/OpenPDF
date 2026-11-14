@@ -514,10 +514,19 @@ private fun DrawScope.drawAudio(a: com.reel.editor.model.AudioItem, x0: Float, x
         if (peaks != null) drawWave(peaks, a.trimStartUs, a.trimEndUs, x0, x1, y + h * 0.35f, h * 0.6f, color.copy(alpha = 0.9f))
         val l = m.measure(a.title, Label.copy(fontSize = 10.sp, color = Color.White), maxLines = 1)
         drawText(l, topLeft = Offset(max(x0, 0f) + 7 * density, y + 3 * density))
-        for (b in a.beatsUs) {
+        // Detected beats as dots, custom markers as diamonds.
+        with(com.reel.editor.model.Beats) {
+            for (b in a.visibleAutoBeats()) {
+                if (b < a.trimStartUs || b > a.trimEndUs) continue
+                val bx = x0 + (b - a.trimStartUs) / 1e6f * scale
+                drawCircle(C.Key, 2.4f * density, Offset(bx, y + h - 4.5f * density))
+            }
+        }
+        for (b in a.markersUs) {
             if (b < a.trimStartUs || b > a.trimEndUs) continue
             val bx = x0 + (b - a.trimStartUs) / 1e6f * scale
-            drawCircle(C.Key, 2.2f * density, Offset(bx, y + h - 4 * density))
+            drawLine(C.Key.copy(alpha = 0.55f), Offset(bx, y + 2 * density), Offset(bx, y + h - 8 * density), strokeWidth = 1.2f * density)
+            drawDiamond(Offset(bx, y + h - 5 * density), 4f * density, C.Key)
         }
         // Fades as shaded wedges
         if (a.fadeInUs > 0) {

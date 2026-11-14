@@ -203,7 +203,7 @@ fun TextPanel(vm: EditorViewModel, layer: TextLayer, startTab: Int, onClose: () 
     }
 }
 
-private val TEXT_PRESETS = listOf(
+internal val TEXT_PRESETS = listOf(
     "Aa" to TextStyle(color = 0xFFFFFFFF, shadow = true),
     "Aa" to TextStyle(color = 0xFFFFD36B, strokeColor = 0xFF1E1A2E, strokeWidth = 3f, shadow = false, font = "black"),
     "Aa" to TextStyle(color = 0xFF0B0B0F, labelColor = 0xFFFFFFFF, shadow = false),

@@ -1,5 +1,5 @@
 // Places the clip on the project canvas: fit/fill, keyframed transform, flip,
-// chroma key, and a blur / color background behind it.
+// chroma key, person cutout, and a blur / color background behind it.
 uniform sampler2D uTex;
 uniform float uCanvasAspect;   // width / height of the output
 uniform float uContentAspect;  // width / height of the clip
@@ -17,6 +17,14 @@ uniform float uKeyOn;
 uniform float uKeySimilarity;  // 0..1
 uniform float uKeySmoothness;  // 0..1
 uniform float uKeySpill;       // 0..1
+uniform sampler2D uMask;       // person mask in clip coordinates (cutout)
+uniform float uMaskOn;
+uniform float uMaskEdge;       // 0 hard .. 1 soft
+uniform float uCutMode;        // 0 color, 1 blur in place, 2 image
+uniform vec3 uCutColor;
+uniform float uCutBlur;        // 0..1
+uniform sampler2D uCutImage;
+uniform float uCutImageAspect;
 
 vec2 contentSize(bool fill) {
   float a = uCanvasAspect, ca = uContentAspect;
@@ -38,6 +46,36 @@ vec3 background(vec2 p) {
     }
   }
   return acc / 25.0 * 0.82;
+}
+
+// What shows where the cutout removed the background.
+vec3 cutBackground(vec2 p, vec2 uv, vec3 canvasBg, float inside) {
+  if (uCutMode < 0.5) return uCutColor;
+  if (uCutMode < 1.5) {
+    if (inside < 0.5) return canvasBg;
+    // A wide, soft blur of the frame itself, like a portrait-mode photo.
+    float r = 0.004 + uCutBlur * 0.022;
+    vec3 acc = vec3(0.0);
+    for (int i = -3; i <= 3; i++) {
+      for (int j = -3; j <= 3; j++) {
+        acc += texture2D(uTex, clamp(uv + vec2(float(i), float(j)) * r, 0.0, 1.0)).rgb;
+      }
+    }
+    return acc / 49.0;
+  }
+  // Picture, filling the canvas.
+  float a = uCanvasAspect, ia = max(uCutImageAspect, 0.01);
+  vec2 size = ia > a ? vec2(ia, 1.0) : vec2(a, a / ia);
+  vec2 P = vec2(p.x * uCanvasAspect, p.y);
+  vec2 iuv = (P - vec2(uCanvasAspect * 0.5, 0.5)) / size + 0.5;
+  return texture2D(uCutImage, clamp(iuv, 0.0, 1.0)).rgb;
+}
+
+float personAlpha(vec2 uv) {
+  if (uMaskOn < 0.5) return 1.0;
+  float m = texture2D(uMask, clamp(uv, 0.0, 1.0)).r;
+  float e = 0.04 + uMaskEdge * 0.3;
+  return smoothstep(0.5 - e, 0.5 + e, m);
 }
 
 float keyAlpha(vec3 c) {
@@ -63,7 +101,8 @@ void main() {
   vec3 bg = background(p);
   float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
   vec3 c = texture2D(uTex, clamp(uv, 0.0, 1.0)).rgb;
-  float a = keyAlpha(c) * inside * uOpacity;
+  if (uMaskOn > 0.5) bg = cutBackground(p, uv, bg, inside);
+  float a = keyAlpha(c) * personAlpha(uv) * inside * uOpacity;
   if (uKeyOn > 0.5) {
     float y = luma(c);
     c = mix(c, vec3(y), uKeySpill * (1.0 - keyAlpha(c)));

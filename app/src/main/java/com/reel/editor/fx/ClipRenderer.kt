@@ -64,6 +64,16 @@ class ClipRenderer(
     private var lutTexCache = HashMap<String, Int>()
     private var curvesKey: Curves? = null
 
+    // Cutout: a small copy of the frame for the segmenter, and the mask it produces.
+    private var segW = 0
+    private var segH = 0
+    private var segTex = 0
+    private var segFb = 0
+    private var maskTex = 0
+    private var segRead: java.nio.ByteBuffer? = null
+    private var maskBytes = ByteArray(0)
+    private var maskBuf: java.nio.ByteBuffer? = null
+
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
         inW = inputWidth
         inH = inputHeight
@@ -108,6 +118,7 @@ class ClipRenderer(
         val outFb = IntArray(1).also { GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, it, 0) }[0]
         val viewport = IntArray(4).also { GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, it, 0) }
         ensureTargets()
+        if (plan.cutout.enabled) updateMask(inputTexId, pts)
 
         val pre = ArrayList<Pass>()
         val post = ArrayList<Pass>()
@@ -275,7 +286,95 @@ class ClipRenderer(
         p.set("uKeySimilarity", k.similarity)
         p.set("uKeySmoothness", k.smoothness)
         p.set("uKeySpill", k.spill)
+        val cut = plan.cutout
+        if (cut.enabled && maskTex != 0) {
+            p.texture("uMask", maskTex, 1)
+            p.set("uMaskOn", 1f)
+            p.set("uMaskEdge", cut.edge)
+            val img = if (cut.mode == com.reel.editor.model.CutoutMode.IMAGE) cut.imageUri?.let { uri ->
+                GlCache.texture("cutbg:$uri:${plan.canvasHeight}") { LayerBitmaps.sticker(context, uri, plan.canvasHeight)?.let { flipForGl(it) } }
+            } else null
+            val mode = when {
+                cut.mode == com.reel.editor.model.CutoutMode.COLOR -> 0f
+                cut.mode == com.reel.editor.model.CutoutMode.BLUR -> 1f
+                img != null -> 2f
+                else -> 0f
+            }
+            p.set("uCutMode", mode)
+            p.set("uCutColor", ((cut.color shr 16) and 0xff) / 255f, ((cut.color shr 8) and 0xff) / 255f, (cut.color and 0xff) / 255f)
+            p.set("uCutBlur", cut.blur)
+            p.texture("uCutImage", img?.id ?: maskTex, 2)
+            p.set("uCutImageAspect", img?.let { it.width.toFloat() / it.height } ?: 1f)
+        } else {
+            p.set("uMaskOn", 0f)
+            // Keep the unused samplers on valid textures.
+            p.texture("uMask", src, 1)
+            p.texture("uCutImage", src, 2)
+        }
         p.draw()
+    }
+
+    /** Runs person segmentation on a small copy of the input frame and uploads the mask. */
+    private fun updateMask(inputTexId: Int, pts: Long) {
+        val landscape = plan.contentAspect > 1.3f
+        val seg = try {
+            Segmenter.forThread(context, landscape)
+        } catch (e: Exception) {
+            logFx("segmenter unavailable", e)
+            return
+        }
+        if (seg.width != segW || seg.height != segH || segTex == 0) {
+            releaseMask()
+            segW = seg.width
+            segH = seg.height
+            segTex = GlTex.empty(segW, segH)
+            segFb = GlTex.framebuffer(segTex)
+            maskTex = lumaTexture(segW, segH)
+            segRead = java.nio.ByteBuffer.allocateDirect(segW * segH * 4).order(java.nio.ByteOrder.nativeOrder())
+            maskBytes = ByteArray(segW * segH)
+            maskBuf = java.nio.ByteBuffer.allocateDirect(segW * segH)
+        }
+        val read = segRead ?: return
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, segFb)
+        GLES20.glViewport(0, 0, segW, segH)
+        passthrough(inputTexId)
+        read.rewind()
+        GLES20.glReadPixels(0, 0, segW, segH, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, read)
+        read.rewind()
+        seg.run(read, plan.clip.id, pts, maskBytes)
+        val mb = maskBuf ?: return
+        mb.rewind()
+        mb.put(maskBytes)
+        mb.rewind()
+        val prev = IntArray(1).also { GLES20.glGetIntegerv(GLES20.GL_TEXTURE_BINDING_2D, it, 0) }[0]
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, maskTex)
+        GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 1)
+        GLES20.glTexSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, segW, segH, GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, mb)
+        GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 4)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, prev)
+    }
+
+    private fun lumaTexture(w: Int, h: Int): Int {
+        val ids = IntArray(1)
+        val prev = IntArray(1).also { GLES20.glGetIntegerv(GLES20.GL_TEXTURE_BINDING_2D, it, 0) }[0]
+        GLES20.glGenTextures(1, ids, 0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, ids[0])
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+        GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+        GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 1)
+        GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_LUMINANCE, w, h, 0, GLES20.GL_LUMINANCE, GLES20.GL_UNSIGNED_BYTE, null)
+        GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 4)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, prev)
+        return ids[0]
+    }
+
+    private fun releaseMask() {
+        if (segFb != 0) GLES20.glDeleteFramebuffers(1, intArrayOf(segFb), 0)
+        GlTex.delete(segTex)
+        GlTex.delete(maskTex)
+        segFb = 0; segTex = 0; maskTex = 0
     }
 
     // ------------------------------------------------------------------ post-canvas
@@ -397,6 +496,7 @@ class ClipRenderer(
 
     override fun release() {
         super.release()
+        releaseMask()
         for (i in 0..1) {
             if (workFb[i] != 0) GLES20.glDeleteFramebuffers(1, intArrayOf(workFb[i]), 0)
             if (canvasFb[i] != 0) GLES20.glDeleteFramebuffers(1, intArrayOf(canvasFb[i]), 0)

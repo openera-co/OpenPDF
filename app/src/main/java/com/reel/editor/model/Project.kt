@@ -87,6 +87,7 @@ data class Clip(
     /** Transition into this clip from the previous one. Ignored on the first clip. */
     val transitionIn: TransitionRef? = null,
     val chroma: ChromaKey = ChromaKey(),
+    val cutout: Cutout = Cutout(),
 ) {
     val trimmedDurationUs: Long get() = (trimEndUs - trimStartUs).coerceAtLeast(0)
 }
@@ -192,6 +193,22 @@ data class ChromaKey(
     val spill: Float = 0.3f,
 )
 
+/** Removes the background behind people and puts something else there. */
+@Serializable
+data class Cutout(
+    val enabled: Boolean = false,
+    val mode: CutoutMode = CutoutMode.BLUR,
+    val color: Long = 0xFF14141C,
+    val blur: Float = 0.6f,
+    /** Content URI of a picture, for [CutoutMode.IMAGE]. */
+    val imageUri: String? = null,
+    /** Edge softness, 0 hard to 1 very soft. */
+    val edge: Float = 0.35f,
+)
+
+@Serializable
+enum class CutoutMode { COLOR, BLUR, IMAGE }
+
 /** An effect bar on the effect track, independent of clip boundaries. */
 @Serializable
 data class TimedFx(
@@ -279,7 +296,13 @@ data class AudioItem(
     val volume: Float = 1f,
     val fadeInUs: Long = 0,
     val fadeOutUs: Long = 0,
+    /** Beats found by analysis, in source time. Shown only when [autoBeats] is on. */
     val beatsUs: List<Long> = emptyList(),
+    val autoBeats: Boolean = false,
+    /** Show every Nth detected beat: 1 every beat, 2 every other, 4 once per bar. */
+    val beatEvery: Int = 1,
+    /** Markers placed by hand, in source time, so they move with the music. */
+    val markersUs: List<Long> = emptyList(),
 ) {
     val durationUs: Long get() = (trimEndUs - trimStartUs).coerceAtLeast(0)
     val endUs: Long get() = startUs + durationUs

@@ -28,4 +28,23 @@ object NativeCore {
     external fun histogram(bitmap: Bitmap): IntArray?
 
     external fun rmsDb(samples: FloatArray): Double
+
+    // ------------------------------------------------------------------ speech to text
+
+    fun interface ProgressListener {
+        fun onProgress(percent: Int)
+    }
+
+    /** Opens the speech model stored (uncompressed) in the APK assets; 0 if it can't be loaded. */
+    external fun speechOpenAsset(assets: android.content.res.AssetManager, name: String): Long
+
+    external fun speechClose(handle: Long)
+
+    /** Safe from any thread; the running transcription returns null soon after. */
+    external fun speechCancel(handle: Long)
+
+    /** 16 kHz mono. Returns [Array<String> words, LongArray startMs, LongArray endMs, FloatArray prob, String language] or null. */
+    external fun speechTranscribe(handle: Long, samples16k: FloatArray, language: String, translate: Boolean, threads: Int, listener: ProgressListener?): Array<Any>?
+
+    external fun resample(samples: FloatArray, fromRate: Int, toRate: Int): FloatArray
 }

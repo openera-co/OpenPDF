@@ -1,3 +1,5 @@
+import java.net.URI
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -73,7 +75,38 @@ android {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     }
     testOptions { unitTests.isReturnDefaultValues = true }
+    // Models are read in place from the APK, so they must not be compressed.
+    androidResources { noCompress += listOf("bin", "tflite") }
 }
+
+// The speech model (264 MB) is not kept in git: fetched once and checked before every build.
+val speechModel = layout.projectDirectory.file("src/main/assets/models/speech.bin").asFile
+val speechModelUrl = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q8_0.bin"
+val speechModelSha256 = "49c8fb02b65e6049d5fa6c04f81f53b867b5ec9540406812c643f177317f779f"
+val speechModelBytes = 264_464_607L
+
+fun sha256Of(f: File): String {
+    val md = MessageDigest.getInstance("SHA-256")
+    f.inputStream().use { input ->
+        val buf = ByteArray(1 shl 20)
+        while (true) { val n = input.read(buf); if (n < 0) break; md.update(buf, 0, n) }
+    }
+    return md.digest().joinToString("") { "%02x".format(it) }
+}
+
+val fetchSpeechModel by tasks.registering {
+    outputs.file(speechModel)
+    outputs.upToDateWhen { speechModel.length() == speechModelBytes }
+    doLast {
+        if (speechModel.length() == speechModelBytes && sha256Of(speechModel) == speechModelSha256) return@doLast
+        speechModel.parentFile.mkdirs()
+        val tmp = File(speechModel.path + ".part")
+        URI(speechModelUrl).toURL().openStream().use { input -> tmp.outputStream().use { input.copyTo(it) } }
+        check(sha256Of(tmp) == speechModelSha256) { "speech model checksum mismatch" }
+        check(tmp.renameTo(speechModel)) { "could not move speech model into place" }
+    }
+}
+tasks.named("preBuild") { dependsOn(fetchSpeechModel) }
 
 kotlin {
     compilerOptions {
@@ -107,6 +140,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    // On-device person segmentation for background cutout (16 KB page aligned).
+    implementation("com.google.ai.edge.litert:litert:1.4.2")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.2.21")

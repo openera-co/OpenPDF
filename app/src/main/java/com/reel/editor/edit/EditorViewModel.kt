@@ -42,7 +42,7 @@ sealed interface Selection {
 
 enum class Panel {
     SPEED, VOLUME, ANIMATION, FILTERS, ADJUST, EFFECTS, TRANSITION, TEXT_EDIT, TEXT_STYLE, TEXT_ANIM,
-    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT
+    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS
 }
 
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
@@ -471,7 +471,98 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         p.hashCode()
     }
 
+    // ------------------------------------------------------------------ beat markers
+
+    private fun updateAudio(id: String, change: (com.reel.editor.model.AudioItem) -> com.reel.editor.model.AudioItem) =
+        edit { p -> p.copy(audio = p.audio.map { if (it.id == id) change(it) else it }) }
+
+    fun setAutoBeats(id: String, on: Boolean) = updateAudio(id) { it.copy(autoBeats = on) }
+
+    fun setBeatEvery(id: String, every: Int) = updateAudio(id) { it.copy(beatEvery = every, autoBeats = true) }
+
+    fun addBeatMarker(id: String) {
+        val t = preview.positionUs.value
+        val a = _project.value.audio.firstOrNull { it.id == id } ?: return
+        if (t < a.startUs || t > a.endUs) { toast("Move the playhead over the music"); return }
+        updateAudio(id) { com.reel.editor.model.Beats.add(it, t) }
+    }
+
+    fun removeBeatMarker(id: String) {
+        val a = _project.value.audio.firstOrNull { it.id == id } ?: return
+        val b = com.reel.editor.model.Beats.removeNear(a, preview.positionUs.value)
+        if (b == a) toast("No marker at the playhead") else updateAudio(id) { b }
+    }
+
+    fun clearBeatMarkers(id: String) = updateAudio(id) { com.reel.editor.model.Beats.clear(it) }
+
+    /** Moves every cut to the nearest beat marker. */
+    fun syncCutsToBeats() {
+        val p = _project.value
+        val markers = com.reel.editor.model.Beats.markers(p)
+        if (markers.isEmpty()) { toast("Add beat markers first"); return }
+        val synced = com.reel.editor.model.Beats.syncCuts(p, markers)
+        if (synced == p) { toast("Cuts already on beats"); return }
+        edit { synced }
+        toast("Cuts synced to beats")
+    }
+
+    // ------------------------------------------------------------------ captions
+
+    data class CaptionStatus(val stage: com.reel.editor.captions.CaptionEngine.Stage, val fraction: Float)
+
+    private val captionEngine by lazy { com.reel.editor.captions.CaptionEngine(getApplication()) }
+    private var captionRun: kotlinx.coroutines.Job? = null
+    private val _captionStatus = MutableStateFlow<CaptionStatus?>(null)
+    val captionStatus: StateFlow<CaptionStatus?> = _captionStatus
+
+    /** Transcribes the project's speech and replaces any earlier auto captions. */
+    fun generateCaptions(language: String, translate: Boolean, style: com.reel.editor.model.TextStyle) {
+        if (captionRun?.isActive == true) return
+        if (_project.value.clips.isEmpty()) { toast("Add a clip first"); return }
+        preview.pause()
+        _captionStatus.value = CaptionStatus(com.reel.editor.captions.CaptionEngine.Stage.LISTENING, 0f)
+        captionRun = viewModelScope.launch {
+            try {
+                var lastPct = -1
+                val res = captionEngine.run(_project.value, language, translate) { p ->
+                    val pct = (p.fraction * 100).toInt()
+                    if (pct != lastPct || p.stage != _captionStatus.value?.stage) {
+                        lastPct = pct
+                        _captionStatus.value = CaptionStatus(p.stage, p.fraction)
+                    }
+                }
+                if (res.lines.isEmpty()) {
+                    toast("No speech found")
+                } else {
+                    val y = _project.value.texts.firstOrNull { it.isCaption }?.transform?.y ?: 0.78f
+                    edit { p -> p.copy(texts = p.texts.filterNot { it.isCaption } + res.lines.map { com.reel.editor.model.CaptionGrouping.toLayer(it, style, y) }) }
+                    toast("${res.lines.size} captions added")
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                toast(e.message ?: "Captions failed")
+            } finally {
+                _captionStatus.value = null
+            }
+        }
+    }
+
+    fun cancelCaptions() {
+        captionEngine.cancel()
+        captionRun?.cancel()
+        _captionStatus.value = null
+    }
+
+    fun deleteCaptions() = edit { p -> p.copy(texts = p.texts.filterNot { it.isCaption }) }
+
+    /** Applies a look to every auto caption, keeping each one's size. */
+    fun styleCaptions(style: com.reel.editor.model.TextStyle) = edit { p ->
+        p.copy(texts = p.texts.map { if (it.isCaption) it.copy(style = style.copy(sizeSp = it.style.sizeSp)) else it })
+    }
+
     override fun onCleared() {
+        captionEngine.cancel()
         saveNow()
         preview.release()
         super.onCleared()

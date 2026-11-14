@@ -73,6 +73,8 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.TextFields
+import androidx.compose.material.icons.rounded.ClosedCaption
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.FindReplace
@@ -228,7 +230,7 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
         }
 
         // With a panel open the timeline keeps only its main rows so the preview stays large.
-        val compact = (panel != null && panel != Panel.AUDIO) || transitionFor != null
+        val compact = (panel != null && panel != Panel.AUDIO && panel != Panel.BEATS) || transitionFor != null
         val fullTl = timelineHeight(project)
         val tlHeight by androidx.compose.animation.core.animateDpAsState(
             if (compact) minOf(fullTl, 150.dp) else fullTl,
@@ -346,6 +348,7 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.ContentCut, "Edit") { vm.clipAtPlayhead()?.let { vm.select(Selection.ClipSel(it.id)) } ?: addClips.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
                 ToolButton(Icons.Rounded.LibraryMusic, "Audio") { vm.select(Selection.None); vm.openPanel(Panel.AUDIO) }
                 ToolButton(Icons.Rounded.TextFields, "Text") { vm.addText() }
+                ToolButton(Icons.Rounded.ClosedCaption, "Captions") { vm.openPanel(Panel.CAPTIONS) }
                 ToolButton(Icons.Rounded.EmojiEmotions, "Stickers") { vm.openPanel(Panel.STICKERS) }
                 ToolButton(Icons.Rounded.AutoAwesome, "Effects") { vm.openPanel(Panel.EFFECTS) }
                 ToolButton(Icons.Rounded.FilterVintage, "Filters") { vm.openPanel(Panel.FILTERS) }
@@ -362,6 +365,7 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.AutoAwesome, "Effects") { vm.openPanel(Panel.EFFECTS) }
                 ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
                 ToolButton(Icons.Rounded.InvertColors, "Chroma") { vm.openPanel(Panel.CHROMA) }
+                ToolButton(Icons.Rounded.ContentCut, "Cutout", active = vm.targetClip()?.cutout?.enabled == true) { vm.openPanel(Panel.CUTOUT) }
                 ToolButton(Icons.Rounded.AspectRatio, "Canvas") { vm.openPanel(Panel.CANVAS) }
                 ToolButton(Icons.Rounded.AcUnit, "Freeze") { vm.freezeFrame() }
                 ToolButton(Icons.Rounded.FindReplace, "Replace") { replace.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
@@ -384,6 +388,7 @@ private fun Toolbar(
             }
             is Selection.AudioSel -> {
                 ToolButton(Icons.Rounded.VolumeUp, "Volume") { vm.openPanel(Panel.AUDIO) }
+                ToolButton(Icons.Rounded.GraphicEq, "Beats") { vm.openPanel(Panel.BEATS) }
                 ToolButton(Icons.Rounded.ContentCut, "Split") { vm.split() }
                 ToolButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
             }
@@ -422,6 +427,9 @@ private fun PanelHost(vm: EditorViewModel, panel: Panel, picking: Boolean, onPic
         Panel.CANVAS -> CanvasPanel(vm, onClose)
         Panel.KEYFRAMES -> KeyframePanel(vm, onClose)
         Panel.CHROMA -> clip?.let { ChromaPanel(vm, it, picking, onPick, onClose) }
+        Panel.CAPTIONS -> CaptionsPanel(vm, onClose)
+        Panel.CUTOUT -> clip?.let { CutoutPanel(vm, it, onClose) }
+        Panel.BEATS -> (selection as? Selection.AudioSel)?.let { s -> project.audio.firstOrNull { it.id == s.id } }?.let { BeatsPanel(vm, it, onClose) }
         else -> Unit
     }
 }

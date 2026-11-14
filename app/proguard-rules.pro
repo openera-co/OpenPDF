@@ -12,3 +12,6 @@
 # code can move those references where older devices resolve them and crash, so Media3 may be
 # shrunk and renamed but not optimized.
 -keep,allowobfuscation,allowshrinking class androidx.media3.** { *; }
+
+# LiteRT (TensorFlow Lite) looks up its Java classes from native code.
+-keep class org.tensorflow.lite.** { *; }

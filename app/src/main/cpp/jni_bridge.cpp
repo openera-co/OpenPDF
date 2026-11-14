@@ -1,10 +1,17 @@
 // JNI entry points for com.reel.editor.nativebridge.NativeCore.
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
 #include <android/bitmap.h>
 #include <jni.h>
 
+#include <atomic>
+#include <memory>
+#include <string>
 #include <vector>
 
 #include "audio_analysis.h"
+#include "captions_core.h"
+#include "whisper.h"
 #include "image_ops.h"
 #include "looks.h"
 
@@ -92,6 +99,113 @@ JNIEXPORT jdouble JNICALL Java_com_reel_editor_nativebridge_NativeCore_rmsDb(JNI
     double db = reel::rmsDb(data, static_cast<size_t>(n));
     env->ReleaseFloatArrayElements(samples, data, JNI_ABORT);
     return db;
+}
+
+// ------------------------------------------------------------------ captions (whisper.cpp)
+
+namespace {
+struct WhisperHandle {
+    std::unique_ptr<reel::Transcriber> t;
+    std::atomic<bool> cancel{false};
+};
+}  // namespace
+
+// Loads the speech model straight out of the APK (stored uncompressed), without copying it.
+JNIEXPORT jlong JNICALL Java_com_reel_editor_nativebridge_NativeCore_speechOpenAsset(JNIEnv* env, jobject, jobject assets, jstring name) {
+    AAssetManager* mgr = AAssetManager_fromJava(env, assets);
+    const char* n = env->GetStringUTFChars(name, nullptr);
+    AAsset* asset = mgr ? AAssetManager_open(mgr, n, AASSET_MODE_STREAMING) : nullptr;
+    env->ReleaseStringUTFChars(name, n);
+    if (!asset) return 0;
+    whisper_model_loader loader{};
+    loader.context = asset;
+    loader.read = [](void* ctx, void* out, size_t size) -> size_t {
+        auto* a = static_cast<AAsset*>(ctx);
+        size_t done = 0;
+        while (done < size) {
+            int r = AAsset_read(a, static_cast<char*>(out) + done, size - done);
+            if (r <= 0) break;
+            done += static_cast<size_t>(r);
+        }
+        return done;
+    };
+    loader.eof = [](void* ctx) -> bool { return AAsset_getRemainingLength64(static_cast<AAsset*>(ctx)) <= 0; };
+    loader.close = [](void* ctx) { AAsset_close(static_cast<AAsset*>(ctx)); };
+    auto h = std::make_unique<WhisperHandle>();
+    h->t = std::make_unique<reel::Transcriber>(&loader);
+    if (!h->t->ok()) return 0;
+    return reinterpret_cast<jlong>(h.release());
+}
+
+JNIEXPORT void JNICALL Java_com_reel_editor_nativebridge_NativeCore_speechClose(JNIEnv*, jobject, jlong handle) {
+    delete reinterpret_cast<WhisperHandle*>(handle);
+}
+
+JNIEXPORT void JNICALL Java_com_reel_editor_nativebridge_NativeCore_speechCancel(JNIEnv*, jobject, jlong handle) {
+    if (handle) reinterpret_cast<WhisperHandle*>(handle)->cancel = true;
+}
+
+// Returns [String[] words, long[] startMs, long[] endMs, float[] prob, String language], or null if
+// cancelled or failed. The listener's onProgress(int) is called on this thread.
+JNIEXPORT jobjectArray JNICALL Java_com_reel_editor_nativebridge_NativeCore_speechTranscribe(
+    JNIEnv* env, jobject, jlong handle, jfloatArray samples, jstring language, jboolean translate, jint threads, jobject listener) {
+    auto* h = reinterpret_cast<WhisperHandle*>(handle);
+    if (!h) return nullptr;
+    h->cancel = false;
+    jsize n = env->GetArrayLength(samples);
+    std::vector<float> pcm(static_cast<size_t>(n));
+    env->GetFloatArrayRegion(samples, 0, n, pcm.data());
+    reel::TranscribeOptions opt;
+    const char* lang = env->GetStringUTFChars(language, nullptr);
+    opt.language = lang;
+    env->ReleaseStringUTFChars(language, lang);
+    opt.translateToEnglish = translate;
+    opt.threads = threads;
+    jmethodID onProgress = nullptr;
+    if (listener) onProgress = env->GetMethodID(env->GetObjectClass(listener), "onProgress", "(I)V");
+    std::function<void(int)> progress = [&](int pct) {
+        if (listener && onProgress) env->CallVoidMethod(listener, onProgress, pct);
+    };
+    std::vector<reel::Word> words;
+    std::string detected;
+    if (!h->t->transcribe(pcm, opt, progress, &h->cancel, words, detected)) return nullptr;
+
+    jclass strCls = env->FindClass("java/lang/String");
+    jsize count = static_cast<jsize>(words.size());
+    jobjectArray texts = env->NewObjectArray(count, strCls, nullptr);
+    std::vector<jlong> starts(words.size()), ends(words.size());
+    std::vector<jfloat> probs(words.size());
+    for (jsize i = 0; i < count; ++i) {
+        jstring s = env->NewStringUTF(words[i].text.c_str());
+        env->SetObjectArrayElement(texts, i, s);
+        env->DeleteLocalRef(s);
+        starts[i] = words[i].startMs;
+        ends[i] = words[i].endMs;
+        probs[i] = words[i].prob;
+    }
+    jlongArray js = env->NewLongArray(count);
+    env->SetLongArrayRegion(js, 0, count, starts.data());
+    jlongArray je = env->NewLongArray(count);
+    env->SetLongArrayRegion(je, 0, count, ends.data());
+    jfloatArray jp = env->NewFloatArray(count);
+    env->SetFloatArrayRegion(jp, 0, count, probs.data());
+    jobjectArray out = env->NewObjectArray(5, env->FindClass("java/lang/Object"), nullptr);
+    env->SetObjectArrayElement(out, 0, texts);
+    env->SetObjectArrayElement(out, 1, js);
+    env->SetObjectArrayElement(out, 2, je);
+    env->SetObjectArrayElement(out, 3, jp);
+    env->SetObjectArrayElement(out, 4, env->NewStringUTF(detected.c_str()));
+    return out;
+}
+
+JNIEXPORT jfloatArray JNICALL Java_com_reel_editor_nativebridge_NativeCore_resample(JNIEnv* env, jobject, jfloatArray samples, jint fromRate, jint toRate) {
+    jsize n = env->GetArrayLength(samples);
+    std::vector<float> in(static_cast<size_t>(n));
+    env->GetFloatArrayRegion(samples, 0, n, in.data());
+    auto out = reel::resample(in.data(), in.size(), fromRate, toRate);
+    jfloatArray arr = env->NewFloatArray(static_cast<jsize>(out.size()));
+    env->SetFloatArrayRegion(arr, 0, static_cast<jsize>(out.size()), out.data());
+    return arr;
 }
 
 }  // extern "C"
