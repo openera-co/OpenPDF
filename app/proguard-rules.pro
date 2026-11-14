@@ -15,3 +15,7 @@
 
 # LiteRT (TensorFlow Lite) looks up its Java classes from native code.
 -keep class org.tensorflow.lite.** { *; }
+
+# Keep class and method names so Sentry stack traces are readable without uploading mappings.
+# Shrinking and optimization still apply.
+-dontobfuscate

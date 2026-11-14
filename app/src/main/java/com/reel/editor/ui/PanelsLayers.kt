@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.FormatItalic
+import androidx.compose.material.icons.rounded.FormatBold
 import androidx.compose.material.icons.rounded.VolumeDown
 import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.AccessTime
@@ -134,22 +136,13 @@ fun TextPanel(vm: EditorViewModel, layer: TextLayer, startTab: Int, onClose: () 
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(12.dp)).background(C.Bg).padding(14.dp).focusRequester(focus),
                 )
                 LaunchedEffect(layer.id) { delay(150); runCatching { focus.requestFocus() } }
-                Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Fonts.all.forEach { f ->
-                        val sel = layer.style.font == f.id
-                        Box(
-                            Modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(C.Surface2).then(if (sel) Modifier.border(2.dp, C.Accent, RoundedCornerShape(12.dp)) else Modifier)
-                                .clickable { update { it.copy(style = it.style.copy(font = f.id)) } }.padding(horizontal = 14.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(f.label, style = Body.copy(fontSize = 16.sp, fontFamily = fontFamilyFor(f.family), fontWeight = if (f.style and android.graphics.Typeface.BOLD != 0) FontWeight.Bold else FontWeight.Normal, fontStyle = if (f.style and android.graphics.Typeface.ITALIC != 0) FontStyle.Italic else FontStyle.Normal))
-                        }
-                    }
-                }
+                FontPicker(layer.style.font) { id -> update { it.copy(style = it.style.copy(font = id)) } }
                 Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     listOf(TextAlignment.START to Icons.Rounded.FormatAlignLeft, TextAlignment.CENTER to Icons.Rounded.FormatAlignCenter, TextAlignment.END to Icons.Rounded.FormatAlignRight).forEach { (a, ic) ->
                         IconBtn(ic, a.name, tint = if (layer.style.align == a) C.Accent else C.Muted, background = C.Surface2, size = 40.dp) { update { it.copy(style = it.style.copy(align = a)) } }
                     }
+                    IconBtn(Icons.Rounded.FormatBold, "Bold", tint = if (layer.style.bold) C.Accent else C.Muted, background = C.Surface2, size = 40.dp) { update { it.copy(style = it.style.copy(bold = !it.style.bold)) } }
+                    IconBtn(Icons.Rounded.FormatItalic, "Italic", tint = if (layer.style.italic) C.Accent else C.Muted, background = C.Surface2, size = 40.dp) { update { it.copy(style = it.style.copy(italic = !it.style.italic)) } }
                     Spacer(Modifier.weight(1f))
                     IconBtn(Icons.Rounded.Delete, "Delete text", tint = C.Muted, background = C.Surface2, size = 40.dp) { vm.deleteSelected() }
                 }
@@ -212,14 +205,13 @@ internal val TEXT_PRESETS = listOf(
     "Aa" to TextStyle(color = 0xFFFFFFFF, labelColor = 0xFFFF4D6D, shadow = false, font = "condensed"),
     "Aa" to TextStyle(color = 0xFF2DD4BF, strokeColor = 0xFF000000, strokeWidth = 4f, font = "black"),
     "Aa" to TextStyle(color = 0xFFFFFFFF, font = "serif-italic", shadow = true),
+    "Aa" to TextStyle(color = 0xFFFFFFFF, strokeColor = 0xFF000000, strokeWidth = 4f, font = "montserrat", bold = true, shadow = false),
+    "Aa" to TextStyle(color = 0xFFFFD36B, font = "anton", shadow = true),
+    "Aa" to TextStyle(color = 0xFF0B0B0F, labelColor = 0xFFFFD36B, font = "bebasneue", shadow = false),
+    "Aa" to TextStyle(color = 0xFFFFFFFF, font = "pacifico", shadow = true),
+    "Aa" to TextStyle(color = 0xFF2DD4BF, strokeColor = 0xFF0B0B0F, strokeWidth = 3f, font = "bangers", shadow = false),
 )
 
-private fun fontFamilyFor(family: String) = when (family) {
-    "serif" -> FontFamily.Serif
-    "monospace" -> FontFamily.Monospace
-    "cursive", "casual" -> FontFamily.Cursive
-    else -> FontFamily.SansSerif
-}
 
 @Composable
 private fun SwatchRow(current: Long, allowNone: Boolean = false, onPick: (Long) -> Unit) {
@@ -455,3 +447,29 @@ private fun EasingCurve(e: Easing) {
 
 @Suppress("unused")
 private val unusedW = Modifier.width(1.dp)
+
+/** Fonts by category; each name is drawn in its own typeface. */
+@Composable
+private fun FontPicker(selected: String, onPick: (String) -> Unit) {
+    val current = Fonts.font(selected)
+    var cat by remember { mutableStateOf(current.category) }
+    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Fonts.Category.entries.forEach { c -> Chip(c.label, c == cat) { cat = c } }
+    }
+    val list = Fonts.all.filter { it.category == cat }
+    val state = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = list.indexOfFirst { it.id == selected }.coerceAtLeast(0))
+    androidx.compose.foundation.lazy.LazyRow(state = state, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(list.size, key = { list[it].id }) { i ->
+            val f = list[i]
+            val sel = selected == f.id
+            val family = remember(f.id) { androidx.compose.ui.text.font.FontFamily(Fonts.typeface(f.id)) }
+            Box(
+                Modifier.height(48.dp).clip(RoundedCornerShape(12.dp)).background(C.Surface2).then(if (sel) Modifier.border(2.dp, C.Accent, RoundedCornerShape(12.dp)) else Modifier)
+                    .clickable { onPick(f.id) }.padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(f.label, style = Body.copy(fontSize = 17.sp, fontFamily = family, color = if (sel) C.Text else C.Soft), maxLines = 1)
+            }
+        }
+    }
+}

@@ -47,6 +47,7 @@ object Exporter {
     }
 
     fun start(context: Context, project: Project, settings: ExportSettings) {
+        com.reel.editor.CrashReports.note("export", "${settings.height}p ${settings.fps}fps hevc=${settings.hevc} clips=${project.clips.size}")
         if (_state.value is ExportState.Running) return
         val app = context.applicationContext
         val built = CompositionFactory.build(app, project, settings.height, settings.fps)
@@ -81,6 +82,7 @@ object Exporter {
                 }
 
                 override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
+                    com.reel.editor.CrashReports.error("export", exportException)
                     transformer = null
                     out.delete()
                     _state.value = ExportState.Failed(friendly(exportException))

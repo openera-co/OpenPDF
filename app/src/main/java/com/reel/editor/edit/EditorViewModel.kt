@@ -559,6 +559,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
+                com.reel.editor.CrashReports.error("captions", e)
                 toast(e.message ?: "Captions failed")
             } finally {
                 _captionStatus.value = null

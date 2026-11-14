@@ -23,8 +23,8 @@ android {
         applicationId = "com.reel.editor"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1.0"
+        versionCode = 4
+        versionName = "1.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild {
@@ -48,12 +48,15 @@ android {
 
     buildTypes {
         release {
+            // Crash and performance reports go to Sentry from release builds only.
+            buildConfigField("String", "SENTRY_DSN", "\"https://96eecaa27224311369a78411dd7e35a1@o4512164490444800.ingest.de.sentry.io/4512427704189008\"")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (signing.getProperty("storeFile") != null) signingConfig = signingConfigs.getByName("release")
         }
         debug {
+            buildConfigField("String", "SENTRY_DSN", "\"\"")
             applicationIdSuffix = ".debug"
         }
     }
@@ -69,7 +72,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     packaging {
         jniLibs { useLegacyPackaging = false }
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
@@ -111,7 +117,7 @@ tasks.named("preBuild") { dependsOn(fetchSpeechModel) }
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        freeCompilerArgs.addAll(listOf("-opt-in=androidx.media3.common.util.UnstableApi", "-opt-in=androidx.media3.common.util.ExperimentalApi", "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api", "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"))
+        freeCompilerArgs.addAll(listOf("-opt-in=androidx.media3.common.util.UnstableApi", "-opt-in=androidx.media3.common.util.ExperimentalApi", "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api", "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi", "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi"))
     }
 }
 
@@ -142,6 +148,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     // On-device person segmentation for background cutout (16 KB page aligned).
     implementation("com.google.ai.edge.litert:litert:1.4.2")
+    // Crash, ANR and native crash reporting.
+    implementation("io.sentry:sentry-android:8.63.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.2.21")

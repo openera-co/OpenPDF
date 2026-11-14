@@ -25,35 +25,154 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
+/**
+ * Text fonts: the phone's own families plus 55 bundled open-licence families (Google Fonts, SIL OFL
+ * and Apache 2.0, licences in assets/fonts/licenses). Characters a bundled font lacks (for example
+ * Arabic, Devanagari or CJK) fall back to the system fonts automatically.
+ */
 object Fonts {
-    data class Font(val id: String, val label: String, val family: String, val style: Int)
+    enum class Category(val label: String) { SANS("Sans"), DISPLAY("Bold"), SERIF("Serif"), SCRIPT("Script"), RETRO("Retro"), SYSTEM("Basic") }
 
-    val all = listOf(
-        Font("sans-bold", "Bold", "sans-serif", Typeface.BOLD),
-        Font("sans", "Regular", "sans-serif", Typeface.NORMAL),
-        Font("black", "Black", "sans-serif-black", Typeface.NORMAL),
-        Font("medium", "Medium", "sans-serif-medium", Typeface.NORMAL),
-        Font("condensed", "Condensed", "sans-serif-condensed", Typeface.BOLD),
-        Font("light", "Light", "sans-serif-light", Typeface.NORMAL),
-        Font("serif", "Serif", "serif", Typeface.BOLD),
-        Font("serif-italic", "Serif italic", "serif", Typeface.BOLD_ITALIC),
-        Font("mono", "Mono", "monospace", Typeface.BOLD),
-        Font("casual", "Casual", "casual", Typeface.NORMAL),
-        Font("cursive", "Script", "cursive", Typeface.BOLD),
-        Font("smallcaps", "Small caps", "sans-serif-smallcaps", Typeface.NORMAL),
+    /**
+     * [family] for system fonts, or [asset] for bundled ones. Variable fonts set [weight] (and use
+     * [boldWeight] for bold); static ones may ship a separate [boldAsset].
+     */
+    data class Font(
+        val id: String,
+        val label: String,
+        val category: Category,
+        val family: String? = null,
+        val style: Int = Typeface.NORMAL,
+        val asset: String? = null,
+        val boldAsset: String? = null,
+        val weight: Int? = null,
+        val boldWeight: Int = 800,
     )
 
-    fun typeface(style: TextStyle): Typeface {
-        val f = all.firstOrNull { it.id == style.font } ?: all[0]
-        val bold = style.bold || (f.style and Typeface.BOLD) != 0
-        val italic = style.italic || (f.style and Typeface.ITALIC) != 0
-        val s = when {
-            bold && italic -> Typeface.BOLD_ITALIC
-            bold -> Typeface.BOLD
-            italic -> Typeface.ITALIC
-            else -> Typeface.NORMAL
+    private fun b(id: String, label: String, cat: Category, weight: Int? = null, bold: Boolean = false, boldWeight: Int = 800) =
+        Font(id, label, cat, asset = "fonts/$id.ttf", boldAsset = if (bold) "fonts/$id-bold.ttf" else null, weight = weight, boldWeight = boldWeight)
+
+    private val system = listOf(
+        Font("sans-bold", "Bold", Category.SYSTEM, "sans-serif", Typeface.BOLD),
+        Font("sans", "Regular", Category.SYSTEM, "sans-serif"),
+        Font("black", "Black", Category.SYSTEM, "sans-serif-black"),
+        Font("medium", "Medium", Category.SYSTEM, "sans-serif-medium"),
+        Font("condensed", "Condensed", Category.SYSTEM, "sans-serif-condensed", Typeface.BOLD),
+        Font("light", "Light", Category.SYSTEM, "sans-serif-light"),
+        Font("serif", "Serif", Category.SYSTEM, "serif", Typeface.BOLD),
+        Font("serif-italic", "Serif italic", Category.SYSTEM, "serif", Typeface.BOLD_ITALIC),
+        Font("mono", "Mono", Category.SYSTEM, "monospace", Typeface.BOLD),
+        Font("casual", "Casual", Category.SYSTEM, "casual"),
+        Font("cursive", "Script", Category.SYSTEM, "cursive", Typeface.BOLD),
+        Font("smallcaps", "Small caps", Category.SYSTEM, "sans-serif-smallcaps"),
+    )
+
+    private val bundled = listOf(
+        b("montserrat", "Montserrat", Category.SANS, 700, boldWeight = 900),
+        b("poppins", "Poppins", Category.SANS, bold = true),
+        b("inter", "Inter", Category.SANS, 600, boldWeight = 900),
+        b("rubik", "Rubik", Category.SANS, 600, boldWeight = 900),
+        b("raleway", "Raleway", Category.SANS, 700, boldWeight = 900),
+        b("lato", "Lato", Category.SANS, bold = true),
+        b("nunito", "Nunito", Category.SANS, 700, boldWeight = 1000),
+        b("worksans", "Work Sans", Category.SANS, 600, boldWeight = 900),
+        b("spacegrotesk", "Space Grotesk", Category.SANS, 600, boldWeight = 700),
+        b("dmsans", "DM Sans", Category.SANS, 600, boldWeight = 1000),
+        b("archivoblack", "Archivo Black", Category.DISPLAY),
+        b("anton", "Anton", Category.DISPLAY),
+        b("bebasneue", "Bebas Neue", Category.DISPLAY),
+        b("oswald", "Oswald", Category.DISPLAY, 600, boldWeight = 700),
+        b("teko", "Teko", Category.DISPLAY, 600, boldWeight = 700),
+        b("russoone", "Russo One", Category.DISPLAY),
+        b("bungee", "Bungee", Category.DISPLAY),
+        b("righteous", "Righteous", Category.DISPLAY),
+        b("fredoka", "Fredoka", Category.DISPLAY, 600, boldWeight = 700),
+        b("comfortaa", "Comfortaa", Category.DISPLAY, 700, boldWeight = 700),
+        b("baloo2", "Baloo", Category.DISPLAY, 700, boldWeight = 800),
+        b("luckiestguy", "Luckiest Guy", Category.DISPLAY),
+        b("bangers", "Bangers", Category.DISPLAY),
+        b("blackopsone", "Black Ops", Category.DISPLAY),
+        b("orbitron", "Orbitron", Category.DISPLAY, 700, boldWeight = 900),
+        b("monoton", "Monoton", Category.DISPLAY),
+        b("rubikmonoone", "Rubik Mono", Category.DISPLAY),
+        b("staatliches", "Staatliches", Category.DISPLAY),
+        b("titanone", "Titan One", Category.DISPLAY),
+        b("playfairdisplay", "Playfair", Category.SERIF, 700, boldWeight = 900),
+        b("merriweather", "Merriweather", Category.SERIF, 700, boldWeight = 900),
+        b("lora", "Lora", Category.SERIF, 600, boldWeight = 700),
+        b("cinzel", "Cinzel", Category.SERIF, 700, boldWeight = 900),
+        b("abrilfatface", "Abril Fatface", Category.SERIF),
+        b("dmserifdisplay", "DM Serif", Category.SERIF),
+        b("robotoslab", "Roboto Slab", Category.SERIF, 700, boldWeight = 900),
+        b("ebgaramond", "Garamond", Category.SERIF, 600, boldWeight = 800),
+        b("alfaslabone", "Alfa Slab", Category.SERIF),
+        b("pacifico", "Pacifico", Category.SCRIPT),
+        b("lobster", "Lobster", Category.SCRIPT),
+        b("dancingscript", "Dancing", Category.SCRIPT, 700, boldWeight = 700),
+        b("caveat", "Caveat", Category.SCRIPT, 700, boldWeight = 700),
+        b("satisfy", "Satisfy", Category.SCRIPT),
+        b("greatvibes", "Great Vibes", Category.SCRIPT),
+        b("permanentmarker", "Marker", Category.SCRIPT),
+        b("kalam", "Kalam", Category.SCRIPT, bold = true),
+        b("shadowsintolight", "Shadows", Category.SCRIPT),
+        b("indieflower", "Indie Flower", Category.SCRIPT),
+        b("amaticsc", "Amatic", Category.SCRIPT, bold = true),
+        b("sacramento", "Sacramento", Category.SCRIPT),
+        b("yellowtail", "Yellowtail", Category.SCRIPT),
+        b("pressstart2p", "Press Start", Category.RETRO),
+        b("vt323", "VT323", Category.RETRO),
+        b("spacemono", "Space Mono", Category.RETRO, bold = true),
+        b("silkscreen", "Silkscreen", Category.RETRO, bold = true),
+    )
+
+    val all = system + bundled
+    private val byId = all.associateBy { it.id }
+
+    @Volatile private var assets: android.content.res.AssetManager? = null
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Typeface>()
+
+    /** Call once at startup so bundled fonts can be read. */
+    fun init(context: Context) {
+        assets = context.applicationContext.assets
+    }
+
+    fun font(id: String): Font = byId[id] ?: system[0]
+
+    fun typeface(style: TextStyle): Typeface = typeface(style.font, style.bold, style.italic)
+
+    fun typeface(id: String, bold: Boolean = false, italic: Boolean = false): Typeface {
+        val f = font(id)
+        return cache.getOrPut("$id|$bold|$italic") { load(f, bold, italic) }
+    }
+
+    private fun load(f: Font, boldIn: Boolean, italicIn: Boolean): Typeface {
+        val am = assets
+        if (f.asset == null || am == null) {
+            val bold = boldIn || (f.style and Typeface.BOLD) != 0
+            val italic = italicIn || (f.style and Typeface.ITALIC) != 0
+            return Typeface.create(f.family ?: "sans-serif", styleOf(bold, italic))
         }
-        return Typeface.create(f.family, s)
+        val base = try {
+            when {
+                f.weight != null -> Typeface.Builder(am, f.asset)
+                    .setFontVariationSettings("'wght' ${if (boldIn) f.boldWeight else f.weight}").build()
+                boldIn && f.boldAsset != null -> Typeface.createFromAsset(am, f.boldAsset)
+                else -> Typeface.createFromAsset(am, f.asset)
+            }
+        } catch (e: Exception) {
+            logFx("font ${f.id} unavailable", e)
+            return Typeface.create("sans-serif", styleOf(boldIn, italicIn))
+        } ?: Typeface.DEFAULT
+        // Bold is native where the font has it; otherwise (and for italic) Android synthesizes it.
+        val synthBold = boldIn && f.weight == null && f.boldAsset == null
+        return if (synthBold || italicIn) Typeface.create(base, styleOf(synthBold, italicIn)) else base
+    }
+
+    private fun styleOf(bold: Boolean, italic: Boolean) = when {
+        bold && italic -> Typeface.BOLD_ITALIC
+        bold -> Typeface.BOLD
+        italic -> Typeface.ITALIC
+        else -> Typeface.NORMAL
     }
 }
 

@@ -162,5 +162,11 @@ object GlTex {
 }
 
 internal fun logFx(msg: String, t: Throwable? = null) {
-    if (t != null) Log.w("ReelFx", msg, t) else Log.d("ReelFx", msg)
+    if (t != null) {
+        Log.w("ReelFx", msg, t)
+        com.reel.editor.CrashReports.note("render", msg)
+        com.reel.editor.CrashReports.error("render", t)
+    } else {
+        Log.d("ReelFx", msg)
+    }
 }

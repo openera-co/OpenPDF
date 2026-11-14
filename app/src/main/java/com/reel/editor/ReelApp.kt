@@ -15,6 +15,8 @@ class ReelApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReports.start(this)
+        com.reel.editor.fx.Fonts.init(this)
         store = ProjectStore(this)
         thumbnails = Thumbnails(this)
         audio = AudioAnalyzer(this)

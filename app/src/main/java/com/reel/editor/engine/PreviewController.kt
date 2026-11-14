@@ -32,6 +32,7 @@ class PreviewController(context: Context) {
     private var durationUs = 0L
     private var wantPlay = false
     private var needsFirstFrame = false
+    private var recoveries = 0
 
     private val _playing = MutableStateFlow(false)
     val playing: StateFlow<Boolean> = _playing
@@ -48,6 +49,7 @@ class PreviewController(context: Context) {
 
         override fun onPlaybackStateChanged(state: Int) {
             if (state == Player.STATE_ENDED) finishAtEnd()
+            if (state == Player.STATE_READY) recoveries = 0
             // Make sure a paused, freshly prepared player shows its first frame.
             if (state == Player.STATE_READY && needsFirstFrame) {
                 needsFirstFrame = false
@@ -56,8 +58,17 @@ class PreviewController(context: Context) {
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            _error.value = "Preview stopped: ${error.errorCodeName}"
             _playing.value = false
+            // Usually transient (a slow release or decoder hiccup): rebuild quietly and carry on.
+            // Only a failure that survives the retries is reported.
+            if (recoveries < 3) {
+                recoveries++
+                com.reel.editor.CrashReports.note("preview", "recovering from ${error.errorCodeName}")
+                main.post { recreate() }
+            } else {
+                com.reel.editor.CrashReports.error("preview", error)
+                _error.value = "Preview paused. Tap play to try again."
+            }
         }
     }
 
@@ -212,7 +223,31 @@ class PreviewController(context: Context) {
         player?.seekTo(((durationUs - 34_000).coerceAtLeast(0)) / 1000)
     }
 
+    /** Throws away the player and builds a fresh one at the same position. */
+    private fun recreate() {
+        val p = latest ?: return
+        val wasPlaying = wantPlay
+        player?.let { pl ->
+            pl.removeListener(listener)
+            outSurface?.let { runCatching { pl.clearVideoSurface(it) } }
+            runCatching { pl.release() }
+        }
+        player = null
+        structure = null
+        wantPlay = wasPlaying
+        pending = p
+        main.removeCallbacks(rebuild)
+        rebuild.run()
+    }
+
     fun play() {
+        if (_error.value != null) {
+            _error.value = null
+            recoveries = 0
+            wantPlay = true
+            recreate()
+            return
+        }
         val p = player ?: return
         wantPlay = true
         if (_positionUs.value >= durationUs - 30_000) seekTo(0)

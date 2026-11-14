@@ -26,6 +26,8 @@
         android:largeHeap="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.Reel">
+        <!-- Sentry starts in ReelApp so it only runs in release builds. -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
 
         <activity
             android:name=".MainActivity"

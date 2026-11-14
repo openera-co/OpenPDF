@@ -37,6 +37,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -241,11 +243,15 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
         val panelMax = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.4f).dp
         AnimatedVisibility(!fullscreen, enter = fadeIn() + slideInVertically { it / 3 }, exit = fadeOut() + slideOutVertically { it / 3 }) {
             Column {
-                Timeline(
-                    project, pos, selection, waveforms, vm.thumbnails,
-                    actions = remember(vm) { actionsFor(vm, addClips, { transitionFor = it }) },
-                    modifier = Modifier.fillMaxWidth().height(tlHeight),
-                )
+                // While typing, give the space to the video so the text can be seen on it.
+                val imeOpen = WindowInsets.isImeVisible
+                AnimatedVisibility(!imeOpen) {
+                    Timeline(
+                        project, pos, selection, waveforms, vm.thumbnails,
+                        actions = remember(vm) { actionsFor(vm, addClips, { transitionFor = it }) },
+                        modifier = Modifier.fillMaxWidth().height(tlHeight),
+                    )
+                }
                 AnimatedContent(
                     targetState = Triple(panel, transitionFor, selection::class),
                     transitionSpec = { (fadeIn() + slideInVertically { it / 4 }) togetherWith (fadeOut() + slideOutVertically { it / 4 }) },
