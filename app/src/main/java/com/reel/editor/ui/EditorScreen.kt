@@ -278,7 +278,8 @@ fun EditorScreen(vm: EditorViewModel, onClose: () -> Unit, onExport: () -> Unit)
                     val on = keys?.let { (_, k, s) -> k.any { abs(s + it.timeUs - pos) < 40_000 } } ?: false
                     IconBtn(Icons.Rounded.Diamond, if (on) "Remove keyframe" else "Add keyframe", tint = if (on) C.Key else C.Text, iconSize = 20.dp) { vm.toggleKeyframe() }
                 }
-                IconBtn(Icons.AutoMirrored.Rounded.Undo, "Undo", enabled = canUndo, iconSize = 20.dp) { vm.undo() }
+                // Hold undo to see every step and jump back several at once.
+                IconBtn(Icons.AutoMirrored.Rounded.Undo, "Undo", enabled = canUndo, iconSize = 20.dp, onLongClick = { vm.openPanel(Panel.HISTORY) }) { vm.undo() }
                 IconBtn(Icons.AutoMirrored.Rounded.Redo, "Redo", enabled = canRedo, iconSize = 20.dp) { vm.redo() }
                 IconBtn(if (fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, "Full screen", iconSize = 20.dp) { fullscreen = !fullscreen }
             }
@@ -625,6 +626,7 @@ private fun PanelHost(vm: EditorViewModel, panel: Panel, picking: Boolean, onPic
         }
         Panel.ADD_LAYER -> AddLayerPanel(vm, onClose)
         Panel.CROP -> clip?.let { CropPanel(vm, it, onClose) }
+        Panel.HISTORY -> HistoryPanel(vm, onClose)
         Panel.PRIVACY -> clip?.let { PrivacyPanel(vm, it, onClose) }
         Panel.TRACK -> TrackPanel(vm, clipMode = selection is Selection.ClipSel, onClose = onClose)
         Panel.SHAPE -> shape?.let { ShapePanel(vm, it, onClose) }

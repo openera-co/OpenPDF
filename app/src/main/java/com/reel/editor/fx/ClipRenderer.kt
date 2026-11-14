@@ -216,6 +216,8 @@ class ClipRenderer(
         p.set("uTint", a.tint); p.set("uHighlights", a.highlights); p.set("uShadows", a.shadows)
         p.set("uFade", a.fade); p.set("uHue", a.hue); p.set("uVignette", a.vignette)
         p.set("uSharpen", a.sharpen); p.set("uGrain", a.grain)
+        p.set("uHslOn", if (a.hsl.isIdentity) 0f else 1f)
+        for (i in 0 until 8) p.set("uHsl$i", a.hsl.hue[i], a.hsl.sat[i], a.hsl.lum[i])
         if (!a.curves.isIdentity) {
             if (curvesKey != a.curves || curveTex == 0) {
                 GlTex.delete(curveTex)
@@ -522,7 +524,7 @@ class ClipRenderer(
                 else -> continue
             }
             if (motion.opacity <= 0.001f) continue
-            val tex = layerTexture(layer, motion.reveal, local) ?: continue
+            val tex = layerTexture(layer, motion.reveal, local, motion.letters, motion.letterMode.takeIf { motion.letters < 1f }) ?: continue
             val t = interpolate(base, keys, local)
             // Text keeps its rendered size (scale 1 = authored size); stickers scale relative to canvas height.
             val px = if (text != null) tex.height.toFloat() / plan.canvasHeight else 1f
@@ -549,13 +551,15 @@ class ClipRenderer(
         GLES20.glDisable(GLES20.GL_BLEND)
     }
 
-    private fun layerTexture(layer: LayerUse, reveal: Float, local: Long): GlCache.Tex? {
+    private fun layerTexture(layer: LayerUse, reveal: Float, local: Long, letters: Float = 1f, letterMode: String? = null): GlCache.Tex? {
         val text = layer.text
         if (text != null) {
             val chars = if (reveal >= 1f) -1 else (text.text.length * reveal).toInt()
             val word = if (text.words.isEmpty()) -1 else text.words.indexOfFirst { local >= it.startUs && local < it.endUs }
-            val key = "text:${text.hashCode()}:$chars:$word:${plan.canvasWidth}x${plan.canvasHeight}"
-            return GlCache.texture(key) { LayerBitmaps.text(text, chars, word, plan.canvasHeight, plan.canvasWidth)?.let { flipForGl(it) } }
+            // Letter-by-letter animations redraw the text in 40 steps.
+            val lq = if (letterMode == null) 40 else (letters.coerceIn(0f, 1f) * 40).toInt()
+            val key = "text:${text.hashCode()}:$chars:$word:$lq:$letterMode:${plan.canvasWidth}x${plan.canvasHeight}"
+            return GlCache.texture(key) { LayerBitmaps.text(text, chars, word, plan.canvasHeight, plan.canvasWidth, lq / 40f, letterMode)?.let { flipForGl(it) } }
         }
         layer.shape?.let { sh ->
             return GlCache.texture("shape:${sh.copy(transform = com.reel.editor.model.Transform(), keyframes = emptyList(), startUs = 0, durationUs = 0).hashCode()}:${plan.canvasHeight}") {

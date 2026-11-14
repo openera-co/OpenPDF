@@ -63,6 +63,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.rounded.ColorLens
 import androidx.compose.material.icons.rounded.Colorize
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -355,8 +356,26 @@ fun AdjustBody(vm: EditorViewModel, adjust: Adjustments, set: (gesture: Boolean,
                 ParamButton(d.label, d.icon, current == d.key, if (v != 0f) "${(v * 100).roundToInt()}" else null) { current = d.key }
             }
             ParamButton("Curves", Icons.Rounded.ShowChart, current == "curves", if (!adjust.curves.isIdentity) "•" else null) { current = "curves" }
+            ParamButton("HSL", Icons.Rounded.ColorLens, current == "hsl", if (!adjust.hsl.isIdentity) "•" else null) { current = "hsl" }
         }
-        if (current == "curves") {
+        if (current == "hsl") {
+            var band by remember { mutableStateOf(0) }
+            val dots = listOf(0xFFE5484D, 0xFFF76B15, 0xFFFFD60A, 0xFF30A46C, 0xFF12A594, 0xFF3E63DD, 0xFF8E4EC6, 0xFFD6409F)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                dots.forEachIndexed { i, col ->
+                    val changed = adjust.hsl.hue[i] != 0f || adjust.hsl.sat[i] != 0f || adjust.hsl.lum[i] != 0f
+                    Box(
+                        Modifier.size(30.dp).clip(CircleShape).background(Color(col))
+                            .border(if (band == i) 3.dp else if (changed) 1.5.dp else 0.dp, if (band == i) C.Text else C.Soft, CircleShape)
+                            .clickable { band = i },
+                    )
+                }
+            }
+            val h = adjust.hsl
+            ValueSlider(Icons.Rounded.Palette, "Hue", h.hue[band] * 100, -100f..100f, { "${it.roundToInt()}" }, Color(dots[band]), default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> set(true) { a -> a.copy(hsl = a.hsl.with(band, h = v / 100f)) } }
+            ValueSlider(Icons.Rounded.InvertColors, "Saturation", h.sat[band] * 100, -100f..100f, { "${it.roundToInt()}" }, Color(dots[band]), default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> set(true) { a -> a.copy(hsl = a.hsl.with(band, s = v / 100f)) } }
+            ValueSlider(Icons.Rounded.LightMode, "Lightness", h.lum[band] * 100, -100f..100f, { "${it.roundToInt()}" }, Color(dots[band]), default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> set(true) { a -> a.copy(hsl = a.hsl.with(band, l = v / 100f)) } }
+        } else if (current == "curves") {
             CurvesEditor(adjust.curves, onStart = vm::beginGesture, onEnd = vm::endGesture) { c -> set(true) { it.copy(curves = c) } }
         } else {
             val d = ADJ.first { it.key == current }

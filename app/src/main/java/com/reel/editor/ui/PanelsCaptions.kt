@@ -27,6 +27,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.rounded.CallMerge
+import androidx.compose.material.icons.rounded.CallSplit
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +86,13 @@ fun CaptionsPanel(vm: EditorViewModel, onClose: () -> Unit) {
             return@Column
         }
 
+        var tab by rememberSaveable { mutableIntStateOf(0) }
+        if (count > 0) Segmented(listOf("Make", "Lines"), tab, { tab = it }, Modifier.padding(horizontal = 12.dp))
+        if (count > 0 && tab == 1) {
+            CaptionLines(vm, project)
+            Spacer(Modifier.height(8.dp))
+            return@Column
+        }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             CaptionEngine.LANGUAGES.forEach { (code, name) -> Chip(name, code == lang) { lang = code } }
         }
@@ -116,5 +129,33 @@ fun CaptionsPanel(vm: EditorViewModel, onClose: () -> Unit) {
             }
         }
         Spacer(Modifier.width(1.dp).height(8.dp))
+    }
+}
+
+
+/** Every caption line with its time: jump to it, merge, split, nudge or delete. */
+@Composable
+private fun CaptionLines(vm: EditorViewModel, project: com.reel.editor.model.Project) {
+    val caps = project.texts.filter { it.isCaption }.sortedBy { it.startUs }
+    val pos by vm.preview.positionUs.collectAsStateCompat()
+    androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 300.dp)) {
+        items(caps.size, key = { caps[it].id }) { i ->
+            val c = caps[i]
+            val on = pos >= c.startUs && pos < c.startUs + c.durationUs
+            Column(Modifier.fillMaxWidth().background(if (on) C.Surface2 else Color.Transparent).clickable { vm.preview.seekTo(c.startUs) }.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("%d:%04.1f".format(c.startUs / 60_000_000, (c.startUs % 60_000_000) / 1e6), style = Mono.copy(color = C.TextTrack, fontSize = 12.sp), modifier = Modifier.width(56.dp))
+                    Text(c.text, style = Body, maxLines = 2, modifier = Modifier.weight(1f))
+                }
+                if (on) Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    IconBtn(Icons.Rounded.FastRewind, "Earlier", size = 36.dp, iconSize = 18.dp) { vm.nudgeCaption(c.id, -100_000) }
+                    IconBtn(Icons.Rounded.FastForward, "Later", size = 36.dp, iconSize = 18.dp) { vm.nudgeCaption(c.id, 100_000) }
+                    IconBtn(Icons.Rounded.Edit, "Edit text", size = 36.dp, iconSize = 18.dp) { vm.select(com.reel.editor.edit.Selection.TextSel(c.id)); vm.openPanel(com.reel.editor.edit.Panel.TEXT_EDIT) }
+                    IconBtn(Icons.Rounded.CallSplit, "Split", size = 36.dp, iconSize = 18.dp) { vm.splitCaption(c.id) }
+                    if (i < caps.lastIndex) IconBtn(Icons.Rounded.CallMerge, "Merge with next", size = 36.dp, iconSize = 18.dp) { vm.mergeCaption(c.id) }
+                    IconBtn(Icons.Rounded.Delete, "Delete", size = 36.dp, iconSize = 18.dp) { vm.deleteCaption(c.id) }
+                }
+            }
+        }
     }
 }

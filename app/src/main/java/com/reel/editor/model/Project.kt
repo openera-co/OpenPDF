@@ -243,6 +243,8 @@ data class Adjustments(
     val sharpen: Float = 0f,
     val grain: Float = 0f,
     val curves: Curves = Curves(),
+    /** Per-colour changes (HSL), one entry per [Hsl.BANDS] colour. */
+    val hsl: Hsl = Hsl(),
 ) {
     val isIdentity: Boolean get() = this == Adjustments() || (copy(curves = Curves()) == Adjustments() && curves.isIdentity)
 
@@ -251,7 +253,29 @@ data class Adjustments(
         brightness = brightness * k, contrast = contrast * k, saturation = saturation * k, vibrance = vibrance * k,
         exposure = exposure * k, temperature = temperature * k, tint = tint * k, highlights = highlights * k,
         shadows = shadows * k, fade = fade * k, hue = hue * k, vignette = vignette * k, sharpen = sharpen * k, grain = grain * k,
+        hsl = Hsl(hsl.hue.map { it * k }, hsl.sat.map { it * k }, hsl.lum.map { it * k }),
     )
+}
+
+/** Hue shift, saturation and lightness per colour range, each -1..1. */
+@Serializable
+data class Hsl(
+    val hue: List<Float> = List(8) { 0f },
+    val sat: List<Float> = List(8) { 0f },
+    val lum: List<Float> = List(8) { 0f },
+) {
+    val isIdentity: Boolean get() = hue.all { it == 0f } && sat.all { it == 0f } && lum.all { it == 0f }
+
+    fun with(band: Int, h: Float? = null, s: Float? = null, l: Float? = null) = Hsl(
+        hue.mapIndexed { i, v -> if (i == band && h != null) h else v },
+        sat.mapIndexed { i, v -> if (i == band && s != null) s else v },
+        lum.mapIndexed { i, v -> if (i == band && l != null) l else v },
+    )
+
+    companion object {
+        /** Band names and their centre hues in degrees. */
+        val BANDS = listOf("Red" to 0f, "Orange" to 30f, "Yellow" to 60f, "Green" to 120f, "Aqua" to 180f, "Blue" to 225f, "Purple" to 270f, "Magenta" to 315f)
+    }
 }
 
 /** Tone curves as control points (x,y in 0..1) per channel. */
@@ -449,6 +473,10 @@ data class TextStyle(
     val lineSpacing: Float = 1f,
     val bold: Boolean = false,
     val italic: Boolean = false,
+    /** Second colour: the fill fades from [color] at the top to this at the bottom. */
+    val gradient: Long? = null,
+    /** Bends the text along an arc: positive curves up like a smile, negative like a rainbow. -1..1. */
+    val curve: Float = 0f,
 )
 
 @Serializable
@@ -535,7 +563,11 @@ data class ExportSettings(
     val fps: Int = 30,
     val bitrate: BitrateLevel = BitrateLevel.RECOMMENDED,
     val hevc: Boolean = false,
+    val format: ExportFormat = ExportFormat.VIDEO,
 )
+
+@Serializable
+enum class ExportFormat { VIDEO, GIF, AUDIO }
 
 @Serializable
 enum class BitrateLevel(val factor: Float) { LOWER(0.6f), RECOMMENDED(1f), HIGHER(1.6f) }

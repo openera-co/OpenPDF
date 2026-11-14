@@ -77,7 +77,8 @@ private val PRESETS = listOf(
 @Composable
 fun ExportSheet(vm: EditorViewModel, onClose: () -> Unit, onStart: () -> Unit) {
     val project by vm.project.collectAsStateCompat()
-    var s by remember { mutableStateOf(ExportSettings()) }
+    val ctx0 = androidx.compose.ui.platform.LocalContext.current
+    var s by remember { mutableStateOf(ExportSettings(height = com.reel.editor.Settings.exportHeight(ctx0), fps = com.reel.editor.Settings.exportFps(ctx0))) }
     val (w, h) = RenderPlans.canvasSize(project, s.height)
     val dur = TimelineMath.duration(project)
     val bytes = Exporter.estimateBytes(project, s, dur)
@@ -86,6 +87,7 @@ fun ExportSheet(vm: EditorViewModel, onClose: () -> Unit, onStart: () -> Unit) {
             Text("Export", style = Title.copy(fontSize = 18.sp), modifier = Modifier.weight(1f).padding(top = 12.dp))
             IconBtn(Icons.Rounded.Close, "Close", iconSize = 20.dp, onClick = onClose)
         }
+        Segmented(listOf("Video", "GIF", "Sound"), s.format.ordinal, { s = s.copy(format = com.reel.editor.model.ExportFormat.entries[it]) }, Modifier.fillMaxWidth())
         var preset by remember { mutableStateOf<String?>(null) }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             PRESETS.forEach { pr -> Chip(pr.name, preset == pr.name) { preset = pr.name; s = pr.settings } }
@@ -185,7 +187,8 @@ fun ExportScreen(vm: EditorViewModel, onBackToEdit: () -> Unit, onHome: () -> Un
                 }
                 Spacer(Modifier.height(24.dp))
                 Row(Modifier.clip(RoundedCornerShape(16.dp)).background(C.Surface2).clickable {
-                    val send = Intent(Intent.ACTION_SEND).setType("video/mp4").putExtra(Intent.EXTRA_STREAM, s.uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    val mime = when (s.file.extension) { "gif" -> "image/gif"; "m4a" -> "audio/mp4"; else -> "video/mp4" }
+                    val send = Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, s.uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     ctx.startActivity(Intent.createChooser(send, null))
                 }.padding(horizontal = 22.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Share, null, tint = C.Text); Text("Share", style = Title, modifier = Modifier.padding(start = 10.dp))

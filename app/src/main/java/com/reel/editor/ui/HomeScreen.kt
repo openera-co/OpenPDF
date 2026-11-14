@@ -58,6 +58,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.FileOpen
 import androidx.compose.material.icons.rounded.SystemUpdate
 import com.reel.editor.edit.ProjectStore
 import com.reel.editor.media.Thumbnails
@@ -68,6 +72,7 @@ import com.reel.editor.model.newId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(store: ProjectStore, thumbnails: Thumbnails, onNew: () -> Unit, onOpen: (String) -> Unit) {
     var version by remember { mutableStateOf(0) }
@@ -77,9 +82,30 @@ fun HomeScreen(store: ProjectStore, thumbnails: Thumbnails, onNew: () -> Unit, o
     var menuFor by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<Project?>(null) }
     var confirmDelete by remember { mutableStateOf<Project?>(null) }
-    var updates by remember { mutableStateOf(false) }
-    if (updates) UpdateSourceDialog { updates = false }
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    var settings by remember { mutableStateOf(false) }
+    if (settings) androidx.compose.material3.ModalBottomSheet(onDismissRequest = { settings = false }, containerColor = C.Bg) { SettingsSheet { settings = false } }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var packing by remember { mutableStateOf(false) }
+    fun toast(m: String) = android.widget.Toast.makeText(ctx, m, android.widget.Toast.LENGTH_SHORT).show()
+    val importProject = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            packing = true
+            val r = withContext(Dispatchers.IO) { runCatching { com.reel.editor.edit.ProjectArchive.import(ctx, uri, store) } }
+            packing = false
+            r.onSuccess { version++; toast("Project imported") }.onFailure { toast(it.message ?: "Not a Reel project") }
+        }
+    }
+    fun shareProject(p: Project) = scope.launch {
+        packing = true
+        val r = withContext(Dispatchers.IO) { runCatching { com.reel.editor.edit.ProjectArchive.export(ctx, p) } }
+        packing = false
+        r.onSuccess { f ->
+            val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", f)
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("application/zip").putExtra(android.content.Intent.EXTRA_STREAM, uri).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            ctx.startActivity(android.content.Intent.createChooser(send, null))
+        }.onFailure { toast(it.message ?: "Couldn't pack the project") }
+    }
     // Quiet check on launch: the card only appears when there is an update.
     androidx.compose.runtime.LaunchedEffect(Unit) {
         com.reel.editor.update.Updater.cleanUp(ctx)
@@ -112,10 +138,12 @@ fun HomeScreen(store: ProjectStore, thumbnails: Thumbnails, onNew: () -> Unit, o
                 )
                 Text("Reel", style = Title.copy(fontSize = 24.sp, fontWeight = FontWeight.Bold), modifier = Modifier.padding(start = 10.dp))
                 Spacer(Modifier.weight(1f))
-                IconBtn(Icons.Rounded.SystemUpdate, "Updates", size = 44.dp) { updates = true }
+                IconBtn(Icons.Rounded.FileOpen, "Import project", size = 44.dp) { importProject.launch(arrayOf("*/*")) }
+                IconBtn(Icons.Rounded.Settings, "Settings", size = 44.dp) { settings = true }
             }
         }
         item(span = { GridItemSpan(2) }) { UpdateCard() }
+        if (packing) item(span = { GridItemSpan(2) }) { androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth(), color = C.Accent, trackColor = C.Surface2) }
         item(span = { GridItemSpan(2) }) {
             Row(
                 Modifier.fillMaxWidth().height(76.dp).clip(RoundedCornerShape(20.dp)).background(C.Accent).clickable(onClick = onNew),
@@ -157,6 +185,7 @@ fun HomeScreen(store: ProjectStore, thumbnails: Thumbnails, onNew: () -> Unit, o
                                 store.save(d.copy(id = newId(), name = d.name + " copy", updatedAt = System.currentTimeMillis()))
                                 version++
                             })
+                            DropdownMenuItem(text = { Text("Share project") }, leadingIcon = { Icon(Icons.Rounded.Share, null) }, onClick = { menuFor = null; shareProject(d) })
                             DropdownMenuItem(text = { Text("Delete") }, leadingIcon = { Icon(Icons.Rounded.Delete, null) }, onClick = { menuFor = null; confirmDelete = d })
                         }
                     }

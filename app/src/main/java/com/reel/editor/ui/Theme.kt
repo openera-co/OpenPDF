@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package com.reel.editor.ui
 
 import androidx.compose.runtime.setValue
@@ -14,6 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -112,13 +114,13 @@ fun ToolButton(icon: ImageVector, label: String, enabled: Boolean = true, active
 }
 
 @Composable
-fun IconBtn(icon: ImageVector, desc: String, tint: Color = C.Text, size: Dp = 44.dp, iconSize: Dp = 22.dp, enabled: Boolean = true, background: Color = Color.Transparent, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun IconBtn(icon: ImageVector, desc: String, tint: Color = C.Text, size: Dp = 44.dp, iconSize: Dp = 22.dp, enabled: Boolean = true, background: Color = Color.Transparent, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     Box(
         modifier
             .size(size)
             .clip(RoundedCornerShape(12.dp))
             .background(background)
-            .clickable(enabled = enabled, role = Role.Button, interactionSource = remember { MutableInteractionSource() }, indication = ripple(bounded = false), onClick = onClick),
+            .combinedClickable(enabled = enabled, role = Role.Button, interactionSource = remember { MutableInteractionSource() }, indication = ripple(bounded = false), onLongClick = onLongClick, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, contentDescription = desc, tint = if (enabled) tint else C.Dim, modifier = Modifier.size(iconSize)) }
 }

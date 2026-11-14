@@ -152,17 +152,21 @@ fun TextPanel(vm: EditorViewModel, layer: TextLayer, startTab: Int, onClose: () 
             }
             1 -> {
                 var sub by remember { mutableIntStateOf(0) }
-                Segmented(listOf("Color", "Stroke", "Label", "Size"), sub, { sub = it }, Modifier.padding(horizontal = 12.dp))
+                Segmented(listOf("Color", "Fade", "Stroke", "Label", "Size"), sub, { sub = it }, Modifier.padding(horizontal = 12.dp))
                 when (sub) {
                     0 -> SwatchRow(layer.style.color) { c -> update { it.copy(style = it.style.copy(color = c)) } }
-                    1 -> {
+                    // Second colour for a top-to-bottom gradient.
+                    1 -> SwatchRow(layer.style.gradient ?: 0, allowNone = true) { c -> update { it.copy(style = it.style.copy(gradient = if (c == 0L) null else c)) } }
+                    2 -> {
                         SwatchRow(layer.style.strokeColor) { c -> update { it.copy(style = it.style.copy(strokeColor = c, strokeWidth = if (it.style.strokeWidth == 0f) 3f else it.style.strokeWidth)) } }
                         ValueSlider(Icons.Rounded.BorderColor, "Stroke", layer.style.strokeWidth, 0f..10f, { "%.1f".format(it) }, default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> update(true) { it.copy(style = it.style.copy(strokeWidth = v)) } }
                     }
-                    2 -> SwatchRow(layer.style.labelColor ?: 0, allowNone = true) { c -> update { it.copy(style = it.style.copy(labelColor = if (c == 0L) null else c)) } }
-                    3 -> {
+                    3 -> SwatchRow(layer.style.labelColor ?: 0, allowNone = true) { c -> update { it.copy(style = it.style.copy(labelColor = if (c == 0L) null else c)) } }
+                    4 -> {
                         ValueSlider(Icons.Rounded.FormatSize, "Size", layer.style.sizeSp, 14f..140f, { "${it.roundToInt()}" }, default = 64f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> update(true) { it.copy(style = it.style.copy(sizeSp = v)) } }
                         ValueSlider(Icons.Rounded.SpaceBar, "Spacing", layer.style.letterSpacing * 100, -5f..40f, { "${it.roundToInt()}" }, default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> update(true) { it.copy(style = it.style.copy(letterSpacing = v / 100f)) } }
+                        // Bend one-line text along an arc.
+                        ValueSlider(Icons.Rounded.Gradient, "Curve", layer.style.curve * 100, -100f..100f, { "${it.roundToInt()}" }, default = 0f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> update(true) { it.copy(style = it.style.copy(curve = v / 100f)) } }
                     }
                 }
                 Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

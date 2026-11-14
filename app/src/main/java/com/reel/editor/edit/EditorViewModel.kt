@@ -65,7 +65,7 @@ fun trackKeyOf(s: Selection): String? = when (s) {
 
 enum class Panel {
     SPEED, VOLUME, ANIMATION, FILTERS, ADJUST, EFFECTS, TRANSITION, TEXT_EDIT, TEXT_STYLE, TEXT_ANIM,
-    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE, SHAPE, ADJUST_LAYER, OVERLAY, MASK, ADD_LAYER, TRACK, PRIVACY
+    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE, SHAPE, ADJUST_LAYER, OVERLAY, MASK, ADD_LAYER, TRACK, PRIVACY, HISTORY
 }
 
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
@@ -100,7 +100,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     fun open(projectId: String?) {
         if (loaded && (projectId == null || projectId == _project.value.id)) return
         loaded = true
-        val p = projectId?.let { store.load(it) } ?: Project(name = "Project ${java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(java.util.Date())}")
+        val p = projectId?.let { store.load(it) } ?: Project(name = "Project ${java.text.SimpleDateFormat("MMM d", java.util.Locale.getDefault()).format(java.util.Date())}", canvas = com.reel.editor.model.CanvasSettings(ratio = com.reel.editor.Settings.defaultRatio(getApplication())))
         _project.value = p
         preview.update(p)
         preview.seekTo(p.playheadUs)
@@ -149,6 +149,15 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun undo() {
         history.undo(_project.value)?.let { _project.value = it; preview.update(it); scheduleSave() }
+        refreshHistoryFlags()
+        validateSelection()
+    }
+
+    fun historySteps(): List<History.Step> = history.steps(_project.value)
+
+    /** Goes back [n] steps in one go (from the history list). */
+    fun undoSteps(n: Int) {
+        history.undoSteps(n, _project.value)?.let { _project.value = it; preview.update(it); scheduleSave() }
         refreshHistoryFlags()
         validateSelection()
     }
@@ -1097,6 +1106,11 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         captionRun?.cancel()
         _captionStatus.value = null
     }
+
+    fun mergeCaption(id: String) = edit { p -> p.copy(texts = com.reel.editor.model.CaptionEdit.mergeWithNext(p.texts, id)) }
+    fun splitCaption(id: String) = edit { p -> p.copy(texts = com.reel.editor.model.CaptionEdit.split(p.texts, id)) }
+    fun nudgeCaption(id: String, deltaUs: Long) = edit { p -> p.copy(texts = com.reel.editor.model.CaptionEdit.nudge(p.texts, id, deltaUs)) }
+    fun deleteCaption(id: String) = edit { p -> p.copy(texts = p.texts.filter { it.id != id }) }
 
     fun deleteCaptions() = edit { p -> p.copy(texts = p.texts.filterNot { it.isCaption }) }
 

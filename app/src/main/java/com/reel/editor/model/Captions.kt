@@ -106,3 +106,57 @@ object CaptionAnchor {
         return if (changed) p.copy(texts = out) else p
     }
 }
+
+/** Line-by-line caption edits. Pure: they take and return the project's text layers. */
+object CaptionEdit {
+    private fun sorted(texts: List<TextLayer>) = texts.filter { it.isCaption }.sortedBy { it.startUs }
+
+    /** Joins a caption with the one after it. */
+    fun mergeWithNext(texts: List<TextLayer>, id: String): List<TextLayer> {
+        val caps = sorted(texts)
+        val i = caps.indexOfFirst { it.id == id }
+        if (i < 0 || i == caps.lastIndex) return texts
+        val a = caps[i]; val b = caps[i + 1]
+        val shift = b.startUs - a.startUs
+        val sameSource = a.anchorClipId != null && a.anchorUri == b.anchorUri
+        val merged = a.copy(
+            text = (a.text.trimEnd() + " " + b.text.trimStart()).trim(),
+            durationUs = (b.startUs + b.durationUs) - a.startUs,
+            words = a.words + b.words.map { it.copy(startUs = it.startUs + shift, endUs = it.endUs + shift) },
+            anchorClipId = if (sameSource) a.anchorClipId else null,
+            anchorMediaEndUs = if (sameSource) b.anchorMediaEndUs else a.anchorMediaEndUs,
+        )
+        return texts.filter { it.id != b.id }.map { if (it.id == a.id) merged else it }
+    }
+
+    /** Splits a caption into two halves at the word nearest its middle. */
+    fun split(texts: List<TextLayer>, id: String): List<TextLayer> {
+        val c = texts.firstOrNull { it.id == id && it.isCaption } ?: return texts
+        val parts = c.text.trim().split(Regex("\\s+"))
+        if (parts.size < 2) return texts
+        val cut = parts.size / 2
+        // Where the second half starts, from word timings when there are any.
+        val atUs = c.words.getOrNull(cut)?.startUs?.takeIf { c.words.size == parts.size } ?: (c.durationUs * cut / parts.size)
+        if (atUs <= 0 || atUs >= c.durationUs) return texts
+        val mediaCut = c.anchorMediaStartUs + atUs
+        val first = c.copy(
+            text = parts.take(cut).joinToString(" "), durationUs = atUs,
+            words = c.words.filter { it.startUs < atUs }.map { it.copy(endUs = minOf(it.endUs, atUs)) },
+            anchorMediaEndUs = if (c.anchorClipId != null) mediaCut else c.anchorMediaEndUs,
+        )
+        val second = c.copy(
+            id = newId(), text = parts.drop(cut).joinToString(" "), startUs = c.startUs + atUs, durationUs = c.durationUs - atUs,
+            words = c.words.filter { it.startUs >= atUs }.map { it.copy(startUs = it.startUs - atUs, endUs = it.endUs - atUs) },
+            anchorMediaStartUs = if (c.anchorClipId != null) mediaCut else c.anchorMediaStartUs,
+        )
+        return texts.flatMap { if (it.id == id) listOf(first, second) else listOf(it) }
+    }
+
+    /** Moves a caption earlier or later; it keeps following its speech, shifted by the same amount. */
+    fun nudge(texts: List<TextLayer>, id: String, deltaUs: Long): List<TextLayer> = texts.map { c ->
+        if (c.id != id) c else {
+            val d = maxOf(deltaUs, -c.startUs)
+            c.copy(startUs = c.startUs + d, anchorMediaStartUs = c.anchorMediaStartUs + d, anchorMediaEndUs = c.anchorMediaEndUs + d)
+        }
+    }
+}

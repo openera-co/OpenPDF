@@ -18,6 +18,9 @@ uniform float uFade;         // 0..1
 uniform float uHue;          // -1..1 (x 180 degrees)
 uniform float uVignette;     // 0..1
 uniform float uSharpen;      // 0..1
+uniform float uHslOn;
+uniform vec3 uHsl0; uniform vec3 uHsl1; uniform vec3 uHsl2; uniform vec3 uHsl3;   // per colour: hue, saturation, lightness
+uniform vec3 uHsl4; uniform vec3 uHsl5; uniform vec3 uHsl6; uniform vec3 uHsl7;
 uniform float uGrain;        // 0..1
 
 vec3 lookup(vec3 c) {
@@ -37,6 +40,33 @@ float curve(float v, float channel) {
   if (channel > 2.5) return texture2D(uCurves, vec2(x, 0.75)).r;
   vec3 t = texture2D(uCurves, vec2(x, 0.25)).rgb;
   return channel < 0.5 ? t.r : (channel < 1.5 ? t.g : t.b);
+}
+
+// How much a hue (0..1) belongs to a band centred at c (degrees / 360), soft on both sides.
+float band(float h, float c, float w) {
+  float d = abs(h - c);
+  d = min(d, 1.0 - d);
+  return 1.0 - smoothstep(0.0, w, d);
+}
+
+vec3 hslAdjust(vec3 c) {
+  vec3 hsv = rgb2hsv(c);
+  float h = hsv.x;
+  vec3 acc = vec3(0.0);
+  acc += uHsl0 * band(h, 0.0 / 360.0, 0.075);
+  acc += uHsl1 * band(h, 30.0 / 360.0, 0.075);
+  acc += uHsl2 * band(h, 60.0 / 360.0, 0.1);
+  acc += uHsl3 * band(h, 120.0 / 360.0, 0.15);
+  acc += uHsl4 * band(h, 180.0 / 360.0, 0.13);
+  acc += uHsl5 * band(h, 225.0 / 360.0, 0.13);
+  acc += uHsl6 * band(h, 270.0 / 360.0, 0.12);
+  acc += uHsl7 * band(h, 315.0 / 360.0, 0.12);
+  // Greys have no colour to change.
+  acc *= smoothstep(0.02, 0.25, hsv.y);
+  hsv.x = fract(hsv.x + acc.x * (30.0 / 360.0));
+  hsv.y = clamp(hsv.y * (1.0 + acc.y), 0.0, 1.0);
+  hsv.z = clamp(hsv.z * (1.0 + acc.z * 0.5), 0.0, 1.0);
+  return hsv2rgb(hsv);
 }
 
 void main() {
@@ -64,6 +94,7 @@ void main() {
     hsv.y += uVibrance * (1.0 - hsv.y) * hsv.y;
     c = hsv2rgb(vec3(hsv.x, clamp(hsv.y, 0.0, 1.0), hsv.z));
   }
+  if (uHslOn > 0.5) c = hslAdjust(c);
   if (uCurvesOn > 0.5) {
     c = vec3(curve(c.r, 3.0), curve(c.g, 3.0), curve(c.b, 3.0));
     c = vec3(curve(c.r, 0.0), curve(c.g, 1.0), curve(c.b, 2.0));

@@ -50,3 +50,40 @@ class CaptionsTest {
         assertTrue(CaptionGrouping.group(listOf(TimedWord(" ", 0, 10))).isEmpty())
     }
 }
+
+class CaptionEditTest {
+    private fun cap(id: String, start: Long, text: String, wordUs: Long = 400_000): com.reel.editor.model.TextLayer {
+        val words = text.split(" ").mapIndexed { i, w -> com.reel.editor.model.WordTiming(w, i * wordUs, (i + 1) * wordUs) }
+        return com.reel.editor.model.TextLayer(id = id, text = text, startUs = start, durationUs = words.size * wordUs, isCaption = true, words = words)
+    }
+
+    @org.junit.Test fun mergeJoinsTextAndTimings() {
+        val t = listOf(cap("a", 0, "hello there"), cap("b", 1_000_000, "general kenobi"))
+        val m = com.reel.editor.model.CaptionEdit.mergeWithNext(t, "a")
+        org.junit.Assert.assertEquals(1, m.size)
+        org.junit.Assert.assertEquals("hello there general kenobi", m[0].text)
+        org.junit.Assert.assertEquals(1_800_000L, m[0].durationUs)
+        org.junit.Assert.assertEquals(1_000_000L, m[0].words[2].startUs)
+    }
+
+    @org.junit.Test fun mergeOfLastLineDoesNothing() {
+        val t = listOf(cap("a", 0, "one two"))
+        org.junit.Assert.assertEquals(t, com.reel.editor.model.CaptionEdit.mergeWithNext(t, "a"))
+    }
+
+    @org.junit.Test fun splitAtTheMiddleWord() {
+        val t = listOf(cap("a", 2_000_000, "one two three four"))
+        val s = com.reel.editor.model.CaptionEdit.split(t, "a")
+        org.junit.Assert.assertEquals(listOf("one two", "three four"), s.map { it.text })
+        org.junit.Assert.assertEquals(2_800_000L, s[1].startUs)
+        org.junit.Assert.assertEquals(800_000L, s[0].durationUs)
+        org.junit.Assert.assertEquals(0L, s[1].words[0].startUs)
+        org.junit.Assert.assertNotEquals(s[0].id, s[1].id)
+    }
+
+    @org.junit.Test fun nudgeNeverGoesBeforeZero() {
+        val t = listOf(cap("a", 100_000, "hi"))
+        org.junit.Assert.assertEquals(0L, com.reel.editor.model.CaptionEdit.nudge(t, "a", -500_000)[0].startUs)
+        org.junit.Assert.assertEquals(200_000L, com.reel.editor.model.CaptionEdit.nudge(t, "a", 100_000)[0].startUs)
+    }
+}

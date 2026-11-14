@@ -27,7 +27,7 @@ object CompositionFactory {
 
     data class Built(val composition: Composition, val canvasWidth: Int, val canvasHeight: Int, val durationUs: Long)
 
-    fun build(context: Context, project: Project, targetHeight: Int, exportFps: Int? = null, live: com.reel.editor.fx.LivePlans? = null): Built? {
+    fun build(context: Context, project: Project, targetHeight: Int, exportFps: Int? = null, live: com.reel.editor.fx.LivePlans? = null, audioOnly: Boolean = false): Built? {
         if (project.clips.isEmpty()) return null
         val catalog = FxCatalog.get(context)
         val (w, h) = RenderPlans.canvasSize(project, targetHeight)
@@ -72,7 +72,19 @@ object CompositionFactory {
         }
 
         val sequences = ArrayList<EditedMediaItemSequence>()
-        sequences += EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO, C.TRACK_TYPE_VIDEO)).addItems(items).build()
+        if (!audioOnly) {
+            sequences += EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO, C.TRACK_TYPE_VIDEO)).addItems(items).build()
+        } else {
+            // Sound only: the clips' audio in sequence; silent clips and photos become gaps.
+            val sb = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
+            for ((i, clip) in project.clips.withIndex()) {
+                val dur = placed[i].durationUs
+                if (clip.kind == ClipKind.PHOTO || !clip.hasAudio) { sb.addGap(dur); continue }
+                val ei = items[i]
+                sb.addItem(ei.buildUpon().setRemoveVideo(true).setEffects(Effects(ei.effects.audioProcessors, emptyList())).build())
+            }
+            sequences += sb.build()
+        }
 
         val total = TimelineMath.duration(project)
         // Auto-duck: where people speak, from the waveform analysis already done for the timeline.

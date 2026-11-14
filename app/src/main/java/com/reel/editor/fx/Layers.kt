@@ -187,9 +187,10 @@ object LayerBitmaps {
      * Renders a text layer. Lines wrap so the text fits inside the canvas width at the layer's
      * scale ([canvasWidth] defaults to a 9:16 frame).
      */
-    fun text(layer: TextLayer, visibleChars: Int, highlightWord: Int, canvasHeight: Int, canvasWidth: Int = canvasHeight * 9 / 16): Bitmap? {
+    fun text(layer: TextLayer, visibleChars: Int, highlightWord: Int, canvasHeight: Int, canvasWidth: Int = canvasHeight * 9 / 16, letters: Float = 1f, letterMode: String? = null): Bitmap? {
         val st = layer.style
         val raw = layer.text.ifEmpty { " " }
+        if (st.curve != 0f && !raw.contains('\n')) return curvedText(layer, canvasHeight)
         val shown = if (visibleChars in 0 until raw.length) raw.substring(0, visibleChars) else raw
         val unit = pxPerUnit(canvasHeight)
         val paint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
@@ -233,7 +234,19 @@ object LayerBitmaps {
         }
         paint.color = st.color.toInt()
         if (st.shadow) paint.setShadowLayer(8 * unit, 0f, 3 * unit, Color.argb(140, 0, 0, 0))
-        layout.draw(canvas)
+        st.gradient?.let { g -> paint.shader = android.graphics.LinearGradient(0f, 0f, 0f, layout.height.toFloat(), st.color.toInt(), g.toInt(), android.graphics.Shader.TileMode.CLAMP) }
+        if (letterMode != null && letters < 1f) {
+            // Letter by letter: each one arrives a little after the one before.
+            if (st.strokeWidth > 0f) { /* stroke already drawn whole; redraw cleanly per letter */ }
+            canvas.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
+            st.labelColor?.let { lc ->
+                val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = lc.toInt() }
+                val r = 14 * unit
+                canvas.drawRoundRect(RectF(pad / 3f - pad, pad / 3f - pad, w - pad / 3f - pad, h - pad / 3f - pad), r, r, p)
+            }
+            drawLetters(canvas, layout, raw, paint, st, unit, letters, letterMode)
+        } else layout.draw(canvas)
+        paint.shader = null
         paint.clearShadowLayer()
         if (highlightWord >= 0 && layer.words.isNotEmpty()) {
             // Karaoke highlight: redraw the active word in the accent color over itself.
@@ -251,6 +264,70 @@ object LayerBitmaps {
             }
         }
         return bmp
+    }
+
+    private fun drawLetters(canvas: Canvas, layout: Layout, raw: String, paint: TextPaint, st: com.reel.editor.model.TextStyle, unit: Float, progress: Float, mode: String) {
+        val n = raw.length.coerceAtLeast(1)
+        val spread = 4f
+        val fill = Paint(paint)
+        val stroke = Paint(paint).apply { shader = null; clearShadowLayer(); style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND; strokeWidth = st.strokeWidth * unit * 2; color = st.strokeColor.toInt() }
+        for (i in raw.indices) {
+            if (raw[i].isWhitespace()) continue
+            val p = ((progress * (n + spread) - i) / spread).coerceIn(0f, 1f)
+            if (p <= 0f) continue
+            val line = layout.getLineForOffset(i)
+            val x = layout.getPrimaryHorizontal(i)
+            val y = layout.getLineBaseline(line).toFloat()
+            val cw = paint.measureText(raw, i, i + 1)
+            canvas.save()
+            when (mode) {
+                "letterpop" -> { val s = if (p < 0.7f) 1.25f * (p / 0.7f) else 1.25f - 0.25f * ((p - 0.7f) / 0.3f); canvas.scale(s.coerceAtLeast(0.01f), s.coerceAtLeast(0.01f), x + cw / 2, y - paint.textSize * 0.35f) }
+                else -> canvas.translate(0f, (1f - p) * (1f - p) * paint.textSize * 0.7f)
+            }
+            val a = (p * 255).toInt()
+            if (st.strokeWidth > 0f) { stroke.alpha = a; canvas.drawText(raw, i, i + 1, x, y, stroke) }
+            fill.alpha = a
+            canvas.drawText(raw, i, i + 1, x, y, fill)
+            canvas.restore()
+        }
+    }
+
+    /** One line of text bent along an arc. */
+    private fun curvedText(layer: TextLayer, canvasHeight: Int): Bitmap? {
+        val st = layer.style
+        val unit = pxPerUnit(canvasHeight)
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = Fonts.typeface(st); textSize = st.sizeSp * unit; letterSpacing = st.letterSpacing; color = st.color.toInt()
+        }
+        val len = paint.measureText(layer.text).coerceAtLeast(1f)
+        // The text covers an arc of up to 300 degrees as |curve| goes to 1.
+        val angle = (kotlin.math.abs(st.curve) * 300f).coerceIn(5f, 300f)
+        val r = len / Math.toRadians(angle.toDouble()).toFloat()
+        val pad = (paint.textSize * 1.4f + st.strokeWidth * unit * 2 + 12 * unit).toInt()
+        val size = ((r + pad) * 2).toInt().coerceAtMost(4096)
+        val cx = size / 2f
+        val cy = size / 2f
+        val path = android.graphics.Path()
+        val oval = RectF(cx - r, cy - r, cx + r, cy + r)
+        // Smile (curve > 0): text along the bottom of the circle, read left to right.
+        if (st.curve > 0) path.addArc(oval, 90f + angle / 2, -angle) else path.addArc(oval, 270f - angle / 2, angle)
+        val full = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(full)
+        val vOffset = if (st.curve > 0) -paint.textSize * 0.25f else paint.textSize * 0.35f
+        if (st.strokeWidth > 0f) {
+            val sp = Paint(paint).apply { style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND; strokeWidth = st.strokeWidth * unit * 2; color = st.strokeColor.toInt() }
+            c.drawTextOnPath(layer.text, path, 0f, vOffset, sp)
+        }
+        if (st.shadow) paint.setShadowLayer(8 * unit, 0f, 3 * unit, Color.argb(140, 0, 0, 0))
+        st.gradient?.let { g -> paint.shader = android.graphics.LinearGradient(0f, cy - r - pad, 0f, cy + r + pad, st.color.toInt(), g.toInt(), android.graphics.Shader.TileMode.CLAMP) }
+        c.drawTextOnPath(layer.text, path, 0f, vOffset, paint)
+        // Trim to what was drawn.
+        val px = IntArray(size * size); full.getPixels(px, 0, size, 0, 0, size, size)
+        var minX = size; var minY = size; var maxX = -1; var maxY = -1
+        for (y in 0 until size) for (x in 0 until size) if ((px[y * size + x] ushr 24) != 0) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y }
+        if (maxX < 0) return null
+        val m = 4
+        return Bitmap.createBitmap(full, (minX - m).coerceAtLeast(0), (minY - m).coerceAtLeast(0), (maxX - minX + 2 * m).coerceAtMost(size - (minX - m).coerceAtLeast(0)), (maxY - minY + 2 * m).coerceAtMost(size - (minY - m).coerceAtLeast(0)))
     }
 
     /** Line width in pixels: captions take 84% of the frame, other text 90%, divided by the layer's own scale. */
@@ -471,11 +548,14 @@ data class LayerMotion(
     /** Extra horizontal and vertical stretch on top of [scale]. */
     val sx: Float = 1f,
     val sy: Float = 1f,
+    /** Letter-by-letter animations: how far along (0..1) and which one. */
+    val letters: Float = 1f,
+    val letterMode: String? = null,
 )
 
 object TextMotion {
-    val inAnims = listOf("none", "fade", "pop", "slideup", "slidedown", "slideleft", "slideright", "typewriter", "bounce", "zoom", "spin", "drop", "glitch", "wipe", "stretch", "flip", "spread", "elastic", "rise", "swirl")
-    val outAnims = listOf("none", "fade", "pop", "slideup", "slidedown", "slideleft", "slideright", "zoom", "spin", "drop", "glitch", "stretch", "flip", "spread", "swirl")
+    val inAnims = listOf("none", "fade", "pop", "slideup", "slidedown", "slideleft", "slideright", "typewriter", "bounce", "zoom", "spin", "drop", "glitch", "wipe", "stretch", "flip", "spread", "elastic", "rise", "swirl", "letters", "letterpop")
+    val outAnims = listOf("none", "fade", "pop", "slideup", "slidedown", "slideleft", "slideright", "zoom", "spin", "drop", "glitch", "stretch", "flip", "spread", "swirl", "letters", "letterpop")
     val loopAnims = listOf("none", "bob", "pulse", "swing", "shake", "blink", "float", "wave", "heartbeat", "jelly", "flicker")
 
     fun label(id: String) = when (id) {
@@ -483,7 +563,7 @@ object TextMotion {
         "slideleft" -> "Slide left"; "slideright" -> "Slide right"; "typewriter" -> "Typewriter"; "bounce" -> "Bounce"
         "zoom" -> "Zoom"; "spin" -> "Spin"; "drop" -> "Drop"; "glitch" -> "Glitch"; "wipe" -> "Wipe"; "bob" -> "Bob"
         "pulse" -> "Pulse"; "swing" -> "Swing"; "shake" -> "Shake"; "blink" -> "Blink"; "float" -> "Float"
-        "stretch" -> "Stretch"; "flip" -> "Flip"; "spread" -> "Spread"; "elastic" -> "Elastic"; "rise" -> "Rise"; "swirl" -> "Swirl"
+        "letters" -> "Letters"; "letterpop" -> "Letter pop"; "stretch" -> "Stretch"; "flip" -> "Flip"; "spread" -> "Spread"; "elastic" -> "Elastic"; "rise" -> "Rise"; "swirl" -> "Swirl"
         "wave" -> "Wave"; "heartbeat" -> "Heartbeat"; "jelly" -> "Jelly"; "flicker" -> "Flicker"
         else -> id
     }
@@ -528,6 +608,7 @@ object TextMotion {
             }
             "rise" -> LayerMotion(opacity = t, dy = (1f - e) * 0.08f, scale = 0.85f + 0.15f * e)
             "swirl" -> LayerMotion(opacity = t, scale = max(0.01f, e), rotationDeg = (1f - e) * 360f)
+            "letters", "letterpop" -> LayerMotion(letters = t, letterMode = id)
             else -> LayerMotion()
         }
     }
@@ -560,6 +641,8 @@ object TextMotion {
         reveal = min(a.reveal, b.reveal),
         sx = a.sx * b.sx,
         sy = a.sy * b.sy,
+        letters = min(a.letters, b.letters),
+        letterMode = a.letterMode ?: b.letterMode,
     )
 
     /** Motion of a layer at [localUs] from its start, for a layer lasting [durationUs]. */

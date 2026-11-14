@@ -58,6 +58,8 @@ import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.GridOn
 import androidx.compose.material.icons.rounded.Square
 import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -483,6 +485,35 @@ fun PrivacyPanel(vm: EditorViewModel, clip: com.reel.editor.model.Clip, onClose:
                 ValueSlider(Icons.Rounded.OpenWith, "Y", pr.y * 100, 0f..100f, { "${it.roundToInt()}" }, C.Accent, default = 40f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.updatePrivacy(true) { it.copy(y = v / 100f) } }
             } else {
                 ValueSlider(Icons.Rounded.ZoomOutMap, "Size", pr.grow * 100, 60f..250f, { "${it.roundToInt()}%" }, C.Accent, default = 130f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v -> vm.updatePrivacy(true) { it.copy(grow = v / 100f) } }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+// ---------------------------------------------------------------------------- history
+
+/** Every undoable step, newest first; tap one to go back to just before it. */
+@Composable
+fun HistoryPanel(vm: EditorViewModel, onClose: () -> Unit) {
+    val project by vm.project.collectAsStateCompat()
+    val steps = remember(project) { vm.historySteps() }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        SheetHeader("History", Icons.Rounded.History, onClose = onClose)
+        if (steps.isEmpty()) {
+            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.History, null, tint = C.Dim) }
+        }
+        androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 260.dp)) {
+            items(steps.size) { i ->
+                val st = steps[i]
+                Row(
+                    Modifier.fillMaxWidth().clickable { vm.undoSteps(st.stepsBack) }.padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(if (i == 0) C.Accent else C.Dim))
+                    Text(st.label, style = Body, modifier = Modifier.weight(1f))
+                    Icon(Icons.AutoMirrored.Rounded.Undo, "Go back to before this", tint = C.Muted, modifier = Modifier.size(18.dp))
+                }
             }
         }
         Spacer(Modifier.height(8.dp))
