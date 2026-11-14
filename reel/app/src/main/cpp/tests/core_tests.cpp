@@ -1,0 +1,189 @@
+// Host-side tests for the native core. Run: cmake -S . -B build && cmake --build build && ctest --test-dir build
+#include <cmath>
+#include <cstdio>
+#include <algorithm>
+#include <cstdlib>
+#include <set>
+#include <string>
+#include <vector>
+
+#include "../audio_analysis.h"
+#include "../image_ops.h"
+#include "../looks.h"
+
+static int failures = 0;
+#define CHECK(cond, ...)                                              \
+    do {                                                              \
+        if (!(cond)) {                                                \
+            ++failures;                                               \
+            std::fprintf(stderr, "FAIL %s:%d: ", __FILE__, __LINE__); \
+            std::fprintf(stderr, __VA_ARGS__);                        \
+            std::fprintf(stderr, "\n");                               \
+        }                                                             \
+    } while (0)
+
+static void testIdentityLut() {
+    reel::LookParams p;  // defaults must be an identity transform
+    const int n = 17;
+    auto lut = reel::renderLut(p, n);
+    CHECK(lut.size() == static_cast<size_t>(n * n * n), "size %zu", lut.size());
+    int worst = 0;
+    for (int r = 0; r < n; ++r)
+        for (int g = 0; g < n; ++g)
+            for (int b = 0; b < n; ++b) {
+                uint32_t c = lut[(r * n + g) * n + b];
+                int er = static_cast<int>(std::lround(r * 255.0 / (n - 1)));
+                int eg = static_cast<int>(std::lround(g * 255.0 / (n - 1)));
+                int eb = static_cast<int>(std::lround(b * 255.0 / (n - 1)));
+                worst = std::max({worst, std::abs(static_cast<int>((c >> 16) & 255) - er), std::abs(static_cast<int>((c >> 8) & 255) - eg), std::abs(static_cast<int>(c & 255) - eb)});
+                CHECK((c >> 24) == 255u, "alpha must be opaque");
+            }
+    CHECK(worst <= 1, "identity LUT deviates by %d levels", worst);
+}
+
+static void testLookCatalog() {
+    int count = reel::lookCount();
+    CHECK(count >= 55, "expected at least 55 looks, got %d", count);
+    std::set<std::string> ids;
+    for (int i = 0; i < count; ++i) {
+        const auto& info = reel::lookInfo(i);
+        CHECK(ids.insert(info.id).second, "duplicate look id %s", info.id);
+        auto lut = reel::renderLut(reel::lookParams(i), 9);
+        bool identity = true;
+        for (int k = 0; k < 9 * 9 * 9 && identity; ++k) {
+            int r = k / 81, g = (k / 9) % 9, b = k % 9;
+            uint32_t c = lut[static_cast<size_t>(k)];
+            if (std::abs(static_cast<int>((c >> 16) & 255) - r * 255 / 8) > 2 || std::abs(static_cast<int>((c >> 8) & 255) - g * 255 / 8) > 2 || std::abs(static_cast<int>(c & 255) - b * 255 / 8) > 2) identity = false;
+        }
+        CHECK(!identity, "look %s does nothing", info.id);
+        // Black and white endpoints must stay ordered (no inversion).
+        uint32_t black = lut[0], white = lut[9 * 9 * 9 - 1];
+        auto lum = [](uint32_t c) { return ((c >> 16) & 255) * 0.2126 + ((c >> 8) & 255) * 0.7152 + (c & 255) * 0.0722; };
+        CHECK(lum(white) > lum(black) + 100, "look %s collapses tonal range", info.id);
+    }
+}
+
+static void testMonoLook() {
+    for (int i = 0; i < reel::lookCount(); ++i) {
+        if (std::string(reel::lookInfo(i).id) != "mono") continue;
+        float r = 0.8f, g = 0.2f, b = 0.4f;
+        reel::applyLook(reel::lookParams(i), r, g, b);
+        CHECK(std::fabs(r - g) < 1e-4f && std::fabs(g - b) < 1e-4f, "mono not grey: %f %f %f", r, g, b);
+        return;
+    }
+    CHECK(false, "mono look missing");
+}
+
+static void testPeaks() {
+    std::vector<float> s(1000, 0.f);
+    s[10] = -0.9f;
+    s[990] = 0.5f;
+    auto p = reel::computePeaks(s.data(), s.size(), 10);
+    CHECK(p.size() == 10, "bucket count");
+    CHECK(std::fabs(p[0] - 0.9f) < 1e-6f, "first bucket %f", p[0]);
+    CHECK(std::fabs(p[9] - 0.5f) < 1e-6f, "last bucket %f", p[9]);
+    CHECK(p[5] == 0.f, "silent bucket");
+    auto empty = reel::computePeaks(nullptr, 0, 4);
+    CHECK(empty.size() == 4 && empty[0] == 0.f, "empty input");
+    // More buckets than samples must not read out of bounds.
+    auto many = reel::computePeaks(s.data(), 3, 8);
+    CHECK(many.size() == 8, "oversampled bucket count");
+}
+
+static void testFft() {
+    const int n = 256;
+    std::vector<float> re(n), im(n, 0.f);
+    for (int i = 0; i < n; ++i) re[i] = static_cast<float>(std::sin(2 * M_PI * 16 * i / n));
+    reel::fft(re.data(), im.data(), n);
+    int best = 0;
+    float bv = 0;
+    for (int k = 0; k < n / 2; ++k) {
+        float m = std::sqrt(re[k] * re[k] + im[k] * im[k]);
+        if (m > bv) { bv = m; best = k; }
+    }
+    CHECK(best == 16, "fft peak at %d", best);
+    CHECK(std::fabs(bv - n / 2.f) < 0.5f, "fft magnitude %f", bv);
+}
+
+static std::vector<float> clickTrack(double bpm, double seconds, int sr, double offset) {
+    std::vector<float> s(static_cast<size_t>(seconds * sr), 0.f);
+    unsigned seed = 7;
+    for (auto& v : s) { seed = seed * 1103515245u + 12345u; v = ((seed >> 16) % 1000 / 1000.f - 0.5f) * 0.02f; }
+    for (double t = offset; t < seconds; t += 60.0 / bpm) {
+        size_t start = static_cast<size_t>(t * sr);
+        for (size_t k = 0; k < 2000 && start + k < s.size(); ++k) {
+            s[start + k] += static_cast<float>(std::exp(-static_cast<double>(k) / 300.0) * std::sin(2 * M_PI * 1000 * k / sr) * 0.8);
+        }
+    }
+    return s;
+}
+
+static void testBeats() {
+    const int sr = 44100;
+    for (double bpm : {90.0, 120.0, 140.0}) {
+        auto s = clickTrack(bpm, 12.0, sr, 0.25);
+        auto res = reel::detectBeats(s.data(), s.size(), sr);
+        double ratio = res.bpm / bpm;
+        bool ok = std::fabs(ratio - 1) < 0.03 || std::fabs(ratio - 2) < 0.06 || std::fabs(ratio - 0.5) < 0.02;
+        CHECK(ok, "bpm %f expected %f", res.bpm, bpm);
+        CHECK(res.beatTimesSec.size() > 10, "few beats: %zu", res.beatTimesSec.size());
+        // Every detected beat should land near a real click when tempo matched.
+        if (std::fabs(ratio - 1) < 0.03) {
+            int near = 0;
+            double period = 60.0 / bpm;
+            for (double t : res.beatTimesSec) {
+                double ph = std::fmod(t - 0.25 + 10 * period, period);
+                if (ph < 0.04 || period - ph < 0.04) ++near;
+            }
+            CHECK(near >= static_cast<int>(res.beatTimesSec.size() * 0.9), "beats off grid: %d of %zu (bpm %f)", near, res.beatTimesSec.size(), bpm);
+        }
+    }
+    std::vector<float> silence(sr * 3, 0.f);
+    auto res = reel::detectBeats(silence.data(), silence.size(), sr);
+    CHECK(res.beatTimesSec.empty() || res.confidence < 0.5, "silence produced confident beats");
+    auto tiny = reel::detectBeats(silence.data(), 100, sr);
+    CHECK(tiny.beatTimesSec.empty(), "too-short input must return nothing");
+}
+
+static void testRms() {
+    std::vector<float> s(48000);
+    for (size_t i = 0; i < s.size(); ++i) s[i] = static_cast<float>(std::sin(2 * M_PI * 440 * i / 48000.0));
+    double db = reel::rmsDb(s.data(), s.size());
+    CHECK(std::fabs(db + 3.0103) < 0.05, "sine rms %f", db);
+    std::vector<float> z(100, 0.f);
+    CHECK(reel::rmsDb(z.data(), z.size()) == -120.0, "silence rms");
+}
+
+static void testPcmAndHistogram() {
+    int16_t pcm[] = {32767, -32768, 16384, 16384, 0, 0};
+    float out[3];
+    size_t frames = reel::pcm16ToMono(pcm, 6, 2, out);
+    CHECK(frames == 3, "frames %zu", frames);
+    CHECK(std::fabs(out[0]) < 1e-3f && std::fabs(out[1] - 0.5f) < 1e-3f && out[2] == 0.f, "downmix %f %f %f", out[0], out[1], out[2]);
+
+    uint8_t px[2 * 2 * 4] = {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255};
+    uint32_t hist[1024];
+    reel::histogramRgba(px, 2, 2, 8, hist);
+    CHECK(hist[255] == 2 && hist[0] == 2, "red histogram");
+    CHECK(hist[768 + 255] == 1, "white luma bin %u", hist[768 + 255]);
+    uint32_t total = 0;
+    for (int i = 768; i < 1024; ++i) total += hist[i];
+    CHECK(total == 4, "luma total %u", total);
+}
+
+int main() {
+    testIdentityLut();
+    testLookCatalog();
+    testMonoLook();
+    testPeaks();
+    testFft();
+    testBeats();
+    testRms();
+    testPcmAndHistogram();
+    if (failures) {
+        std::fprintf(stderr, "%d failure(s)\n", failures);
+        return 1;
+    }
+    std::printf("all native tests passed (%d looks)\n", reel::lookCount());
+    return 0;
+}

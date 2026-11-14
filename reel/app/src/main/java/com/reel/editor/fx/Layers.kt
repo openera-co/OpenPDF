@@ -1,0 +1,664 @@
+package com.reel.editor.fx
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.net.Uri
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import com.reel.editor.model.TextAlignment
+import com.reel.editor.model.TextAnim
+import com.reel.editor.model.TextLayer
+import com.reel.editor.model.TextStyle
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.pow
+import kotlin.math.ceil
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
+
+/**
+ * Text fonts: the phone's own families plus 55 bundled open-licence families (Google Fonts, SIL OFL
+ * and Apache 2.0, licences in assets/fonts/licenses). Characters a bundled font lacks (for example
+ * Arabic, Devanagari or CJK) fall back to the system fonts automatically.
+ */
+object Fonts {
+    enum class Category(val label: String) { SANS("Sans"), DISPLAY("Bold"), SERIF("Serif"), SCRIPT("Script"), RETRO("Retro"), SYSTEM("Basic") }
+
+    /**
+     * [family] for system fonts, or [asset] for bundled ones. Variable fonts set [weight] (and use
+     * [boldWeight] for bold); static ones may ship a separate [boldAsset].
+     */
+    data class Font(
+        val id: String,
+        val label: String,
+        val category: Category,
+        val family: String? = null,
+        val style: Int = Typeface.NORMAL,
+        val asset: String? = null,
+        val boldAsset: String? = null,
+        val weight: Int? = null,
+        val boldWeight: Int = 800,
+    )
+
+    private fun b(id: String, label: String, cat: Category, weight: Int? = null, bold: Boolean = false, boldWeight: Int = 800) =
+        Font(id, label, cat, asset = "fonts/$id.ttf", boldAsset = if (bold) "fonts/$id-bold.ttf" else null, weight = weight, boldWeight = boldWeight)
+
+    private val system = listOf(
+        Font("sans-bold", "Bold", Category.SYSTEM, "sans-serif", Typeface.BOLD),
+        Font("sans", "Regular", Category.SYSTEM, "sans-serif"),
+        Font("black", "Black", Category.SYSTEM, "sans-serif-black"),
+        Font("medium", "Medium", Category.SYSTEM, "sans-serif-medium"),
+        Font("condensed", "Condensed", Category.SYSTEM, "sans-serif-condensed", Typeface.BOLD),
+        Font("light", "Light", Category.SYSTEM, "sans-serif-light"),
+        Font("serif", "Serif", Category.SYSTEM, "serif", Typeface.BOLD),
+        Font("serif-italic", "Serif italic", Category.SYSTEM, "serif", Typeface.BOLD_ITALIC),
+        Font("mono", "Mono", Category.SYSTEM, "monospace", Typeface.BOLD),
+        Font("casual", "Casual", Category.SYSTEM, "casual"),
+        Font("cursive", "Script", Category.SYSTEM, "cursive", Typeface.BOLD),
+        Font("smallcaps", "Small caps", Category.SYSTEM, "sans-serif-smallcaps"),
+    )
+
+    private val bundled = listOf(
+        b("montserrat", "Montserrat", Category.SANS, 700, boldWeight = 900),
+        b("poppins", "Poppins", Category.SANS, bold = true),
+        b("inter", "Inter", Category.SANS, 600, boldWeight = 900),
+        b("rubik", "Rubik", Category.SANS, 600, boldWeight = 900),
+        b("raleway", "Raleway", Category.SANS, 700, boldWeight = 900),
+        b("lato", "Lato", Category.SANS, bold = true),
+        b("nunito", "Nunito", Category.SANS, 700, boldWeight = 1000),
+        b("worksans", "Work Sans", Category.SANS, 600, boldWeight = 900),
+        b("spacegrotesk", "Space Grotesk", Category.SANS, 600, boldWeight = 700),
+        b("dmsans", "DM Sans", Category.SANS, 600, boldWeight = 1000),
+        b("archivoblack", "Archivo Black", Category.DISPLAY),
+        b("anton", "Anton", Category.DISPLAY),
+        b("bebasneue", "Bebas Neue", Category.DISPLAY),
+        b("oswald", "Oswald", Category.DISPLAY, 600, boldWeight = 700),
+        b("teko", "Teko", Category.DISPLAY, 600, boldWeight = 700),
+        b("russoone", "Russo One", Category.DISPLAY),
+        b("bungee", "Bungee", Category.DISPLAY),
+        b("righteous", "Righteous", Category.DISPLAY),
+        b("fredoka", "Fredoka", Category.DISPLAY, 600, boldWeight = 700),
+        b("comfortaa", "Comfortaa", Category.DISPLAY, 700, boldWeight = 700),
+        b("baloo2", "Baloo", Category.DISPLAY, 700, boldWeight = 800),
+        b("luckiestguy", "Luckiest Guy", Category.DISPLAY),
+        b("bangers", "Bangers", Category.DISPLAY),
+        b("blackopsone", "Black Ops", Category.DISPLAY),
+        b("orbitron", "Orbitron", Category.DISPLAY, 700, boldWeight = 900),
+        b("monoton", "Monoton", Category.DISPLAY),
+        b("rubikmonoone", "Rubik Mono", Category.DISPLAY),
+        b("staatliches", "Staatliches", Category.DISPLAY),
+        b("titanone", "Titan One", Category.DISPLAY),
+        b("playfairdisplay", "Playfair", Category.SERIF, 700, boldWeight = 900),
+        b("merriweather", "Merriweather", Category.SERIF, 700, boldWeight = 900),
+        b("lora", "Lora", Category.SERIF, 600, boldWeight = 700),
+        b("cinzel", "Cinzel", Category.SERIF, 700, boldWeight = 900),
+        b("abrilfatface", "Abril Fatface", Category.SERIF),
+        b("dmserifdisplay", "DM Serif", Category.SERIF),
+        b("robotoslab", "Roboto Slab", Category.SERIF, 700, boldWeight = 900),
+        b("ebgaramond", "Garamond", Category.SERIF, 600, boldWeight = 800),
+        b("alfaslabone", "Alfa Slab", Category.SERIF),
+        b("pacifico", "Pacifico", Category.SCRIPT),
+        b("lobster", "Lobster", Category.SCRIPT),
+        b("dancingscript", "Dancing", Category.SCRIPT, 700, boldWeight = 700),
+        b("caveat", "Caveat", Category.SCRIPT, 700, boldWeight = 700),
+        b("satisfy", "Satisfy", Category.SCRIPT),
+        b("greatvibes", "Great Vibes", Category.SCRIPT),
+        b("permanentmarker", "Marker", Category.SCRIPT),
+        b("kalam", "Kalam", Category.SCRIPT, bold = true),
+        b("shadowsintolight", "Shadows", Category.SCRIPT),
+        b("indieflower", "Indie Flower", Category.SCRIPT),
+        b("amaticsc", "Amatic", Category.SCRIPT, bold = true),
+        b("sacramento", "Sacramento", Category.SCRIPT),
+        b("yellowtail", "Yellowtail", Category.SCRIPT),
+        b("pressstart2p", "Press Start", Category.RETRO),
+        b("vt323", "VT323", Category.RETRO),
+        b("spacemono", "Space Mono", Category.RETRO, bold = true),
+        b("silkscreen", "Silkscreen", Category.RETRO, bold = true),
+    )
+
+    val all = system + bundled
+    private val byId = all.associateBy { it.id }
+
+    @Volatile private var assets: android.content.res.AssetManager? = null
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, Typeface>()
+
+    /** Call once at startup so bundled fonts can be read. */
+    fun init(context: Context) {
+        assets = context.applicationContext.assets
+    }
+
+    fun font(id: String): Font = byId[id] ?: system[0]
+
+    fun typeface(style: TextStyle): Typeface = typeface(style.font, style.bold, style.italic)
+
+    fun typeface(id: String, bold: Boolean = false, italic: Boolean = false): Typeface {
+        val f = font(id)
+        return cache.getOrPut("$id|$bold|$italic") { load(f, bold, italic) }
+    }
+
+    private fun load(f: Font, boldIn: Boolean, italicIn: Boolean): Typeface {
+        val am = assets
+        if (f.asset == null || am == null) {
+            val bold = boldIn || (f.style and Typeface.BOLD) != 0
+            val italic = italicIn || (f.style and Typeface.ITALIC) != 0
+            return Typeface.create(f.family ?: "sans-serif", styleOf(bold, italic))
+        }
+        val base = try {
+            when {
+                f.weight != null -> Typeface.Builder(am, f.asset)
+                    .setFontVariationSettings("'wght' ${if (boldIn) f.boldWeight else f.weight}").build()
+                boldIn && f.boldAsset != null -> Typeface.createFromAsset(am, f.boldAsset)
+                else -> Typeface.createFromAsset(am, f.asset)
+            }
+        } catch (e: Exception) {
+            logFx("font ${f.id} unavailable", e)
+            return Typeface.create("sans-serif", styleOf(boldIn, italicIn))
+        } ?: Typeface.DEFAULT
+        // Bold is native where the font has it; otherwise (and for italic) Android synthesizes it.
+        val synthBold = boldIn && f.weight == null && f.boldAsset == null
+        return if (synthBold || italicIn) Typeface.create(base, styleOf(synthBold, italicIn)) else base
+    }
+
+    private fun styleOf(bold: Boolean, italic: Boolean) = when {
+        bold && italic -> Typeface.BOLD_ITALIC
+        bold -> Typeface.BOLD
+        italic -> Typeface.ITALIC
+        else -> Typeface.NORMAL
+    }
+}
+
+/** CPU rendering of text and sticker layers into premultiplied bitmaps. */
+object LayerBitmaps {
+    /** Pixel size of 1 style unit, relative to canvas height so text keeps its look at any export size. */
+    fun pxPerUnit(canvasHeight: Int) = canvasHeight / 1280f
+
+    /**
+     * Renders a text layer. Lines wrap so the text fits inside the canvas width at the layer's
+     * scale ([canvasWidth] defaults to a 9:16 frame).
+     */
+    fun text(layer: TextLayer, visibleChars: Int, highlightWord: Int, canvasHeight: Int, canvasWidth: Int = canvasHeight * 9 / 16, letters: Float = 1f, letterMode: String? = null): Bitmap? {
+        val st = layer.style
+        val raw = layer.text.ifEmpty { " " }
+        if (st.curve != 0f && !raw.contains('\n')) return curvedText(layer, canvasHeight)
+        val shown = if (visibleChars in 0 until raw.length) raw.substring(0, visibleChars) else raw
+        val unit = pxPerUnit(canvasHeight)
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
+            typeface = Fonts.typeface(st)
+            textSize = st.sizeSp * unit
+            letterSpacing = st.letterSpacing
+            color = st.color.toInt()
+        }
+        val maxWidth = wrapWidth(layer, canvasWidth)
+        val measureWidth = min(maxWidth, ceil(StaticLayout.getDesiredWidth(raw, paint)).toInt() + 2)
+        val align = when (st.align) {
+            TextAlignment.START -> Layout.Alignment.ALIGN_NORMAL
+            TextAlignment.CENTER -> Layout.Alignment.ALIGN_CENTER
+            TextAlignment.END -> Layout.Alignment.ALIGN_OPPOSITE
+        }
+        // Lay out the full text so typewriter reveal never reflows.
+        val fullLayout = StaticLayout.Builder.obtain(raw, 0, raw.length, paint, measureWidth.coerceAtLeast(1))
+            .setAlignment(align).setLineSpacing(0f, st.lineSpacing).setIncludePad(true).build()
+        val pad = (st.strokeWidth * unit * 2 + (if (st.shadow) 10 * unit else 0f) + (if (st.labelColor != null) 18 * unit else 0f)).toInt() + 4
+        val w = fullLayout.width + pad * 2
+        val h = fullLayout.height + pad * 2
+        if (w <= 0 || h <= 0 || w > 8192 || h > 8192) return null
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        st.labelColor?.let { lc ->
+            val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = lc.toInt() }
+            val r = 14 * unit
+            canvas.drawRoundRect(RectF(pad / 3f, pad / 3f, w - pad / 3f, h - pad / 3f), r, r, p)
+        }
+        canvas.translate(pad.toFloat(), pad.toFloat())
+        val layout = if (shown.length == raw.length) fullLayout else
+            StaticLayout.Builder.obtain(shown, 0, shown.length, paint, fullLayout.width).setAlignment(align)
+                .setLineSpacing(0f, st.lineSpacing).setIncludePad(true).build()
+        if (st.strokeWidth > 0f) {
+            paint.style = Paint.Style.STROKE
+            paint.strokeJoin = Paint.Join.ROUND
+            paint.strokeWidth = st.strokeWidth * unit * 2
+            paint.color = st.strokeColor.toInt()
+            layout.draw(canvas)
+            paint.style = Paint.Style.FILL
+        }
+        paint.color = st.color.toInt()
+        if (st.shadow) paint.setShadowLayer(8 * unit, 0f, 3 * unit, Color.argb(140, 0, 0, 0))
+        st.gradient?.let { g -> paint.shader = android.graphics.LinearGradient(0f, 0f, 0f, layout.height.toFloat(), st.color.toInt(), g.toInt(), android.graphics.Shader.TileMode.CLAMP) }
+        if (letterMode != null && letters < 1f) {
+            // Letter by letter: each one arrives a little after the one before.
+            if (st.strokeWidth > 0f) { /* stroke already drawn whole; redraw cleanly per letter */ }
+            canvas.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
+            st.labelColor?.let { lc ->
+                val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = lc.toInt() }
+                val r = 14 * unit
+                canvas.drawRoundRect(RectF(pad / 3f - pad, pad / 3f - pad, w - pad / 3f - pad, h - pad / 3f - pad), r, r, p)
+            }
+            drawLetters(canvas, layout, raw, paint, st, unit, letters, letterMode)
+        } else layout.draw(canvas)
+        paint.shader = null
+        paint.clearShadowLayer()
+        if (highlightWord >= 0 && layer.words.isNotEmpty()) {
+            // Karaoke highlight: redraw the active word in the accent color over itself.
+            var offset = 0
+            for ((i, wt) in layer.words.withIndex()) {
+                val at = raw.indexOf(wt.text, offset)
+                if (at < 0) continue
+                offset = at + wt.text.length
+                if (i != highlightWord || offset > shown.length) continue
+                val line = layout.getLineForOffset(at)
+                val x = layout.getPrimaryHorizontal(at)
+                val y = layout.getLineBaseline(line).toFloat()
+                paint.color = 0xFFFFD36B.toInt()
+                canvas.drawText(raw, at, offset, x, y, paint)
+            }
+        }
+        return bmp
+    }
+
+    private fun drawLetters(canvas: Canvas, layout: Layout, raw: String, paint: TextPaint, st: com.reel.editor.model.TextStyle, unit: Float, progress: Float, mode: String) {
+        val n = raw.length.coerceAtLeast(1)
+        val spread = 4f
+        val fill = Paint(paint)
+        val stroke = Paint(paint).apply { shader = null; clearShadowLayer(); style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND; strokeWidth = st.strokeWidth * unit * 2; color = st.strokeColor.toInt() }
+        for (i in raw.indices) {
+            if (raw[i].isWhitespace()) continue
+            val p = ((progress * (n + spread) - i) / spread).coerceIn(0f, 1f)
+            if (p <= 0f) continue
+            val line = layout.getLineForOffset(i)
+            val x = layout.getPrimaryHorizontal(i)
+            val y = layout.getLineBaseline(line).toFloat()
+            val cw = paint.measureText(raw, i, i + 1)
+            canvas.save()
+            when (mode) {
+                "letterpop" -> { val s = if (p < 0.7f) 1.25f * (p / 0.7f) else 1.25f - 0.25f * ((p - 0.7f) / 0.3f); canvas.scale(s.coerceAtLeast(0.01f), s.coerceAtLeast(0.01f), x + cw / 2, y - paint.textSize * 0.35f) }
+                else -> canvas.translate(0f, (1f - p) * (1f - p) * paint.textSize * 0.7f)
+            }
+            val a = (p * 255).toInt()
+            if (st.strokeWidth > 0f) { stroke.alpha = a; canvas.drawText(raw, i, i + 1, x, y, stroke) }
+            fill.alpha = a
+            canvas.drawText(raw, i, i + 1, x, y, fill)
+            canvas.restore()
+        }
+    }
+
+    /** One line of text bent along an arc. */
+    private fun curvedText(layer: TextLayer, canvasHeight: Int): Bitmap? {
+        val st = layer.style
+        val unit = pxPerUnit(canvasHeight)
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = Fonts.typeface(st); textSize = st.sizeSp * unit; letterSpacing = st.letterSpacing; color = st.color.toInt()
+        }
+        val len = paint.measureText(layer.text).coerceAtLeast(1f)
+        // The text covers an arc of up to 300 degrees as |curve| goes to 1.
+        val angle = (kotlin.math.abs(st.curve) * 300f).coerceIn(5f, 300f)
+        val r = len / Math.toRadians(angle.toDouble()).toFloat()
+        val pad = (paint.textSize * 1.4f + st.strokeWidth * unit * 2 + 12 * unit).toInt()
+        val size = ((r + pad) * 2).toInt().coerceAtMost(4096)
+        val cx = size / 2f
+        val cy = size / 2f
+        val path = android.graphics.Path()
+        val oval = RectF(cx - r, cy - r, cx + r, cy + r)
+        // Smile (curve > 0): text along the bottom of the circle, read left to right.
+        if (st.curve > 0) path.addArc(oval, 90f + angle / 2, -angle) else path.addArc(oval, 270f - angle / 2, angle)
+        val full = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(full)
+        val vOffset = if (st.curve > 0) -paint.textSize * 0.25f else paint.textSize * 0.35f
+        if (st.strokeWidth > 0f) {
+            val sp = Paint(paint).apply { style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND; strokeWidth = st.strokeWidth * unit * 2; color = st.strokeColor.toInt() }
+            c.drawTextOnPath(layer.text, path, 0f, vOffset, sp)
+        }
+        if (st.shadow) paint.setShadowLayer(8 * unit, 0f, 3 * unit, Color.argb(140, 0, 0, 0))
+        st.gradient?.let { g -> paint.shader = android.graphics.LinearGradient(0f, cy - r - pad, 0f, cy + r + pad, st.color.toInt(), g.toInt(), android.graphics.Shader.TileMode.CLAMP) }
+        c.drawTextOnPath(layer.text, path, 0f, vOffset, paint)
+        // Trim to what was drawn.
+        val px = IntArray(size * size); full.getPixels(px, 0, size, 0, 0, size, size)
+        var minX = size; var minY = size; var maxX = -1; var maxY = -1
+        for (y in 0 until size) for (x in 0 until size) if ((px[y * size + x] ushr 24) != 0) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y }
+        if (maxX < 0) return null
+        val m = 4
+        return Bitmap.createBitmap(full, (minX - m).coerceAtLeast(0), (minY - m).coerceAtLeast(0), (maxX - minX + 2 * m).coerceAtMost(size - (minX - m).coerceAtLeast(0)), (maxY - minY + 2 * m).coerceAtMost(size - (minY - m).coerceAtLeast(0)))
+    }
+
+    /** Line width in pixels: captions take 84% of the frame, other text 90%, divided by the layer's own scale. */
+    fun wrapWidth(layer: TextLayer, canvasWidth: Int): Int {
+        val frac = if (layer.isCaption) 0.84f else 0.9f
+        val s = layer.transform.scale.coerceIn(0.2f, 8f)
+        return (canvasWidth * frac / s).toInt().coerceAtLeast(64)
+    }
+
+    /** Shape layers offered in the picker. */
+    val shapeKinds = listOf("rect", "roundrect", "circle", "triangle", "star", "heart", "hexagon", "ring", "line", "arrow", "bubble", "burst")
+
+    /** A shape layer drawn into a box of its [ShapeLayer.aspect], height relative to the canvas. */
+    fun shapeLayer(s: com.reel.editor.model.ShapeLayer, canvasHeight: Int): Bitmap {
+        val h = (canvasHeight * 0.6f).toInt().coerceIn(64, 1400)
+        val w = (h * s.aspect.coerceIn(0.1f, 10f)).toInt().coerceIn(16, 2400)
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val unit = pxPerUnit(canvasHeight)
+        val sw = s.strokeWidth * unit * 2
+        val inset = sw / 2 + 1
+        val r = RectF(inset, inset, w - inset, h - inset)
+        val path = shapePath(s.shape, r, s.corner)
+        s.fill?.let { col -> c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = col.toInt(); style = Paint.Style.FILL }) }
+        val ringOrLine = s.shape == "ring"
+        if (sw > 0f || ringOrLine) {
+            c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = (if (ringOrLine && s.strokeWidth <= 0f) (s.fill ?: s.stroke) else s.stroke).toInt()
+                style = Paint.Style.STROKE
+                strokeWidth = if (ringOrLine && sw <= 0f) h * 0.12f else sw
+                strokeJoin = Paint.Join.ROUND
+            })
+        }
+        return bmp
+    }
+
+    private fun shapePath(kind: String, r: RectF, corner: Float): Path {
+        val p = Path()
+        val cx = r.centerX()
+        val cy = r.centerY()
+        val w = r.width()
+        val h = r.height()
+        when (kind) {
+            "rect" -> p.addRect(r, Path.Direction.CW)
+            "roundrect" -> { val rad = min(w, h) * corner.coerceIn(0f, 0.5f); p.addRoundRect(r, rad, rad, Path.Direction.CW) }
+            "circle" -> p.addOval(r, Path.Direction.CW)
+            "ring" -> p.addOval(RectF(r.left + h * 0.06f, r.top + h * 0.06f, r.right - h * 0.06f, r.bottom - h * 0.06f), Path.Direction.CW)
+            "triangle" -> { p.moveTo(cx, r.top); p.lineTo(r.right, r.bottom); p.lineTo(r.left, r.bottom); p.close() }
+            "hexagon" -> {
+                for (i in 0 until 6) {
+                    val a = Math.toRadians(60.0 * i - 90)
+                    val x = cx + w / 2 * cos(a).toFloat(); val y = cy + h / 2 * sin(a).toFloat()
+                    if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
+                }
+                p.close()
+            }
+            "star", "burst" -> {
+                val n = if (kind == "star") 5 else 12
+                val inner = if (kind == "star") 0.42f else 0.72f
+                for (i in 0 until n * 2) {
+                    val a = Math.toRadians(180.0 / n * i - 90)
+                    val k = if (i % 2 == 0) 1f else inner
+                    val x = cx + w / 2 * k * cos(a).toFloat(); val y = cy + h / 2 * k * sin(a).toFloat()
+                    if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
+                }
+                p.close()
+            }
+            "heart" -> {
+                p.moveTo(cx, r.bottom)
+                p.cubicTo(r.left - w * 0.1f, cy + h * 0.1f, r.left + w * 0.05f, r.top - h * 0.05f, cx, r.top + h * 0.28f)
+                p.cubicTo(r.right - w * 0.05f, r.top - h * 0.05f, r.right + w * 0.1f, cy + h * 0.1f, cx, r.bottom)
+                p.close()
+            }
+            "line" -> { val t = h * 0.12f; p.addRoundRect(RectF(r.left, cy - t / 2, r.right, cy + t / 2), t / 2, t / 2, Path.Direction.CW) }
+            "arrow" -> {
+                val t = h * 0.22f
+                val head = min(w * 0.4f, h * 0.9f)
+                p.moveTo(r.left, cy - t / 2); p.lineTo(r.right - head, cy - t / 2); p.lineTo(r.right - head, r.top)
+                p.lineTo(r.right, cy); p.lineTo(r.right - head, r.bottom); p.lineTo(r.right - head, cy + t / 2); p.lineTo(r.left, cy + t / 2); p.close()
+            }
+            "bubble" -> {
+                val body = RectF(r.left, r.top, r.right, r.top + h * 0.8f)
+                val rad = min(w, h) * 0.2f
+                p.addRoundRect(body, rad, rad, Path.Direction.CW)
+                val tail = Path().apply { moveTo(r.left + w * 0.2f, body.bottom - 1); lineTo(r.left + w * 0.18f, r.bottom); lineTo(r.left + w * 0.4f, body.bottom - 1); close() }
+                p.op(tail, Path.Op.UNION)
+            }
+            else -> p.addRect(r, Path.Direction.CW)
+        }
+        return p
+    }
+
+    val stickerShapes = listOf("heart", "star", "sparkle", "arrow", "circle", "bubble", "sun", "bolt", "check", "fire", "music", "smile")
+
+    fun sticker(context: Context, source: String, canvasHeight: Int): Bitmap? {
+        if (source.startsWith("shape:")) return shape(source.removePrefix("shape:"), (canvasHeight * 0.5f).toInt().coerceIn(64, 1024))
+        return try {
+            val uri = Uri.parse(source)
+            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+            var sample = 1
+            while (max(opts.outWidth, opts.outHeight) / sample > 1536) sample *= 2
+            context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+            }
+        } catch (e: Exception) {
+            logFx("sticker decode failed", e)
+            null
+        }
+    }
+
+    fun shape(name: String, size: Int): Bitmap {
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val s = size.toFloat()
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = s * 0.05f; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND; color = Color.WHITE }
+        val path = Path()
+        when (name) {
+            "heart" -> {
+                fill.color = 0xFFFF4D6D.toInt()
+                path.moveTo(s * 0.5f, s * 0.85f)
+                path.cubicTo(s * 0.05f, s * 0.55f, s * 0.15f, s * 0.12f, s * 0.5f, s * 0.32f)
+                path.cubicTo(s * 0.85f, s * 0.12f, s * 0.95f, s * 0.55f, s * 0.5f, s * 0.85f)
+                c.drawPath(path, fill)
+            }
+            "star", "sparkle" -> {
+                fill.color = if (name == "star") 0xFFFFD36B.toInt() else Color.WHITE
+                val points = if (name == "star") 5 else 4
+                val inner = if (name == "star") 0.2f else 0.08f
+                for (i in 0 until points * 2) {
+                    val r = if (i % 2 == 0) s * 0.46f else s * inner
+                    val a = -PI / 2 + i * PI / points
+                    val x = s / 2 + (r * cos(a)).toFloat()
+                    val y = s / 2 + (r * sin(a)).toFloat()
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                path.close()
+                c.drawPath(path, fill)
+            }
+            "arrow" -> {
+                stroke.strokeWidth = s * 0.09f
+                path.moveTo(s * 0.12f, s * 0.5f); path.lineTo(s * 0.85f, s * 0.5f)
+                path.moveTo(s * 0.6f, s * 0.25f); path.lineTo(s * 0.86f, s * 0.5f); path.lineTo(s * 0.6f, s * 0.75f)
+                c.drawPath(path, stroke)
+            }
+            "circle" -> { stroke.strokeWidth = s * 0.07f; c.drawCircle(s / 2, s / 2, s * 0.4f, stroke) }
+            "bubble" -> {
+                fill.color = Color.WHITE
+                c.drawRoundRect(RectF(s * 0.08f, s * 0.12f, s * 0.92f, s * 0.68f), s * 0.16f, s * 0.16f, fill)
+                path.moveTo(s * 0.3f, s * 0.66f); path.lineTo(s * 0.24f, s * 0.9f); path.lineTo(s * 0.48f, s * 0.66f); path.close()
+                c.drawPath(path, fill)
+            }
+            "sun" -> {
+                fill.color = 0xFFFFB547.toInt()
+                c.drawCircle(s / 2, s / 2, s * 0.2f, fill)
+                stroke.color = 0xFFFFB547.toInt()
+                for (i in 0 until 8) {
+                    val a = i * PI / 4
+                    c.drawLine(s / 2 + (s * 0.3f * cos(a)).toFloat(), s / 2 + (s * 0.3f * sin(a)).toFloat(), s / 2 + (s * 0.44f * cos(a)).toFloat(), s / 2 + (s * 0.44f * sin(a)).toFloat(), stroke)
+                }
+            }
+            "bolt" -> {
+                fill.color = 0xFFFFD36B.toInt()
+                path.moveTo(s * 0.56f, s * 0.06f); path.lineTo(s * 0.2f, s * 0.56f); path.lineTo(s * 0.48f, s * 0.56f)
+                path.lineTo(s * 0.4f, s * 0.94f); path.lineTo(s * 0.8f, s * 0.42f); path.lineTo(s * 0.52f, s * 0.42f); path.close()
+                c.drawPath(path, fill)
+            }
+            "check" -> {
+                fill.color = 0xFF3DDC84.toInt()
+                c.drawCircle(s / 2, s / 2, s * 0.44f, fill)
+                stroke.strokeWidth = s * 0.08f
+                path.moveTo(s * 0.3f, s * 0.52f); path.lineTo(s * 0.45f, s * 0.67f); path.lineTo(s * 0.72f, s * 0.36f)
+                c.drawPath(path, stroke)
+            }
+            "fire" -> {
+                fill.color = 0xFFFF7A2B.toInt()
+                path.moveTo(s * 0.5f, s * 0.05f)
+                path.cubicTo(s * 0.8f, s * 0.35f, s * 0.86f, s * 0.6f, s * 0.78f, s * 0.75f)
+                path.cubicTo(s * 0.7f, s * 0.95f, s * 0.3f, s * 0.95f, s * 0.22f, s * 0.75f)
+                path.cubicTo(s * 0.14f, s * 0.55f, s * 0.3f, s * 0.4f, s * 0.36f, s * 0.3f)
+                path.cubicTo(s * 0.42f, s * 0.45f, s * 0.5f, s * 0.45f, s * 0.5f, s * 0.05f)
+                c.drawPath(path, fill)
+                fill.color = 0xFFFFD36B.toInt()
+                c.drawOval(RectF(s * 0.38f, s * 0.55f, s * 0.62f, s * 0.88f), fill)
+            }
+            "music" -> {
+                fill.color = Color.WHITE
+                c.drawOval(RectF(s * 0.18f, s * 0.62f, s * 0.42f, s * 0.82f), fill)
+                c.drawOval(RectF(s * 0.58f, s * 0.52f, s * 0.82f, s * 0.72f), fill)
+                stroke.strokeWidth = s * 0.06f
+                path.moveTo(s * 0.39f, s * 0.72f); path.lineTo(s * 0.39f, s * 0.22f); path.lineTo(s * 0.79f, s * 0.14f); path.lineTo(s * 0.79f, s * 0.62f)
+                c.drawPath(path, stroke)
+            }
+            else -> {
+                fill.color = 0xFFFFD36B.toInt()
+                c.drawCircle(s / 2, s / 2, s * 0.44f, fill)
+                fill.color = 0xFF1E1A2E.toInt()
+                c.drawCircle(s * 0.36f, s * 0.42f, s * 0.05f, fill)
+                c.drawCircle(s * 0.64f, s * 0.42f, s * 0.05f, fill)
+                stroke.color = 0xFF1E1A2E.toInt()
+                stroke.strokeWidth = s * 0.05f
+                c.drawArc(RectF(s * 0.3f, s * 0.4f, s * 0.7f, s * 0.72f), 20f, 140f, false, stroke)
+            }
+        }
+        return bmp
+    }
+}
+
+/** Per-frame motion of a text or sticker layer for its in/out/loop animations. */
+data class LayerMotion(
+    val opacity: Float = 1f,
+    val scale: Float = 1f,
+    val dx: Float = 0f,
+    val dy: Float = 0f,
+    val rotationDeg: Float = 0f,
+    val reveal: Float = 1f,
+    /** Extra horizontal and vertical stretch on top of [scale]. */
+    val sx: Float = 1f,
+    val sy: Float = 1f,
+    /** Letter-by-letter animations: how far along (0..1) and which one. */
+    val letters: Float = 1f,
+    val letterMode: String? = null,
+)
+
+object TextMotion {
+    val inAnims = listOf("none", "fade", "pop", "slideup", "slidedown", "slideleft", "slideright", "typewriter", "bounce", "zoom", "spin", "drop", "glitch", "wipe", "stretch", "flip", "spread", "elastic", "rise", "swirl", "letters", "letterpop")
+    val outAnims = listOf("none", "fade", "pop", "slideup", "slidedown", "slideleft", "slideright", "zoom", "spin", "drop", "glitch", "stretch", "flip", "spread", "swirl", "letters", "letterpop")
+    val loopAnims = listOf("none", "bob", "pulse", "swing", "shake", "blink", "float", "wave", "heartbeat", "jelly", "flicker")
+
+    fun label(id: String) = when (id) {
+        "none" -> "None"; "fade" -> "Fade"; "pop" -> "Pop"; "slideup" -> "Slide up"; "slidedown" -> "Slide down"
+        "slideleft" -> "Slide left"; "slideright" -> "Slide right"; "typewriter" -> "Typewriter"; "bounce" -> "Bounce"
+        "zoom" -> "Zoom"; "spin" -> "Spin"; "drop" -> "Drop"; "glitch" -> "Glitch"; "wipe" -> "Wipe"; "bob" -> "Bob"
+        "pulse" -> "Pulse"; "swing" -> "Swing"; "shake" -> "Shake"; "blink" -> "Blink"; "float" -> "Float"
+        "letters" -> "Letters"; "letterpop" -> "Letter pop"; "stretch" -> "Stretch"; "flip" -> "Flip"; "spread" -> "Spread"; "elastic" -> "Elastic"; "rise" -> "Rise"; "swirl" -> "Swirl"
+        "wave" -> "Wave"; "heartbeat" -> "Heartbeat"; "jelly" -> "Jelly"; "flicker" -> "Flicker"
+        else -> id
+    }
+
+    private fun easeOut(t: Float) = 1f - (1f - t) * (1f - t) * (1f - t)
+
+    /** [p] goes 0 to 1 as the layer becomes fully visible (for out animations the caller passes 1 to 0). */
+    fun appear(id: String, p: Float, timeSec: Float): LayerMotion {
+        val t = p.coerceIn(0f, 1f)
+        val e = easeOut(t)
+        return when (id) {
+            "fade" -> LayerMotion(opacity = t)
+            "pop" -> {
+                val s = if (t < 0.7f) 1.15f * easeOut(t / 0.7f) else 1.15f - 0.15f * ((t - 0.7f) / 0.3f)
+                LayerMotion(opacity = min(1f, t * 3f), scale = max(0.01f, s))
+            }
+            "slideup" -> LayerMotion(opacity = t, dy = -(1f - e) * 0.12f)
+            "slidedown" -> LayerMotion(opacity = t, dy = (1f - e) * 0.12f)
+            "slideleft" -> LayerMotion(opacity = t, dx = (1f - e) * 0.3f)
+            "slideright" -> LayerMotion(opacity = t, dx = -(1f - e) * 0.3f)
+            "typewriter" -> LayerMotion(reveal = t)
+            "bounce" -> {
+                val y = if (t < 1f) abs(cos(t * PI.toFloat() * 2.5f)) * (1f - t) * 0.15f else 0f
+                LayerMotion(opacity = min(1f, t * 4f), dy = y)
+            }
+            "zoom" -> LayerMotion(opacity = t, scale = 0.3f + 0.7f * e)
+            "spin" -> LayerMotion(opacity = t, scale = 0.4f + 0.6f * e, rotationDeg = -(1f - e) * 180f)
+            "drop" -> LayerMotion(opacity = min(1f, t * 2f), dy = (1f - e) * 0.3f, scale = 1f + (1f - e) * 0.3f)
+            "glitch" -> {
+                val k = 1f - t
+                val j = ((timeSec * 37f) % 1f - 0.5f) * 0.06f * k
+                LayerMotion(opacity = if (k > 0.05f && ((timeSec * 20).toInt() % 3 == 0)) 0.4f else 1f, dx = j)
+            }
+            "wipe" -> LayerMotion(reveal = t)
+            "stretch" -> LayerMotion(opacity = min(1f, t * 3f), sx = max(0.01f, e), sy = 1f + (1f - e) * 0.25f)
+            // A card turning over: width goes through zero and back.
+            "flip" -> LayerMotion(opacity = min(1f, t * 4f), sx = max(0.01f, abs(cos((1f - e) * PI.toFloat()))))
+            "spread" -> LayerMotion(opacity = t, sx = 1f + (1f - e) * 0.8f)
+            "elastic" -> {
+                val s = if (t >= 1f) 1f else 1f - cos(t * PI.toFloat() * 3.5f) * (1f - t).pow(2.2f)
+                LayerMotion(opacity = min(1f, t * 4f), scale = max(0.01f, s))
+            }
+            "rise" -> LayerMotion(opacity = t, dy = (1f - e) * 0.08f, scale = 0.85f + 0.15f * e)
+            "swirl" -> LayerMotion(opacity = t, scale = max(0.01f, e), rotationDeg = (1f - e) * 360f)
+            "letters", "letterpop" -> LayerMotion(letters = t, letterMode = id)
+            else -> LayerMotion()
+        }
+    }
+
+    fun loop(id: String, timeSec: Float): LayerMotion = when (id) {
+        "bob" -> LayerMotion(dy = sin(timeSec * 3f) * 0.012f)
+        "pulse" -> LayerMotion(scale = 1f + 0.06f * sin(timeSec * 5f))
+        "swing" -> LayerMotion(rotationDeg = sin(timeSec * 3f) * 8f)
+        "shake" -> LayerMotion(dx = sin(timeSec * 60f) * 0.006f, dy = cos(timeSec * 47f) * 0.004f)
+        "blink" -> LayerMotion(opacity = if ((timeSec * 2f) % 1f < 0.75f) 1f else 0.15f)
+        "float" -> LayerMotion(dy = sin(timeSec * 1.6f) * 0.02f, rotationDeg = sin(timeSec * 1.1f) * 3f)
+        "wave" -> LayerMotion(dy = sin(timeSec * 4f) * 0.01f, rotationDeg = sin(timeSec * 4f + 1.2f) * 4f, sx = 1f + 0.03f * sin(timeSec * 4f + 0.6f))
+        "heartbeat" -> {
+            // Two quick beats, then rest.
+            val ph = (timeSec * 1.2f) % 1f
+            val b = exp(-((ph - 0.1f) * 30f).pow(2)) + 0.7f * exp(-((ph - 0.3f) * 30f).pow(2))
+            LayerMotion(scale = 1f + 0.12f * b)
+        }
+        "jelly" -> LayerMotion(sx = 1f + 0.07f * sin(timeSec * 7f), sy = 1f - 0.07f * sin(timeSec * 7f))
+        "flicker" -> LayerMotion(opacity = 0.75f + 0.25f * ((sin(timeSec * 31f) + sin(timeSec * 17f + 1f)) * 0.5f).coerceIn(-1f, 1f))
+        else -> LayerMotion()
+    }
+
+    fun combine(a: LayerMotion, b: LayerMotion) = LayerMotion(
+        opacity = a.opacity * b.opacity,
+        scale = a.scale * b.scale,
+        dx = a.dx + b.dx,
+        dy = a.dy + b.dy,
+        rotationDeg = a.rotationDeg + b.rotationDeg,
+        reveal = min(a.reveal, b.reveal),
+        sx = a.sx * b.sx,
+        sy = a.sy * b.sy,
+        letters = min(a.letters, b.letters),
+        letterMode = a.letterMode ?: b.letterMode,
+    )
+
+    /** Motion of a layer at [localUs] from its start, for a layer lasting [durationUs]. */
+    fun at(inAnim: TextAnim?, outAnim: TextAnim?, loopAnim: TextAnim?, localUs: Long, durationUs: Long): LayerMotion {
+        val tSec = localUs / 1e6f
+        var m = LayerMotion()
+        if (inAnim != null && inAnim.id != "none" && inAnim.durationUs > 0) {
+            val d = min(inAnim.durationUs, durationUs / 2).coerceAtLeast(1)
+            if (localUs < d) m = combine(m, appear(inAnim.id, localUs.toFloat() / d, tSec))
+        }
+        if (outAnim != null && outAnim.id != "none" && outAnim.durationUs > 0) {
+            val d = min(outAnim.durationUs, durationUs / 2).coerceAtLeast(1)
+            val left = durationUs - localUs
+            if (left < d) m = combine(m, appear(outAnim.id, left.toFloat() / d, tSec))
+        }
+        if (loopAnim != null && loopAnim.id != "none") m = combine(m, loop(loopAnim.id, tSec))
+        return m.copy(opacity = m.opacity.coerceIn(0f, 1f))
+    }
+}
