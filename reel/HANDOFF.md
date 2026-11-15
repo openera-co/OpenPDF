@@ -78,7 +78,7 @@ app/src/main/java/com/reel/editor/
   ui/          Compose screens and panels (EditorScreen, Timeline, Panels*, MediaPicker, ...)
 app/src/main/cpp/  JNI core: looks (LUT generator), audio analysis, voice DSP, image ops,
                captions core; third_party/whisper.cpp vendored (v1.9.5, CPU only)
-app/src/main/assets/fx/  GLSL library: 267 transitions (211 from gl-transitions, MIT, plus 34 of
+app/src/main/assets/fx/  GLSL library: 267 transitions (211 from gl-transitions, MIT, plus 56 of
                our own), 96 filters, 110 effects, 39 clip animations, internal shaders (canvas,
                grade, overlay_blend, privacy, ...)
 tools/fx/      shader sources and tools: library.glsl (filters, effects, clip animations; built by
