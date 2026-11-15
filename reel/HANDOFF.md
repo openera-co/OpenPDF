@@ -2,7 +2,7 @@
 
 Reel is a mobile video editor for Android, in the style of CapCut and VN: a timeline with clips,
 text, stickers, shapes, overlays and audio. It has hundreds of effects and transitions, on-device
-captions, background cutout, head tracking and in-app updates. Current version: **1.6.3**
+captions, background cutout, head tracking and in-app updates. Current version: **1.6.4**
 (versionCode 10).
 
 This document is for whoever picks the project up next: how to build it, where things live, how it
@@ -211,7 +211,7 @@ APK from the installed one. It verifies the SHA-256, then installs through `Pack
 falls back to the full APK when no patch fits. Updating from 1.3.0 or older needs one manual install
 of 1.4.0 or later, because the updater arrived in 1.4.0.
 
-Release APKs sent to the owner so far: 1.0 through 1.6.3. Patches exist for 1.4.0 → 1.6.0 and
+Release APKs sent to the owner so far: 1.0 through 1.6.4. Patches exist for 1.4.0 → 1.6.0 and
 1.5.0 → 1.6.0.
 
 ---
