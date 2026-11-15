@@ -70,6 +70,7 @@ import androidx.compose.material.icons.rounded.RotateRight
 import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.Face
 import androidx.compose.material.icons.rounded.Vibration
+import androidx.compose.material.icons.rounded.SpaceBar
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Category
@@ -519,6 +520,7 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.SettingsBackupRestore, "Reverse", active = vm.targetClip()?.reversedFrom != null) { vm.reverseClip() }
                 ToolButton(Icons.Rounded.AspectRatio, "Canvas") { vm.openPanel(Panel.CANVAS) }
                 ToolButton(Icons.Rounded.AcUnit, "Freeze") { vm.freezeFrame() }
+                ToolButton(Icons.Rounded.SpaceBar, "Remove pauses") { vm.removePauses() }
                 ToolButton(Icons.Rounded.MusicNote, "Extract audio") { vm.extractAudio() }
                 ToolButton(Icons.Rounded.FindReplace, "Replace") { replace() }
                 ToolButton(Icons.Rounded.Checklist, "Select") { vm.startMultiSelect() }

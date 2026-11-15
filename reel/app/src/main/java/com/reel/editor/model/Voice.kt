@@ -122,3 +122,50 @@ object Ducking {
         return g
     }
 }
+
+/** Remove pauses: cuts the quiet stretches out of a talking clip, leaving the spoken parts. */
+object Pauses {
+    data class Result(val project: Project, val removed: Int, val removedUs: Long)
+
+    /**
+     * The clip [clipId] split into its spoken parts. Pauses shorter than [minPauseUs] stay, and
+     * each part keeps [padUs] of quiet on both sides so words aren't clipped. Null when there is
+     * nothing to cut, or the clip uses a speed curve.
+     */
+    fun remove(project: Project, clipId: String, levels: FloatArray, perSec: Int, minPauseUs: Long = 450_000, padUs: Long = 110_000): Result? {
+        val idx = project.clips.indexOfFirst { it.id == clipId }
+        if (idx < 0) return null
+        val c = project.clips[idx]
+        if (c.kind != ClipKind.VIDEO || !c.hasAudio || !c.speed.curve.isNullOrEmpty()) return null
+        val speech = Ducking.merge(Ducking.activeInSource(levels, perSec), minPauseUs)
+        val keep = ArrayList<LongRange>()
+        for (r in speech) {
+            val a = max(c.trimStartUs, r.first - padUs)
+            val b = min(c.trimEndUs, r.last + padUs)
+            if (b - a < 80_000) continue
+            val last = keep.lastOrNull()
+            if (last != null && a - last.last < minPauseUs) keep[keep.lastIndex] = last.first..b else keep += a..b
+        }
+        if (keep.isEmpty()) return null
+        val removedUs = c.trimmedDurationUs - keep.sumOf { it.last - it.first }
+        if (removedUs < minPauseUs / 2) return null
+        fun tl(media: Long) = SpeedMath.mediaToTimeline(c.speed, c.trimmedDurationUs, media - c.trimStartUs)
+        val pieces = keep.mapIndexed { i, r ->
+            val t0 = tl(r.first); val t1 = tl(r.last)
+            c.copy(
+                id = if (i == 0) c.id else newId(),
+                trimStartUs = r.first, trimEndUs = r.last,
+                fadeInUs = if (i == 0) c.fadeInUs else 0, fadeOutUs = if (i == keep.lastIndex) c.fadeOutUs else 0,
+                animIn = if (i == 0) c.animIn else null, animOut = if (i == keep.lastIndex) c.animOut else null,
+                transitionIn = if (i == 0) c.transitionIn else null,
+                keyframes = c.keyframes.filter { it.timeUs in t0..t1 }.map { it.copy(timeUs = it.timeUs - t0) },
+                volumeKeys = c.volumeKeys.filter { it.timeUs in t0..t1 }.map { it.copy(timeUs = it.timeUs - t0) },
+            )
+        }
+        val clips = project.clips.toMutableList()
+        clips.removeAt(idx)
+        clips.addAll(idx, pieces)
+        val gaps = keep.zipWithNext().count() + (if (keep.first().first > c.trimStartUs) 1 else 0) + (if (keep.last().last < c.trimEndUs) 1 else 0)
+        return Result(project.copy(clips = clips), gaps, removedUs)
+    }
+}

@@ -330,7 +330,26 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Adds a built-in sound effect at the playhead, on its own audio track. */
+    /** Cuts the quiet stretches out of the selected clip, leaving its spoken parts back to back. */
+    fun removePauses() {
+        val sel = _selection.value as? Selection.ClipSel ?: return
+        val c = _project.value.clips.firstOrNull { it.id == sel.id } ?: return
+        if (c.kind != com.reel.editor.model.ClipKind.VIDEO || !c.hasAudio) { toast("This clip has no sound"); return }
+        if (!c.speed.curve.isNullOrEmpty()) { toast("Works on clips at one speed"); return }
+        preview.pause()
+        viewModelScope.launch {
+            _busy.value = true
+            val lv = withContext(Dispatchers.Default) { (audioAnalyzer.cached(c.uri) ?: audioAnalyzer.analyze(c.uri))?.peaks }
+            _busy.value = false
+            if (lv == null) { toast("Couldn't read the sound"); return@launch }
+            val r = com.reel.editor.model.Pauses.remove(_project.value, c.id, lv, com.reel.editor.engine.CompositionFactory.LEVELS_PER_SEC)
+            if (r == null) { toast("No pauses to cut"); return@launch }
+            edit { r.project }
+            toast("Cut ${r.removed} pause${if (r.removed == 1) "" else "s"}, %.1f s".format(r.removedUs / 1e6))
+        }
+    }
+
+    /** Adds a built-in sound effect at the playhead. */
     fun addSound(s: com.reel.editor.media.SoundFx.Sfx) {
         viewModelScope.launch {
             val ctx = getApplication<Application>()
@@ -833,13 +852,19 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Saves the frame under the playhead to the gallery (Pictures/Reel), as shown in the preview. */
+    /** Saves the frame under the playhead to the gallery (Pictures/Reel) at 1080p, as it will export. */
     fun saveFrame() {
         preview.pause()
         com.reel.editor.fx.PreviewOriginal.on = false
-        val bmp = preview.snapshot() ?: run { toast("Preview isn't ready"); return }
+        val shot = preview.snapshot()
+        val pos = preview.positionUs.value
         viewModelScope.launch {
             val ctx = getApplication<Application>()
+            _busy.value = true
+            // Full HD with everything on it; the on-screen picture if that can't be made.
+            val full = runCatching { com.reel.editor.engine.StillRenderer.render(ctx, _project.value, pos, 1080) }.getOrNull()
+            _busy.value = false
+            val bmp = full ?: shot ?: run { toast("Preview isn't ready"); return@launch }
             val ok = withContext(Dispatchers.IO) {
                 runCatching {
                     val name = "Reel_${System.currentTimeMillis()}.jpg"
