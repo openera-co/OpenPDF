@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Grain
 import androidx.compose.material.icons.rounded.InvertColors
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.SlowMotionVideo
 import androidx.compose.material.icons.rounded.Opacity
 import androidx.compose.material.icons.rounded.Palette
@@ -145,6 +146,9 @@ fun SpeedPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = 28.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 listOf("0.1x", "0.5x", "1x", "2x", "10x", "100x").forEach { Text(it, style = Label.copy(color = C.Muted)) }
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.Center) {
+                PillButton(Icons.Rounded.SlowMotionVideo, "Smooth slow-mo", accent = true) { vm.smoothSlowMo(clip.id) }
             }
         } else {
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -346,6 +350,7 @@ fun AdjustPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
         SheetHeader("Adjust", Icons.Rounded.Tune, onClose = onClose, onDone = onClose)
         AdjustBody(vm, clip.adjust) { g, f -> vm.updateClip(clip.id, g) { it.copy(adjust = f(it.adjust)) } }
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PillButton(Icons.Rounded.AutoFixHigh, "Auto", accent = true) { vm.autoEnhance(clip.id) }
             PillButton(Icons.Rounded.Refresh, "Reset") { vm.updateClip(clip.id) { it.copy(adjust = Adjustments()) } }
             PillButton(Icons.Rounded.ContentCopy, "Apply to all") { vm.edit { p -> p.copy(clips = p.clips.map { it.copy(adjust = clip.adjust) }) }; vm.toast("Applied to all clips") }
         }

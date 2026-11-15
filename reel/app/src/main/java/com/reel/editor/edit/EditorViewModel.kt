@@ -899,6 +899,43 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     }
     private var smoother: com.reel.editor.media.Smoother? = null
 
+    /** Quarter speed with interpolated frames, so the slow motion stays fluid. */
+    fun smoothSlowMo(clipId: String) {
+        val c = _project.value.clips.firstOrNull { it.id == clipId } ?: return
+        if (c.kind == com.reel.editor.model.ClipKind.PHOTO) return
+        updateClip(clipId) { it.copy(speed = com.reel.editor.model.Speed(constant = 0.25f)) }
+        if (c.smoothFrom == null) { select(Selection.ClipSel(clipId)); smoothClip() }
+    }
+
+    /** Sets exposure, contrast, white balance and colour for the clip from a few of its frames. */
+    fun autoEnhance(clipId: String) {
+        val c = _project.value.clips.firstOrNull { it.id == clipId } ?: return
+        viewModelScope.launch {
+            _busy.value = true
+            val ctx = getApplication<Application>()
+            val stats = withContext(Dispatchers.Default) {
+                runCatching {
+                    val px = ArrayList<Int>()
+                    fun take(b: android.graphics.Bitmap) {
+                        val s = android.graphics.Bitmap.createScaledBitmap(b, 96, (96 * b.height / b.width.coerceAtLeast(1)).coerceAtLeast(16), true)
+                        val a = IntArray(s.width * s.height); s.getPixels(a, 0, s.width, 0, 0, s.width, s.height); px.addAll(a.toList())
+                    }
+                    if (c.kind == com.reel.editor.model.ClipKind.PHOTO) {
+                        ctx.contentResolver.openInputStream(Uri.parse(c.uri))?.use { android.graphics.BitmapFactory.decodeStream(it) }?.let(::take)
+                    } else {
+                        val times = (0 until 5).map { c.trimStartUs + (c.trimmedDurationUs * (it + 0.5) / 5).toLong() }
+                        com.reel.editor.track.FrameSampler(ctx, c.uri, 240).sample(times, { false }) { _, b -> take(b) }
+                    }
+                    if (px.isEmpty()) null else com.reel.editor.model.AutoEnhance.stats(px.toIntArray())
+                }.getOrNull()
+            }
+            _busy.value = false
+            if (stats == null) { toast("Couldn't read this clip"); return@launch }
+            updateClip(clipId) { it.copy(adjust = com.reel.editor.model.AutoEnhance.adjust(stats, it.adjust)) }
+            toast("Enhanced")
+        }
+    }
+
     /** Saves the frame under the playhead to the gallery (Pictures/Reel) at 1080p, as it will export. */
     fun saveFrame() {
         preview.pause()
