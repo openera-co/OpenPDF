@@ -57,7 +57,7 @@ vec4 effect(vec2 uv) {
 }
 
 //== id: posterize | Posterize | filter | Art
-//== param: levels float 4.0 2.0 10.0
+//== param: levels float 3.0 2.0 10.0
 vec4 effect(vec2 uv) {
   vec3 c = getColor(uv).rgb;
   return vec4(floor(c * levels + 0.5) / levels, 1.0);
@@ -1007,13 +1007,13 @@ vec4 effect(vec2 uv) {
 }
 
 //== id: vivid | Vivid | filter | Color
-//== param: amount float 1.5 1.0 2.5
+//== param: amount float 1.8 1.0 2.5
 vec4 effect(vec2 uv) {
   vec3 c = getColor(uv).rgb;
   float l = luma(c);
   float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
   vec3 o = mix(vec3(l), c, mix(amount, 1.0, sat));
-  o = (o - 0.5) * 1.08 + 0.5;
+  o = (o - 0.5) * 1.12 + 0.5;
   return vec4(clamp(o, 0.0, 1.0), 1.0);
 }
 
@@ -1313,8 +1313,8 @@ vec4 effect(vec2 uv) {
   float wsum = 0.0;
   for (int i = -2; i <= 2; i++) {
     for (int j = -2; j <= 2; j++) {
-      vec3 s = getColor(uv + vec2(float(i), float(j)) * px * 1.5).rgb;
-      float w = exp(-dot(s - c, s - c) * 40.0) * exp(-float(i * i + j * j) * 0.2);
+      vec3 s = getColor(uv + vec2(float(i), float(j)) * px * 2.0).rgb;
+      float w = exp(-dot(s - c, s - c) * 18.0) * exp(-float(i * i + j * j) * 0.2);
       acc += s * w;
       wsum += w;
     }
@@ -2000,8 +2000,8 @@ vec4 effect(vec2 uv) {
 //== id: anim_heart | Heart | anim | Shape
 vec4 effect(vec2 uv) {
   vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);
-  vec2 q = (uv - vec2(0.5, 0.45)) * asp / max(0.001, uProgress * 1.8);
-  q.y = -q.y;
+  // uv.y points up: the lobes sit on top, the point below.
+  vec2 q = (uv - vec2(0.5, 0.55)) * asp / max(0.001, uProgress * 1.8);
   q.y -= sqrt(abs(q.x)) * 0.5;
   float show = smoothstep(0.62, 0.58, length(q));
   if (uProgress > 0.99) show = 1.0;
