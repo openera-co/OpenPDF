@@ -2663,3 +2663,194 @@ vec4 effect(vec2 uv) {
   if (p > 0.99) return vec4(getColor(uv).rgb, 1.0);
   return vec4(getColor(clamp(q, 0.0, 1.0)).rgb * inside, 1.0);
 }
+
+//== id: vaporwave | Vaporwave | filter | Color
+vec4 effect(vec2 uv) {
+  vec3 c = getColor(uv).rgb;
+  float l = luma(c);
+  vec3 g = mix(vec3(0.35, 0.1, 0.55), vec3(1.0, 0.45, 0.8), smoothstep(0.1, 0.6, l));
+  g = mix(g, vec3(0.4, 1.0, 0.95), smoothstep(0.65, 1.0, l));
+  vec3 o = mix(c, g, 0.6);
+  return vec4(clamp(o * 1.05, 0.0, 1.0), 1.0);
+}
+
+//== id: rednoir | Red noir | filter | Color
+vec4 effect(vec2 uv) {
+  vec3 c = getColor(uv).rgb;
+  vec3 hsv = rgb2hsv(c);
+  float red = (1.0 - smoothstep(0.03, 0.08, min(hsv.x, 1.0 - hsv.x))) * smoothstep(0.25, 0.5, hsv.y);
+  float l = luma(c);
+  float g = clamp((l - 0.5) * 1.6 + 0.5, 0.0, 1.0);
+  vec3 o = mix(vec3(g), c * vec3(1.2, 0.6, 0.6), red);
+  return vec4(clamp(o, 0.0, 1.0), 1.0);
+}
+
+//== id: littleplanet | Little planet | filter | Lens
+vec4 effect(vec2 uv) {
+  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);
+  vec2 d = (uv - 0.5) * asp;
+  float r = length(d);
+  float a = atan(d.x, -d.y);
+  // the picture wraps round a circle: the bottom edge in the middle, the sky outside
+  float y = clamp(1.0 - r * 1.25, 0.0, 1.0);
+  float x = fract(a / 6.2831853 + 0.5);
+  return vec4(getColor(vec2(x, y)).rgb, 1.0);
+}
+
+//== id: softdream | Soft dream | filter | Detail
+vec4 effect(vec2 uv) {
+  vec3 c = getColor(uv).rgb;
+  vec3 b = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    float a = float(i) * 0.785398;
+    b += getColor(uv + vec2(cos(a), sin(a)) * 0.012).rgb;
+  }
+  b /= 8.0;
+  vec3 o = max(c, b) * 0.6 + c * 0.4;
+  o = mix(o, vec3(1.0, 0.92, 0.95), 0.12) + 0.03;
+  return vec4(clamp(o, 0.0, 1.0), 1.0);
+}
+
+//== id: nightcity | Night city | filter | Color
+vec4 effect(vec2 uv) {
+  vec3 c = getColor(uv).rgb;
+  float l = luma(c);
+  vec3 o = mix(c * vec3(0.55, 0.75, 0.95), c * vec3(1.15, 0.95, 0.8), smoothstep(0.55, 0.9, l));
+  o += smoothstep(0.75, 1.0, l) * vec3(0.15, 0.08, 0.0);
+  o = (o - 0.5) * 1.15 + 0.45;
+  return vec4(clamp(o, 0.0, 1.0), 1.0);
+}
+
+//== id: matte | Matte | filter | Color
+vec4 effect(vec2 uv) {
+  vec3 c = getColor(uv).rgb;
+  vec3 o = c * 0.82 + 0.1;
+  o = mix(vec3(luma(o)), o, 0.85);
+  return vec4(o * vec3(1.0, 0.98, 0.95), 1.0);
+}
+
+//== id: speedlines | Speed lines | effect | Motion
+vec4 effect(vec2 uv) {
+  vec3 c = getColor(uv).rgb;
+  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);
+  vec2 d = (uv - 0.5) * asp;
+  float a = atan(d.y, d.x);
+  float r = length(d);
+  float k = floor(a * 40.0);
+  float flick = floor(uTime * 16.0);
+  float on = step(0.55, rand(vec2(k, flick)));
+  float w = abs(fract(a * 40.0) - 0.5);
+  float line = on * smoothstep(0.25, 0.0, w) * smoothstep(0.25, 0.7, r);
+  return vec4(mix(c, vec3(1.0), line * 0.85), 1.0);
+}
+
+//== id: filmstrip | Film strip | effect | Retro
+vec4 effect(vec2 uv) {
+  float edge = 0.09;
+  float roll = fract(uTime * 0.6);
+  vec2 q = vec2((uv.x - edge) / (1.0 - 2.0 * edge), fract(uv.y + roll));
+  float gap = step(0.97, q.y);
+  vec3 c = getColor(vec2(q.x, q.y / 0.97)).rgb;
+  if (uv.x < edge || uv.x > 1.0 - edge) {
+    float side = uv.x < edge ? uv.x / edge : (1.0 - uv.x) / edge;
+    float holes = step(abs(fract((uv.y + roll) * 12.0) - 0.5), 0.2) * step(abs(side - 0.5), 0.22);
+    return vec4(mix(vec3(0.06, 0.05, 0.04), vec3(0.9), holes), 1.0);
+  }
+  return vec4(mix(c, vec3(0.06, 0.05, 0.04), gap), 1.0);
+}
+
+//== id: hologram | Hologram | effect | Glitch
+vec4 effect(vec2 uv) {
+  float t = uTime;
+  float jitter = step(0.93, rand(vec2(floor(t * 12.0), 1.0))) * (rand(vec2(floor(uv.y * 30.0), floor(t * 12.0))) - 0.5) * 0.04;
+  vec3 c = getColor(uv + vec2(jitter, 0.0)).rgb;
+  float l = luma(c);
+  float lines = 0.75 + 0.25 * sin((uv.y + t * 0.1) * uResolution.y * 1.2);
+  float band = smoothstep(0.0, 0.05, abs(fract(uv.y - t * 0.3) - 0.5) - 0.42);
+  vec3 o = vec3(0.25, 0.85, 1.0) * (l * 1.3 + 0.1) * lines + (1.0 - band) * 0.15;
+  o *= 0.9 + 0.1 * sin(t * 30.0);
+  return vec4(min(o, vec3(1.0)), 1.0);
+}
+
+//== id: liquid | Liquid | effect | Lens
+vec4 effect(vec2 uv) {
+  float t = uTime * 0.8;
+  vec2 q = uv;
+  q.x += 0.012 * sin(uv.y * 14.0 + t * 2.0) + 0.008 * sin(uv.y * 31.0 - t * 3.0);
+  q.y += 0.012 * cos(uv.x * 12.0 + t * 1.7) + 0.008 * cos(uv.x * 27.0 + t * 2.3);
+  return vec4(getColor(clamp(q, 0.0, 1.0)).rgb, 1.0);
+}
+
+//== id: pixelsortfx | Pixel sort | effect | Glitch
+vec4 effect(vec2 uv) {
+  float t = floor(uTime * 6.0);
+  float row = floor(uv.y * 60.0);
+  float sorting = step(0.6, rand(vec2(row, t)));
+  vec3 c = getColor(uv).rgb;
+  if (sorting < 0.5) return vec4(c, 1.0);
+  // bright pixels smear to the right along the row
+  vec3 acc = c;
+  float best = luma(c);
+  for (int i = 1; i < 12; i++) {
+    vec3 s = getColor(uv - vec2(float(i) * 0.012, 0.0)).rgb;
+    float l = luma(s);
+    if (l > best && l > 0.45) { best = l; acc = s; }
+  }
+  return vec4(acc, 1.0);
+}
+
+//== id: infinitezoom | Infinite zoom | effect | Lens
+vec4 effect(vec2 uv) {
+  float z = pow(2.0, fract(uTime * 0.35));
+  vec2 d = (uv - 0.5) / z;
+  // the frame shows itself inset at half size, again and again
+  vec3 c = vec3(0.0);
+  float s = 1.0;
+  for (int i = 0; i < 4; i++) {
+    vec2 q = d / s + 0.5;
+    if (max(abs(q.x - 0.5), abs(q.y - 0.5)) <= 0.5) c = getColor(q).rgb * (1.0 - 0.06 * float(i));
+    s *= 0.5;
+  }
+  return vec4(c, 1.0);
+}
+
+//== id: heartframe | Heart frame | effect | Party
+vec4 effect(vec2 uv) {
+  vec3 c = getColor(uv).rgb;
+  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);
+  vec2 q = (uv - vec2(0.5, 0.55)) * asp / (0.9 + 0.04 * sin(uTime * 6.0));
+  q.y -= sqrt(abs(q.x)) * 0.5;
+  float d = length(q);
+  float inside = smoothstep(0.62, 0.58, d);
+  vec3 pink = vec3(1.0, 0.45, 0.65);
+  float rim = smoothstep(0.66, 0.62, d) - inside;
+  vec3 o = mix(mix(c * 0.4 + pink * 0.35, c, inside), vec3(1.0, 0.75, 0.85), rim);
+  return vec4(o, 1.0);
+}
+
+//== id: flames | Flames | effect | Weather
+vec4 effect(vec2 uv) {
+  vec3 c = getColor(uv).rgb;
+  vec2 q = vec2(uv.x * 6.0, uv.y * 3.0 - uTime * 1.6);
+  float n = noise(q) * 0.55 + noise(q * 2.1 + 3.0) * 0.3 + noise(q * 4.3) * 0.15;
+  float h = 0.45 * n + 0.08;
+  float f = smoothstep(h, h - 0.18, uv.y);
+  vec3 fire = mix(vec3(1.0, 0.25, 0.0), vec3(1.0, 0.9, 0.35), smoothstep(0.2, 0.8, f));
+  return vec4(min(c * (1.0 - f * 0.6) + fire * f, vec3(1.0)), 1.0);
+}
+
+//== id: glowstars | Twinkle | effect | Light
+vec4 effect(vec2 uv) {
+  vec3 c = getColor(uv).rgb;
+  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);
+  for (int i = 0; i < 16; i++) {
+    float fi = float(i);
+    vec2 p = vec2(rand(vec2(fi, 11.0)), rand(vec2(fi, 13.0)));
+    float tw = pow(max(0.0, sin(uTime * (2.0 + rand(vec2(fi, 3.0)) * 3.0) + fi * 1.7)), 6.0);
+    vec2 d = (uv - p) * asp;
+    float cross = 0.0006 / (abs(d.x * d.y) + 0.0004) * exp(-dot(d, d) * 300.0);
+    float core = 0.0003 / (dot(d, d) + 0.0003);
+    c += vec3(1.0, 0.95, 0.85) * (cross * 0.4 + core * 0.6) * tw;
+  }
+  return vec4(min(c, vec3(1.0)), 1.0);
+}

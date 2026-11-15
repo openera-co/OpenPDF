@@ -7322,5 +7322,113 @@
 "license": "MIT",
 "params": [],
 "code": "vec4 transition(vec2 uv) {\n  float n = 10.0;\n  float f = fract(uv.y * n);\n  float id = floor(uv.y * n);\n  float t = clamp(progress * 1.4 - id / n * 0.4, 0.0, 1.0);\n  float a = t * 3.14159;\n  float h = abs(cos(a));\n  float fy = (f - 0.5) / max(h, 0.001) + 0.5;\n  if (fy < 0.0 || fy > 1.0) return vec4(getToColor(uv).rgb * 0.35, 1.0);\n  vec2 q = vec2(uv.x, (id + fy) / n);\n  vec3 c = t < 0.5 ? getFromColor(q).rgb : getToColor(q).rgb;\n  return vec4(c * (0.55 + 0.45 * h), 1.0);\n}"
+},
+{
+"id": "rt_zigzag",
+"name": "Zigzag Wipe",
+"category": "Shape",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "vec4 transition(vec2 uv) {\n  float teeth = abs(fract(uv.y * 8.0) - 0.5) * 0.12;\n  float edge = progress * 1.2 - 0.06;\n  float m = smoothstep(edge + 0.005, edge - 0.005, uv.x + teeth - 0.03);\n  if (progress >= 1.0) m = 1.0;\n  return mix(getFromColor(uv), getToColor(uv), m);\n}"
+},
+{
+"id": "rt_stripes",
+"name": "Stripe Slide",
+"category": "Slide",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "vec4 transition(vec2 uv) {\n  float n = 8.0;\n  float row = floor(uv.y * n);\n  float dir = mod(row, 2.0) < 1.0 ? 1.0 : -1.0;\n  float delay = row / n * 0.3;\n  float t = clamp((progress - delay) / 0.7, 0.0, 1.0);\n  t = t * t * (3.0 - 2.0 * t);\n  float x = uv.x + dir * (1.0 - t);\n  if (x >= 0.0 && x <= 1.0 && t > 0.0) return getToColor(vec2(x, uv.y));\n  return getFromColor(uv);\n}"
+},
+{
+"id": "rt_pixelzoom",
+"name": "Pixel Zoom",
+"category": "Glitch",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "vec4 transition(vec2 uv) {\n  float k = sin(progress * 3.14159);\n  float cells = mix(400.0, 12.0, k * k);\n  vec2 n = vec2(cells, cells / ratio);\n  vec2 q = (floor(uv * n) + 0.5) / n;\n  if (k < 0.02) q = uv;\n  q = (q - 0.5) / (1.0 + k * 0.15) + 0.5;\n  return progress < 0.5 ? getFromColor(q) : getToColor(q);\n}"
+},
+{
+"id": "rt_rgbswap",
+"name": "RGB Arrive",
+"category": "Glitch",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float r = smoothstep(0.0, 0.6, p);\n  float g = smoothstep(0.2, 0.8, p);\n  float b = smoothstep(0.4, 1.0, p);\n  vec3 a = getFromColor(uv).rgb;\n  vec3 o = vec3(getToColor(uv + vec2((1.0 - r) * 0.1, 0.0)).r, getToColor(uv).g, getToColor(uv - vec2((1.0 - b) * 0.1, 0.0)).b);\n  return vec4(mix(a, o, vec3(r, g, b)), 1.0);\n}"
+},
+{
+"id": "rt_circlegrid",
+"name": "Dot Grid",
+"category": "Shape",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "vec4 transition(vec2 uv) {\n  vec2 n = vec2(12.0, 12.0 / ratio);\n  vec2 id = floor(uv * n);\n  vec2 f = fract(uv * n) - 0.5;\n  float delay = length(id / n - 0.5) * 0.7;\n  float t = clamp((progress - delay) / 0.3, 0.0, 1.0);\n  float m = step(length(f), t * 0.75);\n  if (progress >= 1.0) m = 1.0;\n  return mix(getFromColor(uv), getToColor(uv), m);\n}"
+},
+{
+"id": "rt_glitchblocks",
+"name": "Block Glitch",
+"category": "Glitch",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "float rand(vec2 co) { return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453); }\nvec4 transition(vec2 uv) {\n  vec2 n = vec2(10.0, 10.0 / ratio);\n  vec2 id = floor(uv * n);\n  float r = rand(id);\n  float k = sin(progress * 3.14159);\n  vec2 off = vec2((rand(id + floor(progress * 12.0)) - 0.5) * 0.08 * k, 0.0);\n  vec2 q = clamp(uv + off, 0.0, 1.0);\n  vec4 c = progress > r * 0.8 + 0.1 ? getToColor(q) : getFromColor(q);\n  return vec4(c.rgb * (1.0 + k * 0.2 * step(0.85, rand(id + 5.0))), 1.0);\n}"
+},
+{
+"id": "rt_overshoot",
+"name": "Overshoot Slide",
+"category": "Slide",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float s = 1.70158 * 1.4;\n  float e = 1.0 + (s + 1.0) * pow(p - 1.0, 3.0) + s * pow(p - 1.0, 2.0);\n  float x = uv.x - 1.0 + e;\n  float xa = uv.x + e;\n  if (x >= 0.0 && x <= 1.0) return getToColor(vec2(x, uv.y));\n  if (xa >= 0.0 && xa <= 1.0) return getFromColor(vec2(xa, uv.y));\n  return getToColor(vec2(clamp(x, 0.0, 1.0), uv.y));\n}"
+},
+{
+"id": "rt_spinout",
+"name": "Spin Out",
+"category": "Zoom",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  vec2 asp = vec2(ratio, 1.0);\n  vec2 d = (uv - 0.5) * asp;\n  if (p < 0.5) {\n    float t = p * 2.0;\n    float a = t * t * 3.0;\n    float z = 1.0 - t * t * 0.9;\n    vec2 r = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / max(z, 0.05) / asp + 0.5;\n    if (r.x < 0.0 || r.x > 1.0 || r.y < 0.0 || r.y > 1.0) return vec4(getToColor(uv).rgb * t * 0.6, 1.0);\n    return getFromColor(r);\n  }\n  float t = (1.0 - p) * 2.0;\n  float a = -t * t * 3.0;\n  float z = 1.0 + t * t * 2.0;\n  vec2 r = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / z / asp + 0.5;\n  return getToColor(clamp(r, 0.0, 1.0));\n}"
+},
+{
+"id": "rt_bookclose",
+"name": "Book Close",
+"category": "Shape",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  // the two halves of the outgoing picture swing shut towards the middle\n  float w = 0.5 * (1.0 - smoothstep(0.0, 1.0, p));\n  float dx = abs(uv.x - 0.5);\n  if (dx < w) {\n    float side = uv.x < 0.5 ? 0.0 : 1.0;\n    float local = (uv.x < 0.5 ? (uv.x - (0.5 - w)) : (uv.x - 0.5)) / max(w, 0.001);\n    float sx = side * 0.5 + local * 0.5;\n    float shade = 1.0 - 0.4 * (1.0 - w * 2.0) * (uv.x < 0.5 ? 1.0 - local : local);\n    float y = (uv.y - 0.5) * (1.0 + (1.0 - w * 2.0) * 0.15 * (uv.x < 0.5 ? 1.0 - local : local)) + 0.5;\n    if (y < 0.0 || y > 1.0) return getToColor(uv);\n    return vec4(getFromColor(vec2(sx, y)).rgb * shade, 1.0);\n  }\n  return getToColor(uv);\n}"
+},
+{
+"id": "rt_heatfade",
+"name": "Heat Fade",
+"category": "Warp",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "vec4 transition(vec2 uv) {\n  float k = sin(progress * 3.14159);\n  vec2 off = vec2(sin(uv.y * 40.0 + progress * 20.0), cos(uv.x * 30.0 + progress * 15.0)) * 0.01 * k;\n  vec2 q = clamp(uv + off, 0.0, 1.0);\n  vec4 c = mix(getFromColor(q), getToColor(q), smoothstep(0.2, 0.8, progress));\n  return vec4(c.rgb + vec3(0.12, 0.05, 0.0) * k, 1.0);\n}"
+},
+{
+"id": "rt_diagslices",
+"name": "Diagonal Slices",
+"category": "Slide",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "vec4 transition(vec2 uv) {\n  float n = 7.0;\n  float s = (uv.x + uv.y) * 0.5;\n  float id = floor(s * n);\n  float delay = id / n * 0.4;\n  float t = clamp((progress - delay) / 0.6, 0.0, 1.0);\n  t = t * t * (3.0 - 2.0 * t);\n  vec2 dir = mod(id, 2.0) < 1.0 ? vec2(1.0, -1.0) : vec2(-1.0, 1.0);\n  vec2 q = uv + dir * (1.0 - t) * 0.7;\n  if (t > 0.0 && q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0 && floor((q.x + q.y) * 0.5 * n) == id) return getToColor(q);\n  if (t >= 1.0) return getToColor(uv);\n  return getFromColor(uv);\n}"
+},
+{
+"id": "rt_flashzoom",
+"name": "Flash Zoom",
+"category": "Light",
+"author": "Reel",
+"license": "MIT",
+"params": [],
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  vec2 d = uv - 0.5;\n  float flash = exp(-pow((p - 0.5) * 7.0, 2.0));\n  vec3 c;\n  if (p < 0.5) c = getFromColor(d / (1.0 + p * 0.8) + 0.5).rgb;\n  else c = getToColor(d / (1.0 + (1.0 - p) * 0.8) + 0.5).rgb;\n  return vec4(mix(c, vec3(1.0), flash * 0.8), 1.0);\n}"
 }
 ]
