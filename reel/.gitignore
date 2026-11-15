@@ -7,3 +7,4 @@ app/build/
 signing.properties
 *.jks
 app/src/main/assets/models/speech.bin
+.kotlin/
