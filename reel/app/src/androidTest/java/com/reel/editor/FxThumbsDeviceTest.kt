@@ -92,10 +92,37 @@ class FxThumbsDeviceTest {
             }
         }
 
-        val filters = cat.filters.map { f -> f.name to FxThumbs.fx(cat, f, FxThumbs.Mode.STATIC, a, "t:a").also { check("filter", f.id, it, false) } }
-        val effects = cat.effects.map { e -> e.name to FxThumbs.fx(cat, e, FxThumbs.Mode.LOOP, a, "t:a").also { check("effect", e.id, it, true) } }
-        val anims = cat.anims.map { an -> an.name to FxThumbs.fx(cat, an, FxThumbs.Mode.ANIM_IN, a, "t:a").also { check("anim", an.id, it, true) } }
-        val trans = cat.transitions.map { t -> t.name to FxThumbs.transition(cat, t, a, b, "t:ab").also { check("transition", t.id, it, true) } }
+        val filters = cat.filters.map { f ->
+            f.name to FxThumbs.fx(cat, f, FxThumbs.Mode.STATIC, a, "t:a").also {
+                check("filter", f.id, it, false)
+                // A filter that leaves the picture as it was does nothing.
+                it?.firstOrNull()?.let { fr -> val d = diff(fr, a); if (d < 2.0) problems += "filter ${f.id}: no visible change ($d)" }
+            }
+        }
+        val effects = cat.effects.map { e ->
+            e.name to FxThumbs.fx(cat, e, FxThumbs.Mode.LOOP, a, "t:a").also {
+                check("effect", e.id, it, true)
+                it?.let { fr -> val d = fr.maxOf { x -> diff(x, a) }; if (d < 1.0) problems += "effect ${e.id}: no visible change ($d)" }
+            }
+        }
+        val anims = cat.anims.map { an ->
+            an.name to FxThumbs.fx(cat, an, FxThumbs.Mode.ANIM_IN, a, "t:a").also {
+                check("anim", an.id, it, true)
+                // When the animation is done the clip must look exactly like itself.
+                it?.lastOrNull()?.let { fr -> val d = diff(fr, a); if (d > 4.0) problems += "anim ${an.id}: end frame is not the clip ($d)" }
+            }
+        }
+        val trans = cat.transitions.map { t ->
+            t.name to FxThumbs.transition(cat, t, a, b, "t:ab").also {
+                check("transition", t.id, it, true)
+                // A transition starts on the outgoing clip and ends on the incoming one.
+                if (!it.isNullOrEmpty()) {
+                    val ds = diff(it.first(), a); val de = diff(it.last(), b)
+                    if (ds > 6.0) problems += "transition ${t.id}: does not start on clip A ($ds)"
+                    if (de > 6.0) problems += "transition ${t.id}: does not end on clip B ($de)"
+                }
+            }
+        }
 
         sheet("thumbs_filters", filters.mapNotNull { (n, f) -> f?.let { n to it[0] } })
         sheet("thumbs_effects", effects.mapNotNull { (n, f) -> f?.let { n to it[it.size / 2] } })
