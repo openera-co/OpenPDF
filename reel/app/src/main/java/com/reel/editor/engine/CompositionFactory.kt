@@ -27,7 +27,7 @@ object CompositionFactory {
 
     data class Built(val composition: Composition, val canvasWidth: Int, val canvasHeight: Int, val durationUs: Long)
 
-    fun build(context: Context, project: Project, targetHeight: Int, exportFps: Int? = null, live: com.reel.editor.fx.LivePlans? = null, audioOnly: Boolean = false): Built? {
+    fun build(context: Context, project: Project, targetHeight: Int, exportFps: Int? = null, live: com.reel.editor.fx.LivePlans? = null, audioOnly: Boolean = false, premixInto: java.io.File? = null): Built? {
         if (project.clips.isEmpty()) return null
         val catalog = FxCatalog.get(context)
         val (w, h) = RenderPlans.canvasSize(project, targetHeight)
@@ -98,19 +98,33 @@ object CompositionFactory {
             else -> 1f to { off: Long -> com.reel.editor.model.interpolateValue(volume, keys, off) * duck(off) }
         }
         val srcs = ArrayList<Src>()
-        for (a in project.audio.filter { !it.muted && it.startUs < total && it.durationUs > 0 }) {
-            val end = minOf(a.trimEndUs, a.trimStartUs + (total - a.startUs))
+        // Sounds stop a moment before the timeline's end: a lane reaching the very end (or past it
+        // by rounding) leaves the export's audio mixer waiting forever.
+        val audioEnd = total - END_GUARD_US
+        for (a in project.audio.filter { !it.muted && it.startUs < audioEnd && it.durationUs > 0 }) {
+            val end = minOf(a.trimEndUs, a.trimStartUs + (audioEnd - a.startUs))
             val duck = if (a.duck && a.kind == com.reel.editor.model.AudioKind.MUSIC) { off: Long -> com.reel.editor.model.Ducking.gainAt(speech, a.startUs + off, a.duckDb) } else null
             val (vol, extra) = gainFn(a.volume, a.volumeKeys, duck)
             srcs += Src(a.uri, a.startUs, a.trimStartUs, end, a.sourceDurationUs, voiceProcessors(a.voice) + VolumeFadeProcessor(vol, a.fadeInUs, a.fadeOutUs, end - a.trimStartUs, extraGain = extra))
         }
         val overlaysHeard = !project.tracks.isMuted(com.reel.editor.model.TrackFlags.OVERLAYS) && !project.tracks.isHidden(com.reel.editor.model.TrackFlags.OVERLAYS)
-        for (o in project.overlays.filter { overlaysHeard && it.kind == ClipKind.VIDEO && it.hasAudio && !it.muted && it.startUs < total && it.timelineDurationUs > 0 }) {
-            val end = minOf(o.trimEndUs, o.trimStartUs + (total - o.startUs))
+        for (o in project.overlays.filter { overlaysHeard && it.kind == ClipKind.VIDEO && it.hasAudio && !it.muted && it.startUs < audioEnd && it.timelineDurationUs > 0 }) {
+            val end = minOf(o.trimEndUs, o.trimStartUs + (audioEnd - o.startUs))
             val (vol, extra) = gainFn(o.volume, o.volumeKeys, null)
             srcs += Src(o.uri, o.startUs, o.trimStartUs, end, o.sourceDurationUs, listOf(VolumeFadeProcessor(vol, 0, 0, end - o.trimStartUs, extraGain = extra)))
         }
-        if (srcs.isNotEmpty()) {
+        // Export: with more than one source, mix them ourselves into one track (several audio
+        // sequences at once can stall Media3's export).
+        val premixed = if (premixInto != null && srcs.size > 1) {
+            AudioPremix.render(context, srcs.map { AudioPremix.Source(it.uri, it.startUs, it.trimStartUs, it.trimEndUs, it.fx) }, audioEnd, premixInto)
+        } else false
+        if (premixed) {
+            val frames = (premixInto!!.length() - 44) / 4
+            val dur = frames * 1_000_000L / AudioPremix.RATE
+            sequences += EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
+                .addItem(EditedMediaItem.Builder(MediaItem.fromUri(android.net.Uri.fromFile(premixInto))).setRemoveVideo(true).setDurationUs(dur).build())
+                .build()
+        } else if (srcs.isNotEmpty()) {
             // Overlapping sources are split across sequences so each sequence stays gap-ordered.
             val lanes = ArrayList<MutableList<Src>>()
             for (a in srcs.sortedBy { it.startUs }) {
@@ -145,6 +159,9 @@ object CompositionFactory {
      * so this leaves room for several on top of music and a voiceover.
      */
     const val MAX_AUDIO_LANES = 8
+
+    /** How long before the timeline's end music, sounds and overlay audio stop. */
+    const val END_GUARD_US = 50_000L
 
     /** Waveform levels per second, as produced by AudioAnalyzer. */
     const val LEVELS_PER_SEC = 40

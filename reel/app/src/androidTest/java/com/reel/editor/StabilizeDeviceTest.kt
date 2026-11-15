@@ -60,7 +60,7 @@ class StabilizeDeviceTest {
         val done = CountDownLatch(1)
         var error: ExportException? = null
         Handler(Looper.getMainLooper()).post {
-            Transformer.Builder(ctx).addListener(object : Transformer.Listener {
+            Transformer.Builder(ctx).setMaxDelayBetweenMuxerSamplesMs(120_000).addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) = done.countDown()
                 override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) { error = exportException; done.countDown() }
             }).build().start(built.composition, out.absolutePath)

@@ -85,6 +85,79 @@ object AudioDecoder {
         }
     }
 
+    /** Interleaved stereo frames (mono is doubled, extra channels dropped). */
+    class Stereo(val lr: FloatArray, val sampleRate: Int) { val frames get() = lr.size / 2 }
+
+    /** Blocking. The range [startUs, endUs) as stereo floats at the track's own rate, or null. */
+    fun decodeStereo(context: Context, uri: String, startUs: Long, endUs: Long, cancelled: () -> Boolean = { false }): Stereo? {
+        val ex = MediaExtractor()
+        var codec: MediaCodec? = null
+        try {
+            ex.setDataSource(context, Uri.parse(uri), null)
+            val track = (0 until ex.trackCount).firstOrNull { ex.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true } ?: return null
+            ex.selectTrack(track)
+            val fmt = ex.getTrackFormat(track)
+            codec = MediaCodec.createDecoderByType(fmt.getString(MediaFormat.KEY_MIME)!!)
+            codec.configure(fmt, null, null, 0)
+            codec.start()
+            var rate = fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            var channels = fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            var float = false
+            ex.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+            val out = Builder()
+            val info = MediaCodec.BufferInfo()
+            var inputDone = false
+            var outputDone = false
+            while (!outputDone) {
+                if (cancelled()) return null
+                if (!inputDone) {
+                    val i = codec.dequeueInputBuffer(5_000)
+                    if (i >= 0) {
+                        val n = ex.readSampleData(codec.getInputBuffer(i)!!, 0)
+                        if (n < 0 || ex.sampleTime > endUs) {
+                            codec.queueInputBuffer(i, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            inputDone = true
+                        } else {
+                            codec.queueInputBuffer(i, 0, n, ex.sampleTime, 0)
+                            ex.advance()
+                        }
+                    }
+                }
+                val o = codec.dequeueOutputBuffer(info, 5_000)
+                if (o == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    val f = codec.outputFormat
+                    rate = f.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    channels = f.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                    float = f.containsKey(MediaFormat.KEY_PCM_ENCODING) && f.getInteger(MediaFormat.KEY_PCM_ENCODING) == android.media.AudioFormat.ENCODING_PCM_FLOAT
+                } else if (o >= 0) {
+                    if (info.size > 0) {
+                        val buf = codec.getOutputBuffer(o)!!
+                        buf.position(info.offset).limit(info.offset + info.size)
+                        val b = buf.slice().order(ByteOrder.nativeOrder())
+                        val frames = info.size / (channels * if (float) 4 else 2)
+                        val frameUs = 1_000_000.0 / rate
+                        for (k in 0 until frames) {
+                            val t = info.presentationTimeUs + (k * frameUs).toLong()
+                            if (t < startUs || t >= endUs) continue
+                            fun at(c: Int) = if (float) b.getFloat((k * channels + c) * 4) else b.getShort((k * channels + c) * 2) / 32768f
+                            val l = at(0)
+                            out.add(l); out.add(if (channels > 1) at(1) else l)
+                        }
+                    }
+                    codec.releaseOutputBuffer(o, false)
+                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
+                }
+            }
+            return Stereo(out.build(), rate)
+        } catch (e: Exception) {
+            return null
+        } finally {
+            runCatching { codec?.stop() }
+            runCatching { codec?.release() }
+            ex.release()
+        }
+    }
+
     private fun floatToMono(buf: ByteBuffer, channels: Int): FloatArray {
         val fb = buf.slice().order(ByteOrder.nativeOrder()).asFloatBuffer()
         val frames = fb.remaining() / channels

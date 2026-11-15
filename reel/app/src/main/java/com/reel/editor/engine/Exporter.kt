@@ -58,14 +58,26 @@ object Exporter {
         val audio = format == com.reel.editor.model.ExportFormat.AUDIO
         val height = if (gif) minOf(settings.height, 360) else settings.height
         val fps = if (gif) minOf(settings.fps, 15) else settings.fps
-        val built = CompositionFactory.build(app, project, height, fps, audioOnly = audio)
         progressScale = if (gif) 0.7f else 1f
-        if (built == null) {
-            _state.value = ExportState.Failed("Nothing to export")
-            return
-        }
         val dir = File(app.cacheDir, "exports").apply { mkdirs() }
         dir.listFiles()?.forEach { it.delete() }
+        _state.value = ExportState.Running(0f, null)
+        // Mixing the sound can take a few seconds: build off the main thread, then start there.
+        Thread {
+            val built = try {
+                CompositionFactory.build(app, project, height, fps, audioOnly = audio, premixInto = File(dir, "mix.wav"))
+            } catch (e: Exception) {
+                com.reel.editor.CrashReports.error("export-build", e); null
+            }
+            main.post {
+                if (_state.value is ExportState.Cancelled) return@post
+                if (built == null) { _state.value = ExportState.Failed("Nothing to export"); return@post }
+                startBuilt(app, project, settings, built, dir, gif, audio, fps)
+            }
+        }.start()
+    }
+
+    private fun startBuilt(app: Context, project: Project, settings: ExportSettings, built: CompositionFactory.Built, dir: File, gif: Boolean, audio: Boolean, fps: Int) {
         val base = "${project.name.replace(Regex("[^A-Za-z0-9_-]"), "_").ifEmpty { "Reel" }}_${System.currentTimeMillis()}"
         val out = File(dir, if (audio) "$base.m4a" else "$base.mp4")
         val mime = if (settings.hevc) MimeTypes.VIDEO_H265 else MimeTypes.VIDEO_H264
@@ -79,6 +91,9 @@ object Exporter {
             .setAudioMimeType(MimeTypes.AUDIO_AAC)
             .setEncoderFactory(encoder)
             .setPortraitEncodingEnabled(true)
+            // Heavy effects on a slow phone can leave long gaps between output samples; only a
+            // really stuck export should fail.
+            .setMaxDelayBetweenMuxerSamplesMs(120_000)
             .addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                     transformer = null

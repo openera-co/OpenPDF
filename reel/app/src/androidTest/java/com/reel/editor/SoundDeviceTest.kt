@@ -78,21 +78,21 @@ class SoundDeviceTest {
     @Test
     fun laneProbe() {
         val n = InstrumentationRegistry.getArguments().getString("lanes")?.toInt() ?: return
-        overlapping(n)
+        overlapping(n, InstrumentationRegistry.getArguments().getString("filler") ?: "wind", InstrumentationRegistry.getArguments().getString("spacing")?.toLong() ?: 50_000L)
     }
 
     /** Five quiet sounds hold five lanes; a sixth, loud one must still be heard. */
     @Test
     fun manyOverlappingSoundsAreAllMixed() = overlapping(5)
 
-    private fun overlapping(quiet: Int) {
+    private fun overlapping(quiet: Int, fillerId: String = "wind", spacingUs: Long = 50_000L) {
         val v = File(ctx.cacheDir, "a.mp4")
         inst.context.assets.open("a.mp4").use { i -> v.outputStream().use { i.copyTo(it) } }
         val clip = MediaProbe.probeClip(ctx, Uri.fromFile(v))!!.copy(muted = true)
-        val wind = SoundFx.byId("wind")!!
+        val wind = SoundFx.byId(fillerId)!!
         val wf = SoundFx.file(ctx.filesDir, wind)
         val wdur = (wf.length() - 44) / 2 * 1_000_000L / SoundFx.RATE
-        val fillers = (0 until quiet).map { i -> AudioItem(uri = Uri.fromFile(wf).toString(), title = "w$i", kind = AudioKind.SOUND, sourceDurationUs = wdur, startUs = i * 50_000L, volume = 0.001f) }
+        val fillers = (0 until quiet).map { i -> AudioItem(uri = Uri.fromFile(wf).toString(), title = "w$i", kind = AudioKind.SOUND, sourceDurationUs = wdur, startUs = i * spacingUs, volume = 0.001f) }
         val kick = SoundFx.byId("kick")!!
         val kf = SoundFx.file(ctx.filesDir, kick)
         val kdur = (kf.length() - 44) / 2 * 1_000_000L / SoundFx.RATE
@@ -108,12 +108,13 @@ class SoundDeviceTest {
     }
 
     private fun export(p: Project): File {
-        val built = CompositionFactory.build(ctx, p, 360, 30)!!
+        // As the exporter does: extra audio is mixed into one track first.
+        val built = CompositionFactory.build(ctx, p, 360, 30, premixInto = File(ctx.cacheDir, "mix.wav"))!!
         val out = File(ctx.cacheDir, "sounds.mp4").apply { delete() }
         val done = CountDownLatch(1)
         var error: ExportException? = null
         Handler(Looper.getMainLooper()).post {
-            Transformer.Builder(ctx).addListener(object : Transformer.Listener {
+            Transformer.Builder(ctx).setMaxDelayBetweenMuxerSamplesMs(120_000).addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) = done.countDown()
                 override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) { error = exportException; done.countDown() }
             }).build().start(built.composition, out.absolutePath)
