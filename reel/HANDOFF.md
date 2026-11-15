@@ -78,8 +78,8 @@ app/src/main/java/com/reel/editor/
   ui/          Compose screens and panels (EditorScreen, Timeline, Panels*, MediaPicker, ...)
 app/src/main/cpp/  JNI core: looks (LUT generator), audio analysis, voice DSP, image ops,
                captions core; third_party/whisper.cpp vendored (v1.9.5, CPU only)
-app/src/main/assets/fx/  GLSL library: 267 transitions (211 from gl-transitions, MIT, plus 56 of
-               our own), 96 filters, 110 effects, 39 clip animations, internal shaders (canvas,
+app/src/main/assets/fx/  GLSL library: 279 transitions (211 from gl-transitions, MIT, plus 68 of
+               our own), 102 filters, 119 effects, 39 clip animations, internal shaders (canvas,
                grade, overlay_blend, privacy, ...)
 tools/fx/      shader sources and tools: library.glsl (filters, effects, clip animations; built by
                build_library.py), reel_transitions.glsl (our transitions; build_transitions.py),
@@ -125,7 +125,8 @@ The preview and the export share this path. Only the preview honours "hold to se
 ## 4. Features (all shipped and tested unless noted)
 
 - **Editing:** trim, split, reorder, speed and speed curves, freeze, replace, duplicate, reverse,
-  crop, rotate, flip, extract audio, transitions.
+  crop, rotate, flip, extract audio, transitions, remove pauses (`model/Voice.kt` `Pauses`: cuts
+  quiet stretches longer than 450 ms out of a talking clip, keeping 110 ms around the words).
 - **Selection:** multi-select, copy and paste style, undo and redo with a history list.
 - **Text templates:** 34 ready-made designs in 7 categories (titles, lower thirds, social, quotes,
   neon, retro, moments), built from text plus shapes and staggered animations
@@ -136,9 +137,15 @@ The preview and the export share this path. Only the preview honours "hold to se
 - **Look:** 100+ looks, `.cube` LUT import, adjustments, curves, HSL, filters, effects, clip masks,
   chroma key, background cutout.
 - **Motion:** keyframes on everything, a value graph, a bezier easing editor, head tracking
-  (layers follow a head), auto reframe, and face blur that follows the face.
+  (layers follow a head), auto reframe, face blur that follows the face, and stabilization
+  (`model/Stabilize.kt`, `track/Stabilizer.kt`: block matching at 160 px with a coarse whole-frame
+  pass, a robust shift-and-turn fit, Gaussian smoothing of the camera path, then clip keyframes
+  that cancel the shake with the least zoom that hides the edges; Light, Normal, Strong).
 - **Audio:** music, voiceover recording, text to speech, voice effects and enhancer, auto-duck,
-  volume keyframes, beat markers (auto and manual).
+  volume keyframes, beat markers (auto and manual), and 36 sound effects in 4 groups
+  (`media/SoundFx.kt`): made by a small synthesizer in code, so nothing to license, rendered once
+  to WAV in app storage. Export mixes music, sounds and overlay audio into one track first
+  (`engine/AudioPremix.kt`), so any number can overlap.
 - **Beat detection** (`cpp/beat_tracker.cpp`): bass-weighted multi-band log spectral flux, tempo
   from a mean tempogram with a prior around 120 BPM, dynamic-programming beat placement (Ellis 2007,
   as in librosa) that follows tempo drift, a check that moves beats onto the kick when it locked onto
@@ -152,8 +159,10 @@ The preview and the export share this path. Only the preview honours "hold to se
 - **Timeline:** per-type lanes, vertical scroll, and a track column with eye, mute and lock per
   track.
 - **Preview:** drag, pinch and twist with snap guides; two-finger undo; three-finger redo;
-  hold-to-see-original; safe-area overlays for TikTok, Reels and Shorts; save frame.
-- **Export:** 720p to 4K, 24 to 60 fps, HEVC option, platform presets, GIF, sound only.
+  hold-to-see-original; safe-area overlays for TikTok, Reels and Shorts; save frame at 1080p
+  with every layer (`engine/StillRenderer.kt` runs a second player off screen into an ImageReader).
+- **Export:** 720p to 4K, 24 to 60 fps, HEVC option, platform presets, GIF (one palette made from
+  the video's own colours by median cut, shared by every frame), sound only.
 - **Projects:** drafts, duplicate, share and import as `.reelproj`, settings.
 - **In-app updates** through small binary patches (see section 6).
 - **Crash reporting** with Sentry, release builds only.
@@ -162,9 +171,9 @@ The preview and the export share this path. Only the preview honours "hold to se
 
 ## 5. Testing
 
-- **JVM unit tests:** 81, in `app/src/test`. Run with `gradle :app:testDebugUnitTest`. The GIF and
+- **JVM unit tests:** 96, in `app/src/test`. Run with `gradle :app:testDebugUnitTest`. The GIF and
   update-patch tests shell out to `python3` (and Pillow); they are skipped if those are missing.
-- **Device tests:** 26, in `app/src/androidTest`. They run on an emulator or a phone with
+- **Device tests:** 33, in `app/src/androidTest`. They run on an emulator or a phone with
   `gradle :app:assembleDebugAndroidTest`, then
   `adb shell am instrument -w com.reel.editor.debug.test/androidx.test.runner.AndroidJUnitRunner`.
   They export real videos and check pixels: layers, overlays, adjustment layers, crop, face blur,
@@ -225,10 +234,11 @@ Release APKs sent to the owner so far: 1.0 through 1.6.5. Patches exist for 1.4.
 - The text panel plus the keyboard leaves a small preview on short phones.
 - Caption translation only goes into English; that is a limit of the model.
 - The `.reelproj` format copies every media file, so packed projects can be large.
-- The GIF palette is a fixed 252 colours with ordered dithering. It is fast and doesn't flicker,
-  but gradients band a little.
-- Save frame captures the preview's own resolution (the screen width, about 600 to 1080 px wide), not
-  the export resolution.
+- Stabilization cancels shifts and turns, not rolling-shutter wobble or zoom; very large shakes are
+  only partly cancelled so the zoom stays under 8 to 22 percent.
+- Remove pauses works on clips at one speed (not speed curves) and leaves layers above in place.
+- On the software emulator, exports with heavy audio can go more than 25 s between output samples;
+  the exporter allows 2 minutes before calling an export stuck.
 - Not tapped through on the emulator yet: caption Merge and the Share project send sheet. Their
   logic is covered by unit and device tests.
 
@@ -236,10 +246,9 @@ Release APKs sent to the owner so far: 1.0 through 1.6.5. Patches exist for 1.4.
 
 ## 8. Backlog (agreed, not built)
 
-- Stabilization; smooth slow motion (frame interpolation); proxy editing for 4K.
+- Smooth slow motion (frame interpolation); proxy editing for 4K.
 - Tracking any object, not just heads; separating voice from music.
-- Sound effects and royalty-free music libraries; one-tap video templates. These need
-  licensed content.
+- A royalty-free music library; one-tap video templates. These need licensed content.
 - A first-run walkthrough of the gestures; tablet and landscape layout.
 - Translating the UI into other languages. All strings are currently hard-coded in Compose and need
   moving to `strings.xml`.
