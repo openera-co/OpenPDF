@@ -8,7 +8,6 @@ import android.media.ImageReader
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
-import androidx.media3.common.Player
 import androidx.media3.common.util.Size
 import androidx.media3.transformer.CompositionPlayer
 import com.reel.editor.model.Project
@@ -32,16 +31,18 @@ object StillRenderer {
         val reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 3)
         val lock = Any()
         var latest: Image? = null
+        // Frames that reached the reader since the seek was asked for.
+        var fresh = 0
+        var afterSeek = false
         // Keep only the newest frame so the player never waits on us.
         reader.setOnImageAvailableListener({ r ->
             val img = r.acquireLatestImage() ?: return@setOnImageAvailableListener
-            synchronized(lock) { latest?.close(); latest = img }
+            synchronized(lock) { latest?.close(); latest = img; if (afterSeek) fresh++ }
         }, bg)
         val player = CompositionPlayer.Builder(context).build()
         try {
             withTimeoutOrNull(20_000) {
                 suspendCancellableCoroutine { cont ->
-                    var seeking = false
                     fun grab() {
                         // Copy on the reader's thread, then hand the bitmap back.
                         bg.post {
@@ -58,23 +59,24 @@ object StillRenderer {
                             main.post { if (cont.isActive) cont.resume(bmp) }
                         }
                     }
-                    player.addListener(object : Player.Listener {
-                        override fun onPlaybackStateChanged(state: Int) {
-                            if (state != Player.STATE_READY) return
-                            if (!seeking) {
-                                seeking = true
-                                player.seekTo(positionUs.coerceIn(0, (built.durationUs - 34_000).coerceAtLeast(0)) / 1000)
-                                // A seek to where the player already is may not pass through loading again.
-                                main.postDelayed({ if (cont.isActive) grab() }, 2_500)
-                            } else {
-                                // Ready at the position: give the frame a moment to reach the reader.
-                                main.postDelayed({ if (cont.isActive) grab() }, 400)
-                            }
+                    // Seek before preparing: a paused player draws its first frame where it stands and
+                    // doesn't redraw for a later seek. Wait for that frame, then a moment for a newer one.
+                    var waited = 0
+                    fun poll() {
+                        if (!cont.isActive) return
+                        val n = synchronized(lock) { fresh }
+                        when {
+                            n > 0 -> main.postDelayed({ if (cont.isActive) grab() }, 300)
+                            waited >= 15_000 -> grab()
+                            else -> { waited += 100; main.postDelayed({ poll() }, 100) }
                         }
-                    })
+                    }
+                    synchronized(lock) { afterSeek = true; fresh = 0 }
                     player.setVideoSurface(reader.surface, Size(w, h))
                     player.setComposition(built.composition)
+                    player.seekTo(positionUs.coerceIn(0, (built.durationUs - 34_000).coerceAtLeast(0)) / 1000)
                     player.prepare()
+                    main.postDelayed({ poll() }, 100)
                 }
             }
         } finally {
