@@ -539,6 +539,10 @@ data class AudioItem(
     val fadeOutUs: Long = 0,
     /** Beats found by analysis, in source time. Shown only when [autoBeats] is on. */
     val beatsUs: List<Long> = emptyList(),
+    /** Which beat detector found [beatsUs]; older results are detected again. */
+    val beatsVersion: Int = 0,
+    /** Tempo found with the beats, 0 if unknown. */
+    val bpm: Float = 0f,
     val autoBeats: Boolean = false,
     /** Show every Nth detected beat: 1 every beat, 2 every other, 4 once per bar. */
     val beatEvery: Int = 1,

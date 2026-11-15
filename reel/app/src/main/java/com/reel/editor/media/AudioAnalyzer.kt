@@ -31,8 +31,8 @@ class AudioAnalyzer(private val context: Context) {
         val peaks = NativeCore.peaks(samples, (seconds * peaksPerSecond).toInt().coerceAtLeast(1))
         val beats = NativeCore.beats(samples, rate)
         val bpm = beats.getOrElse(0) { 0.0 }
-        val confidence = beats.getOrElse(1) { 0.0 }
-        val beatList = if (confidence >= 0.15 && beats.size > 2) beats.drop(2).map { (it * 1e6).toLong() } else emptyList()
+        // Every track with a pulse gets its beats; the user can switch them off.
+        val beatList = if (beats.size > 2) beats.drop(2).map { (it * 1e6).toLong() } else emptyList()
         return Analysis((seconds * 1e6).toLong(), peaks, bpm, beatList).also { cache[uri] = it }
     }
 

@@ -346,7 +346,11 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 withContext(Dispatchers.Main) {
                     // Beats are analysis results, not an edit: no undo step.
                     val p = _project.value
-                    _project.value = p.copy(audio = p.audio.map { if (it.id == audioItemId && it.beatsUs.isEmpty()) it.copy(beatsUs = a.beatsUs) else it })
+                    _project.value = p.copy(audio = p.audio.map {
+                        if (it.id == audioItemId && (it.beatsUs.isEmpty() || it.beatsVersion < com.reel.editor.model.Beats.DETECTOR_VERSION))
+                            it.copy(beatsUs = a.beatsUs, beatsVersion = com.reel.editor.model.Beats.DETECTOR_VERSION, bpm = a.bpm.toFloat())
+                        else it
+                    })
                     preview.update(_project.value)
                 }
             }

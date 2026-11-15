@@ -6,6 +6,9 @@ import kotlin.math.abs
 object Beats {
     const val REMOVE_TOLERANCE_US = 150_000L
 
+    /** Version of the native beat tracker; bump when detection changes so saved beats refresh. */
+    const val DETECTOR_VERSION = 2
+
     /** Source time of one marker to timeline time for this item, or null if it is trimmed away. */
     private fun AudioItem.toTimeline(sourceUs: Long): Long? =
         if (sourceUs < trimStartUs || sourceUs > trimEndUs) null else startUs + (sourceUs - trimStartUs)

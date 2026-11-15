@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.reel.editor.edit.EditorViewModel
 import com.reel.editor.model.AudioItem
 import com.reel.editor.model.Beats
+import kotlin.math.roundToInt
 
 private val DENSITY = listOf(1, 2, 4)
 
@@ -36,12 +37,17 @@ fun BeatsPanel(vm: EditorViewModel, item: AudioItem, onClose: () -> Unit) {
     val analyzed = waveforms.containsKey(item.uri)
     val detected = item.beatsUs.isNotEmpty()
     val count = Beats.markers(item).size
+    // Detected beats show as soon as they are ready, the first time the panel opens for a track.
+    androidx.compose.runtime.LaunchedEffect(item.id, detected) {
+        if (detected && !item.autoBeats && item.markersUs.isEmpty()) vm.setAutoBeats(item.id, true)
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SheetHeader("Beats", Icons.Rounded.GraphicEq, iconTint = C.Key, onClose = onClose, onDone = onClose)
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Auto", style = Title.copy(color = if (detected) C.Text else C.Dim))
-            if (!analyzed) CircularProgressIndicator(color = C.Key, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+            if (!analyzed || (item.beatsVersion < Beats.DETECTOR_VERSION && !detected)) CircularProgressIndicator(color = C.Key, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+            else if (item.bpm > 0f) Text("${item.bpm.roundToInt()} BPM", style = Label.copy(color = C.Muted))
             Spacer(Modifier.weight(1f))
             if (detected) {
                 Segmented(listOf("Beat", "Half", "Bar"), DENSITY.indexOf(item.beatEvery).coerceAtLeast(0), { vm.setBeatEvery(item.id, DENSITY[it]) })

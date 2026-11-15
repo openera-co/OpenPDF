@@ -22,7 +22,7 @@ set(WHISPER_SDL2 OFF CACHE BOOL "" FORCE)
 set(WHISPER_CURL OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
 
-add_library(reelcore_static STATIC looks.cpp audio_analysis.cpp image_ops.cpp captions_core.cpp voice_dsp.cpp)
+add_library(reelcore_static STATIC looks.cpp audio_analysis.cpp beat_tracker.cpp image_ops.cpp captions_core.cpp voice_dsp.cpp)
 target_compile_options(reelcore_static PRIVATE -Wall -Wextra -ffast-math)
 target_link_libraries(reelcore_static PUBLIC whisper)
 

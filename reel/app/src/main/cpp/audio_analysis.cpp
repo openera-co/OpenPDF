@@ -87,67 +87,7 @@ std::vector<float> onsetEnvelope(const float* samples, size_t count, int window,
     return out;
 }
 
-BeatResult detectBeats(const float* samples, size_t count, int sampleRate) {
-    BeatResult res;
-    if (sampleRate <= 0 || count < static_cast<size_t>(sampleRate)) return res;
-    const int window = 1024, hop = 512;
-    std::vector<float> env = onsetEnvelope(samples, count, window, hop);
-    if (env.size() < 16) return res;
-    const double fps = static_cast<double>(sampleRate) / hop;
-
-    // Tempo via autocorrelation over 60..180 BPM with a mild preference near 120 BPM.
-    int minLag = static_cast<int>(std::floor(fps * 60.0 / 180.0));
-    int maxLag = static_cast<int>(std::ceil(fps * 60.0 / 60.0));
-    maxLag = std::min<int>(maxLag, static_cast<int>(env.size()) - 1);
-    double best = -1.0, total = 0.0;
-    int bestLag = 0;
-    for (int lag = std::max(1, minLag); lag <= maxLag; ++lag) {
-        double acc = 0.0;
-        for (size_t i = static_cast<size_t>(lag); i < env.size(); ++i) acc += env[i] * env[i - static_cast<size_t>(lag)];
-        acc /= static_cast<double>(env.size() - static_cast<size_t>(lag));
-        double bpm = 60.0 * fps / lag;
-        double weight = std::exp(-0.5 * std::pow(std::log2(bpm / 120.0) / 0.9, 2.0));
-        double score = acc * weight;
-        total += score;
-        if (score > best) { best = score; bestLag = lag; }
-    }
-    if (bestLag == 0) return res;
-    // Refine with parabolic interpolation around the peak.
-    auto ac = [&](int lag) {
-        double acc = 0.0;
-        for (size_t i = static_cast<size_t>(lag); i < env.size(); ++i) acc += env[i] * env[i - static_cast<size_t>(lag)];
-        return acc / static_cast<double>(env.size() - static_cast<size_t>(lag));
-    };
-    double period = bestLag;
-    if (bestLag > minLag && bestLag < maxLag) {
-        double y0 = ac(bestLag - 1), y1 = ac(bestLag), y2 = ac(bestLag + 1);
-        double den = y0 - 2 * y1 + y2;
-        if (std::fabs(den) > 1e-12) period = bestLag + 0.5 * (y0 - y2) / den;
-    }
-    res.bpm = 60.0 * fps / period;
-    int nLags = maxLag - std::max(1, minLag) + 1;
-    res.confidence = total > 0 ? std::min(1.0, best / (total / nLags) / 6.0) : 0.0;
-
-    // Phase: choose the offset whose grid collects the most onset energy.
-    double bestPhaseScore = -1.0, phase = 0.0;
-    for (int p = 0; p < static_cast<int>(std::ceil(period)); ++p) {
-        double s = 0.0;
-        for (double t = p; t < env.size(); t += period) s += env[static_cast<size_t>(std::lround(t)) < env.size() ? static_cast<size_t>(std::lround(t)) : env.size() - 1];
-        if (s > bestPhaseScore) { bestPhaseScore = s; phase = p; }
-    }
-    // Snap each grid point to the strongest onset within a small window.
-    const int snap = std::max(1, static_cast<int>(period * 0.1));
-    for (double t = phase; t < env.size(); t += period) {
-        int c = static_cast<int>(std::lround(t)), bi = c;
-        float bv = -1.f;
-        for (int k = std::max(0, c - snap); k <= std::min<int>(static_cast<int>(env.size()) - 1, c + snap); ++k) {
-            if (env[static_cast<size_t>(k)] > bv) { bv = env[static_cast<size_t>(k)]; bi = k; }
-        }
-        // Frame index -> time of the frame center.
-        res.beatTimesSec.push_back((bi * hop + window / 2.0) / sampleRate);
-    }
-    return res;
-}
+// detectBeats lives in beat_tracker.cpp.
 
 double rmsDb(const float* samples, size_t count) {
     if (count == 0 || samples == nullptr) return -120.0;

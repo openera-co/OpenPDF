@@ -145,6 +145,50 @@ static void testBeats() {
     CHECK(tiny.beatTimesSec.empty(), "too-short input must return nothing");
 }
 
+// A drum loop at the app's analysis rate: kick on every beat, loud open hats exactly between
+// beats (the classic trap for beat trackers), a bass drone, noise, and a tempo that drifts.
+static std::vector<float> drumLoop(double bpm0, double bpm1, double seconds, int sr, double offset, std::vector<double>& beats) {
+    std::vector<float> s(static_cast<size_t>(seconds * sr), 0.f);
+    unsigned seed = 11;
+    auto noise = [&]() { seed = seed * 1103515245u + 12345u; return ((seed >> 16) % 2000 / 1000.f - 1.f); };
+    for (size_t i = 0; i < s.size(); ++i) s[i] = 0.12f * static_cast<float>(std::sin(2 * M_PI * 55 * i / sr)) + 0.01f * noise();
+    for (double t = offset; t < seconds - 0.5;) {
+        double bpm = bpm0 + (bpm1 - bpm0) * t / seconds, period = 60.0 / bpm;
+        beats.push_back(t);
+        size_t k0 = static_cast<size_t>(t * sr);
+        for (size_t k = 0; k < static_cast<size_t>(sr * 0.3) && k0 + k < s.size(); ++k) {
+            double tt = static_cast<double>(k) / sr;
+            s[k0 + k] += static_cast<float>(0.9 * std::sin(2 * M_PI * (50 + 100 * std::exp(-tt * 30)) * tt) * std::exp(-tt * 10));
+        }
+        size_t h0 = static_cast<size_t>((t + period / 2) * sr);
+        for (size_t k = 0; k < static_cast<size_t>(sr * 0.08) && h0 + k < s.size(); ++k)
+            s[h0 + k] += 0.35f * noise() * static_cast<float>(std::exp(-static_cast<double>(k) / sr * 40));
+        t += period;
+    }
+    return s;
+}
+
+static void testBeatsOnDrums() {
+    const int sr = 11025;
+    struct Case { double bpm0, bpm1, offset; };
+    for (Case c : {Case{128, 128, 0.7}, Case{100, 100, 1.3}, Case{112, 126, 0.4}, Case{94, 94, 2.0}}) {
+        std::vector<double> truth;
+        auto s = drumLoop(c.bpm0, c.bpm1, 40.0, sr, c.offset, truth);
+        auto res = reel::detectBeats(s.data(), s.size(), sr);
+        // Each detected beat must sit on a kick, within 15 ms: not on the hats in between.
+        int hit = 0;
+        double worst = 0;
+        for (double t : res.beatTimesSec) {
+            double d = 1e9;
+            for (double b : truth) d = std::min(d, std::fabs(t - b));
+            if (d <= 0.015) ++hit;
+            worst = std::max(worst, d);
+        }
+        CHECK(res.beatTimesSec.size() >= truth.size() * 9 / 10, "drums %.0f-%.0f: %zu beats of %zu", c.bpm0, c.bpm1, res.beatTimesSec.size(), truth.size());
+        CHECK(hit >= static_cast<int>(res.beatTimesSec.size() * 95 / 100), "drums %.0f-%.0f: only %d of %zu beats on the kick (worst %.0f ms)", c.bpm0, c.bpm1, hit, res.beatTimesSec.size(), worst * 1000);
+    }
+}
+
 static void testRms() {
     std::vector<float> s(48000);
     for (size_t i = 0; i < s.size(); ++i) s[i] = static_cast<float>(std::sin(2 * M_PI * 440 * i / 48000.0));
@@ -178,6 +222,7 @@ int main() {
     testPeaks();
     testFft();
     testBeats();
+    testBeatsOnDrums();
     testRms();
     testPcmAndHistogram();
     if (failures) {
