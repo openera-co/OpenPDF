@@ -2,7 +2,7 @@
 
 Reel is a mobile video editor for Android, in the style of CapCut and VN: a timeline with clips,
 text, stickers, shapes, overlays and audio. It has hundreds of effects and transitions, on-device
-captions, background cutout, head tracking and in-app updates. Current version: **1.7.0**
+captions, background cutout, head tracking and in-app updates. Current version: **1.8.0**
 (versionCode 10).
 
 This document is for whoever picks the project up next: how to build it, where things live, how it
@@ -135,12 +135,20 @@ The preview and the export share this path. Only the preview honours "hold to se
   letter-by-letter), stickers, 12 shapes, overlays (picture in picture with 9 blend modes, masks
   and chroma key), adjustment layers.
 - **Look:** 100+ looks, `.cube` LUT import, adjustments, curves, HSL, filters, effects, clip masks,
-  chroma key, background cutout.
+  chroma key, background cutout, and Auto enhance (`model/AutoEnhance.kt`: exposure, contrast,
+  grey-world white balance and vibrance from 5 frames, solved against the grade shader's maths).
 - **Motion:** keyframes on everything, a value graph, a bezier easing editor, head tracking
   (layers follow a head), auto reframe, face blur that follows the face, and stabilization
   (`model/Stabilize.kt`, `track/Stabilizer.kt`: block matching at 160 px with a coarse whole-frame
   pass, a robust shift-and-turn fit, Gaussian smoothing of the camera path, then clip keyframes
-  that cancel the shake with the least zoom that hides the edges; Light, Normal, Strong).
+  that cancel the shake with the least zoom that hides the edges; Light, Normal, Strong), and
+  frame interpolation ("Smooth" in Speed, plus a Smooth slow-mo preset): `cpp/interp.cpp`
+  estimates motion with coarse-to-fine block matching on a 320 px grey copy (median and blur on
+  the vector grid), then each in-between frame pulls from both neighbours along the motion and
+  blends, letting the nearer frame win where they disagree. `media/Smoother.kt` writes a copy at
+  about 120 fps (30 fps x4, 24 x5, 60 x2) with the sound copied as is; the clip keeps the original
+  in `smoothFrom` to switch back. On a known 120 fps clip the made frames are 2.3 times closer to
+  the real ones than repeating a frame.
 - **Audio:** music, voiceover recording, text to speech, voice effects and enhancer, auto-duck,
   volume keyframes, beat markers (auto and manual), and 36 sound effects in 4 groups
   (`media/SoundFx.kt`): made by a small synthesizer in code, so nothing to license, rendered once
@@ -161,7 +169,7 @@ The preview and the export share this path. Only the preview honours "hold to se
 - **Preview:** drag, pinch and twist with snap guides; two-finger undo; three-finger redo;
   hold-to-see-original; safe-area overlays for TikTok, Reels and Shorts; save frame at 1080p
   with every layer (`engine/StillRenderer.kt` runs a second player off screen into an ImageReader).
-- **Export:** 720p to 4K, 24 to 60 fps, HEVC option, platform presets, GIF (one palette made from
+- **Export:** 720p to 4K, 24 to 120 fps, HEVC option, platform presets, GIF (one palette made from
   the video's own colours by median cut, shared by every frame), sound only.
 - **Projects:** drafts, duplicate, share and import as `.reelproj`, settings.
 - **In-app updates** through small binary patches (see section 6).
@@ -171,9 +179,9 @@ The preview and the export share this path. Only the preview honours "hold to se
 
 ## 5. Testing
 
-- **JVM unit tests:** 96, in `app/src/test`. Run with `gradle :app:testDebugUnitTest`. The GIF and
+- **JVM unit tests:** 100, in `app/src/test`. Run with `gradle :app:testDebugUnitTest`. The GIF and
   update-patch tests shell out to `python3` (and Pillow); they are skipped if those are missing.
-- **Device tests:** 33, in `app/src/androidTest`. They run on an emulator or a phone with
+- **Device tests:** 35, in `app/src/androidTest`. They run on an emulator or a phone with
   `gradle :app:assembleDebugAndroidTest`, then
   `adb shell am instrument -w com.reel.editor.debug.test/androidx.test.runner.AndroidJUnitRunner`.
   They export real videos and check pixels: layers, overlays, adjustment layers, crop, face blur,
@@ -220,7 +228,7 @@ APK from the installed one. It verifies the SHA-256, then installs through `Pack
 falls back to the full APK when no patch fits. Updating from 1.3.0 or older needs one manual install
 of 1.4.0 or later, because the updater arrived in 1.4.0.
 
-Release APKs sent to the owner so far: 1.0 through 1.7.0. Patches exist for 1.4.0 → 1.6.0 and
+Release APKs sent to the owner so far: 1.0 through 1.8.0. Patches exist for 1.4.0 → 1.6.0 and
 1.5.0 → 1.6.0.
 
 ---
@@ -236,6 +244,8 @@ Release APKs sent to the owner so far: 1.0 through 1.7.0. Patches exist for 1.4.
 - The `.reelproj` format copies every media file, so packed projects can be large.
 - Stabilization cancels shifts and turns, not rolling-shutter wobble or zoom; very large shakes are
   only partly cancelled so the zoom stays under 8 to 22 percent.
+- Smooth is slow on the software emulator (13 minutes for 3 s); phones were not timed. Encoders
+  that refuse 120 fps at the clip's size are asked for 60 fps instead (that fallback is untested).
 - Remove pauses works on clips at one speed (not speed curves) and leaves layers above in place.
 - On the software emulator, exports with heavy audio can go more than 25 s between output samples;
   the exporter allows 2 minutes before calling an export stuck.
@@ -246,7 +256,7 @@ Release APKs sent to the owner so far: 1.0 through 1.7.0. Patches exist for 1.4.
 
 ## 8. Backlog (agreed, not built)
 
-- Smooth slow motion (frame interpolation); proxy editing for 4K.
+- Proxy editing for 4K.
 - Tracking any object, not just heads; separating voice from music.
 - A royalty-free music library; one-tap video templates. These need licensed content.
 - A first-run walkthrough of the gestures; tablet and landscape layout.
