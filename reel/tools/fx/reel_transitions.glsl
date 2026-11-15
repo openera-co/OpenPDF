@@ -99,21 +99,21 @@ vec4 transition(vec2 uv) {
 
 //== id: rt_pushup | Push Up | Slide
 vec4 transition(vec2 uv) {
-  float e = 1.0 - pow(1.0 - progress, 3.0);
+  float e = 1.0 - ((1.0 - progress) * (1.0 - progress) * (1.0 - progress));
   float y = uv.y - e;
   return y > 0.0 ? getFromColor(vec2(uv.x, y)) : getToColor(vec2(uv.x, y + 1.0));
 }
 
 //== id: rt_pushdown | Push Down | Slide
 vec4 transition(vec2 uv) {
-  float e = 1.0 - pow(1.0 - progress, 3.0);
+  float e = 1.0 - ((1.0 - progress) * (1.0 - progress) * (1.0 - progress));
   float y = uv.y + e;
   return y < 1.0 ? getFromColor(vec2(uv.x, y)) : getToColor(vec2(uv.x, y - 1.0));
 }
 
 //== id: rt_stackup | Stack | Slide
 vec4 transition(vec2 uv) {
-  float e = 1.0 - pow(1.0 - progress, 3.0);
+  float e = 1.0 - ((1.0 - progress) * (1.0 - progress) * (1.0 - progress));
   float y = uv.y - (1.0 - e);
   float shade = 1.0 - 0.5 * e;
   return y > 0.0 ? getToColor(vec2(uv.x, y)) : getFromColor(0.5 + (uv - 0.5) * (1.0 + 0.1 * e)) * shade;
@@ -146,7 +146,7 @@ vec4 transition(vec2 uv) {
 //== id: rt_rotatein | Rotate In | Zoom
 vec4 transition(vec2 uv) {
   float p = progress;
-  float e = 1.0 - pow(1.0 - p, 3.0);
+  float e = 1.0 - ((1.0 - p) * (1.0 - p) * (1.0 - p));
   vec2 asp = vec2(ratio, 1.0);
   float a = (1.0 - e) * 1.2;
   vec2 d = (uv - 0.5) * asp;
@@ -232,7 +232,7 @@ vec4 transition(vec2 uv) {
   vec2 d = (uv - 0.5) * asp;
   float r = length(d);
   float front = progress * 1.3;
-  float w = exp(-pow((r - front) * 12.0, 2.0)) * 0.03;
+  float w = exp(-(((r - front) * 12.0) * ((r - front) * 12.0))) * 0.03;
   vec2 q = uv + normalize(d + 1e-5) / asp * w;
   return r < front ? getToColor(q) : getFromColor(q);
 }
@@ -344,7 +344,7 @@ vec4 transition(vec2 uv) {
 
 //== id: rt_splitreveal | Split Reveal | Slide
 vec4 transition(vec2 uv) {
-  float e = 1.0 - pow(1.0 - progress, 3.0);
+  float e = 1.0 - ((1.0 - progress) * (1.0 - progress) * (1.0 - progress));
   float half_ = e * 0.5;
   if (uv.y < 0.5 - half_) return getFromColor(vec2(uv.x, uv.y + half_));
   if (uv.y > 0.5 + half_) return getFromColor(vec2(uv.x, uv.y - half_));
@@ -427,7 +427,7 @@ vec4 transition(vec2 uv) {
   float p = progress;
   float y = 1.0 - p * 1.1 + 0.05;
   vec3 c = uv.y > y ? getToColor(uv).rgb : getFromColor(uv).rgb;
-  float line = exp(-pow((uv.y - y) * 80.0, 2.0));
+  float line = exp(-(((uv.y - y) * 80.0) * ((uv.y - y) * 80.0)));
   float glow = exp(-abs(uv.y - y) * 20.0) * 0.3;
   return vec4(min(c + vec3(0.6, 0.9, 1.0) * (line + glow) * sin(p * 3.14159), vec3(1.0)), 1.0);
 }
@@ -474,7 +474,7 @@ vec4 transition(vec2 uv) {
   float x = (uv.x + uv.y * 0.3) / 1.3;
   float edge = p * 1.4 - 0.2;
   vec3 c = x < edge ? getToColor(uv).rgb : getFromColor(uv).rgb;
-  float band = exp(-pow((x - edge) * 12.0, 2.0)) * sin(p * 3.14159);
+  float band = exp(-(((x - edge) * 12.0) * ((x - edge) * 12.0))) * sin(p * 3.14159);
   return vec4(min(c + band * 0.9, vec3(1.0)), 1.0);
 }
 
@@ -530,7 +530,7 @@ vec4 transition(vec2 uv) {
     return getFromColor(q);
   }
   float t = (p - 0.4) / 0.6;
-  float h = max(1.0 - pow(1.0 - t, 3.0), 0.004);
+  float h = max(1.0 - ((1.0 - t) * (1.0 - t) * (1.0 - t)), 0.004);
   vec2 q = vec2(uv.x, (uv.y - 0.5) / h + 0.5);
   if (q.y < 0.0 || q.y > 1.0) return vec4(0.0, 0.0, 0.0, 1.0);
   return getToColor(q);
@@ -649,9 +649,9 @@ vec4 transition(vec2 uv) {
     return getFromColor(d / z + 0.5) + vec4(vec3(pow(p * 2.0, 4.0) * 0.6), 0.0);
   }
   float t = (p - 0.5) * 2.0;
-  float z = 0.4 + 0.6 * (1.0 - pow(1.0 - t, 3.0));
+  float z = 0.4 + 0.6 * (1.0 - ((1.0 - t) * (1.0 - t) * (1.0 - t)));
   vec2 q = d / z + 0.5;
-  float fl = pow(1.0 - t, 4.0) * 0.6;
+  float fl = (((1.0 - t) * (1.0 - t)) * ((1.0 - t) * (1.0 - t))) * 0.6;
   if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) return vec4(vec3(fl), 1.0);
   return getToColor(q) + vec4(vec3(fl), 0.0);
 }
@@ -744,7 +744,9 @@ vec4 transition(vec2 uv) {
 vec4 transition(vec2 uv) {
   float p = progress;
   float s = 1.70158 * 1.4;
-  float e = 1.0 + (s + 1.0) * pow(p - 1.0, 3.0) + s * pow(p - 1.0, 2.0);
+  // (p - 1) is negative: multiply instead of pow(), which is undefined for negative bases on GPUs.
+  float q = p - 1.0;
+  float e = 1.0 + (s + 1.0) * q * q * q + s * q * q;
   float x = uv.x - 1.0 + e;
   float xa = uv.x + e;
   if (x >= 0.0 && x <= 1.0) return getToColor(vec2(x, uv.y));
@@ -818,7 +820,7 @@ vec4 transition(vec2 uv) {
 vec4 transition(vec2 uv) {
   float p = progress;
   vec2 d = uv - 0.5;
-  float flash = exp(-pow((p - 0.5) * 7.0, 2.0));
+  float flash = exp(-(((p - 0.5) * 7.0) * ((p - 0.5) * 7.0)));
   vec3 c;
   if (p < 0.5) c = getFromColor(d / (1.0 + p * 0.8) + 0.5).rgb;
   else c = getToColor(d / (1.0 + (1.0 - p) * 0.8) + 0.5).rgb;

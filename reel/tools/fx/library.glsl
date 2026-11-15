@@ -876,7 +876,7 @@ vec4 effect(vec2 uv) {
 
 //== id: anim_rise | Rise | anim | Slide
 vec4 effect(vec2 uv) {
-  float e = 1.0 - pow(1.0 - uProgress, 3.0);
+  float e = 1.0 - ((1.0 - uProgress) * (1.0 - uProgress) * (1.0 - uProgress));
   vec2 q = uv + vec2(0.0, (1.0 - e) * 0.25);
   float inside = step(q.y, 1.0);
   return vec4(getColor(q).rgb * inside * e, 1.0);
@@ -1033,7 +1033,7 @@ vec4 effect(vec2 uv) {
   c = c * vec3(1.05, 1.0, 0.9) + vec3(0.04, 0.03, 0.06);
   c = mix(vec3(luma(c)), c, 0.85);
   c = pow(c, vec3(0.95, 1.0, 1.1));
-  float v = 1.0 - 0.3 * pow(length(uv - 0.5) * 1.4, 3.0);
+  float v = 1.0 - 0.3 * ((length(uv - 0.5) * 1.4) * (length(uv - 0.5) * 1.4) * (length(uv - 0.5) * 1.4));
   return vec4(clamp(c * v, 0.0, 1.0), 1.0);
 }
 
@@ -1454,7 +1454,7 @@ vec4 effect(vec2 uv) {
   vec3 c = getColor(uv).rgb;
   vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);
   float r = length((uv - vec2(0.5, 0.4)) * asp);
-  float ring = exp(-pow((r - 0.28 - 0.02 * sin(uTime * 2.0)) * 18.0, 2.0));
+  float ring = exp(-(((r - 0.28 - 0.02 * sin(uTime * 2.0)) * 18.0) * ((r - 0.28 - 0.02 * sin(uTime * 2.0)) * 18.0)));
   return vec4(c + ring * vec3(1.0, 0.85, 0.6) * 0.45, 1.0);
 }
 
@@ -1522,7 +1522,7 @@ vec4 effect(vec2 uv) {
   vec3 c = vec3(l) * vec3(1.05, 0.95, 0.78);
   c *= 0.85 + 0.15 * rand(vec2(t, 4.0));
   c += (rand(uv * uResolution * 0.5 + t) - 0.5) * 0.1;
-  float v = 1.0 - pow(length(uv - 0.5) * 1.4, 3.0);
+  float v = 1.0 - ((length(uv - 0.5) * 1.4) * (length(uv - 0.5) * 1.4) * (length(uv - 0.5) * 1.4));
   return vec4(c * v, 1.0);
 }
 
@@ -1861,7 +1861,7 @@ vec4 effect(vec2 uv) {
 vec4 effect(vec2 uv) {
   vec2 q = uv + vec2(sin(uv.y * 12.0 + uTime * 1.8), cos(uv.x * 10.0 + uTime * 1.5)) * 0.006;
   vec3 c = getColor(q).rgb * vec3(0.6, 0.9, 1.05) + vec3(0.0, 0.05, 0.1);
-  float caust = pow(noise(uv * 10.0 + uTime * 0.6) * noise(uv * 13.0 - uTime * 0.5), 2.0) * 1.2;
+  float caust = ((noise(uv * 10.0 + uTime * 0.6) * noise(uv * 13.0 - uTime * 0.5)) * (noise(uv * 10.0 + uTime * 0.6) * noise(uv * 13.0 - uTime * 0.5))) * 1.2;
   return vec4(c + caust * vec3(0.6, 0.9, 1.0) * (1.0 - uv.y), 1.0);
 }
 
@@ -1941,7 +1941,7 @@ vec4 effect(vec2 uv) {
 //== id: anim_drop | Drop | anim | Slide
 vec4 effect(vec2 uv) {
   float p = uProgress;
-  float e = 1.0 - pow(1.0 - p, 3.0);
+  float e = 1.0 - ((1.0 - p) * (1.0 - p) * (1.0 - p));
   float b = p < 1.0 ? sin(p * 9.42) * (1.0 - p) * 0.08 : 0.0;
   vec2 q = uv + vec2(0.0, (1.0 - e) - b);
   float inside = step(0.0, q.y) * step(q.y, 1.0);
@@ -2011,7 +2011,7 @@ vec4 effect(vec2 uv) {
 //== id: anim_zoomspin | Zoom spin | anim | Basic
 vec4 effect(vec2 uv) {
   float p = uProgress;
-  float e = 1.0 - pow(1.0 - p, 3.0);
+  float e = 1.0 - ((1.0 - p) * (1.0 - p) * (1.0 - p));
   float a = (1.0 - e) * 3.14159;
   float z = max(0.02, e);
   vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);
@@ -2042,7 +2042,7 @@ vec4 effect(vec2 uv) {
 //== id: anim_stretch | Stretch | anim | Basic
 vec4 effect(vec2 uv) {
   float p = uProgress;
-  float e = 1.0 - pow(1.0 - p, 2.0);
+  float e = 1.0 - ((1.0 - p) * (1.0 - p));
   float sx = max(0.02, e);
   float sy = 1.0 + (1.0 - e) * 1.5;
   vec2 q = vec2(0.5 + (uv.x - 0.5) / sx, 0.5 + (uv.y - 0.5) / sy);
@@ -2071,7 +2071,7 @@ vec4 effect(vec2 uv) {
 //== id: anim_slidezoom | Push in | anim | Slide
 vec4 effect(vec2 uv) {
   float p = uProgress;
-  float e = 1.0 - pow(1.0 - p, 3.0);
+  float e = 1.0 - ((1.0 - p) * (1.0 - p) * (1.0 - p));
   float z = mix(1.6, 1.0, e);
   vec2 q = 0.5 + (uv - 0.5) / z + vec2(1.0 - e, 0.0) * 0.6;
   float inside = step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0);
@@ -2351,7 +2351,7 @@ vec4 effect(vec2 uv) {
   for (int i = 0; i < 3; i++) {
     float fi = float(i);
     float y = 0.75 + 0.08 * sin(uv.x * (3.0 + fi) + t * (1.0 + fi * 0.3) + fi * 2.0) + fi * 0.05;
-    float b = exp(-pow((uv.y - y) * 9.0, 2.0)) * (0.6 + 0.4 * noise(vec2(uv.x * 8.0 + t * 2.0, fi)));
+    float b = exp(-(((uv.y - y) * 9.0) * ((uv.y - y) * 9.0))) * (0.6 + 0.4 * noise(vec2(uv.x * 8.0 + t * 2.0, fi)));
     col += b * mix(vec3(0.1, 1.0, 0.5), vec3(0.5, 0.3, 1.0), fi / 2.0);
   }
   return vec4(min(c + col * 0.7, vec3(1.0)), 1.0);
@@ -2404,7 +2404,7 @@ vec4 effect(vec2 uv) {
 vec4 effect(vec2 uv) {
   vec2 cell = vec2(48.0, 48.0 * uResolution.y / uResolution.x);
   vec2 id = floor(uv * cell);
-  float k = pow(0.5 + 0.5 * sin(uTime * 2.0), 3.0);
+  float k = ((0.5 + 0.5 * sin(uTime * 2.0)) * (0.5 + 0.5 * sin(uTime * 2.0)) * (0.5 + 0.5 * sin(uTime * 2.0)));
   vec2 off = (vec2(rand(id), rand(id + 4.0)) - 0.5) * 0.2 * k * step(0.6, rand(id + 9.0));
   vec3 c = getColor(uv + off).rgb;
   return vec4(c, 1.0);
@@ -2568,7 +2568,7 @@ vec4 effect(vec2 uv) {
 //== id: anim_unfold | Unfold | anim | Shape
 vec4 effect(vec2 uv) {
   float p = uProgress;
-  float e = 1.0 - pow(1.0 - p, 3.0);
+  float e = 1.0 - ((1.0 - p) * (1.0 - p) * (1.0 - p));
   float h = max(e, 0.001);
   vec2 q = vec2(uv.x, (uv.y - 0.5) / h + 0.5);
   float inside = step(0.0, q.y) * step(q.y, 1.0);
@@ -2588,14 +2588,14 @@ vec4 effect(vec2 uv) {
 
 //== id: anim_wavein | Wave in | anim | Basic
 vec4 effect(vec2 uv) {
-  float k = pow(1.0 - uProgress, 2.0);
+  float k = ((1.0 - uProgress) * (1.0 - uProgress));
   vec2 q = uv + vec2(sin(uv.y * 20.0 + uProgress * 12.0), cos(uv.x * 16.0 + uProgress * 10.0)) * 0.04 * k;
   return vec4(getColor(clamp(q, 0.0, 1.0)).rgb * (1.0 - k * 0.6), 1.0);
 }
 
 //== id: anim_rgbin | RGB in | anim | Light
 vec4 effect(vec2 uv) {
-  float k = pow(1.0 - uProgress, 2.0) * 0.12;
+  float k = ((1.0 - uProgress) * (1.0 - uProgress)) * 0.12;
   vec3 c = vec3(getColor(uv + vec2(k, 0.0)).r, getColor(uv + vec2(0.0, k * 0.5)).g, getColor(uv - vec2(k, 0.0)).b);
   return vec4(c * min(1.0, uProgress * 3.0), 1.0);
 }
@@ -2624,9 +2624,9 @@ vec4 effect(vec2 uv) {
 //== id: anim_slideblur | Slide blur | anim | Slide
 vec4 effect(vec2 uv) {
   float p = uProgress;
-  float e = 1.0 - pow(1.0 - p, 4.0);
+  float e = 1.0 - (((1.0 - p) * (1.0 - p)) * ((1.0 - p) * (1.0 - p)));
   float off = 1.0 - e;
-  float speed = 4.0 * pow(1.0 - p, 3.0) * 0.08;
+  float speed = 4.0 * ((1.0 - p) * (1.0 - p) * (1.0 - p)) * 0.08;
   vec3 acc = vec3(0.0);
   float w = 0.0;
   for (int i = 0; i < 10; i++) {

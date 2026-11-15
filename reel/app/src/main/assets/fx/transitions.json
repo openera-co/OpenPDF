@@ -6898,7 +6898,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float e = 1.0 - pow(1.0 - progress, 3.0);\n  float y = uv.y - e;\n  return y > 0.0 ? getFromColor(vec2(uv.x, y)) : getToColor(vec2(uv.x, y + 1.0));\n}"
+"code": "vec4 transition(vec2 uv) {\n  float e = 1.0 - ((1.0 - progress) * (1.0 - progress) * (1.0 - progress));\n  float y = uv.y - e;\n  return y > 0.0 ? getFromColor(vec2(uv.x, y)) : getToColor(vec2(uv.x, y + 1.0));\n}"
 },
 {
 "id": "rt_pushdown",
@@ -6907,7 +6907,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float e = 1.0 - pow(1.0 - progress, 3.0);\n  float y = uv.y + e;\n  return y < 1.0 ? getFromColor(vec2(uv.x, y)) : getToColor(vec2(uv.x, y - 1.0));\n}"
+"code": "vec4 transition(vec2 uv) {\n  float e = 1.0 - ((1.0 - progress) * (1.0 - progress) * (1.0 - progress));\n  float y = uv.y + e;\n  return y < 1.0 ? getFromColor(vec2(uv.x, y)) : getToColor(vec2(uv.x, y - 1.0));\n}"
 },
 {
 "id": "rt_stackup",
@@ -6916,7 +6916,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float e = 1.0 - pow(1.0 - progress, 3.0);\n  float y = uv.y - (1.0 - e);\n  float shade = 1.0 - 0.5 * e;\n  return y > 0.0 ? getToColor(vec2(uv.x, y)) : getFromColor(0.5 + (uv - 0.5) * (1.0 + 0.1 * e)) * shade;\n}"
+"code": "vec4 transition(vec2 uv) {\n  float e = 1.0 - ((1.0 - progress) * (1.0 - progress) * (1.0 - progress));\n  float y = uv.y - (1.0 - e);\n  float shade = 1.0 - 0.5 * e;\n  return y > 0.0 ? getToColor(vec2(uv.x, y)) : getFromColor(0.5 + (uv - 0.5) * (1.0 + 0.1 * e)) * shade;\n}"
 },
 {
 "id": "rt_zoompunch",
@@ -6943,7 +6943,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float e = 1.0 - pow(1.0 - p, 3.0);\n  vec2 asp = vec2(ratio, 1.0);\n  float a = (1.0 - e) * 1.2;\n  vec2 d = (uv - 0.5) * asp;\n  d = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / max(e, 0.001);\n  vec2 q = 0.5 + d / asp;\n  bool inside = all(greaterThanEqual(q, vec2(0.0))) && all(lessThanEqual(q, vec2(1.0)));\n  return inside ? getToColor(q) : getFromColor(uv) * (1.0 - 0.5 * e);\n}"
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float e = 1.0 - ((1.0 - p) * (1.0 - p) * (1.0 - p));\n  vec2 asp = vec2(ratio, 1.0);\n  float a = (1.0 - e) * 1.2;\n  vec2 d = (uv - 0.5) * asp;\n  d = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / max(e, 0.001);\n  vec2 q = 0.5 + d / asp;\n  bool inside = all(greaterThanEqual(q, vec2(0.0))) && all(lessThanEqual(q, vec2(1.0)));\n  return inside ? getToColor(q) : getFromColor(uv) * (1.0 - 0.5 * e);\n}"
 },
 {
 "id": "rt_barrelroll",
@@ -7006,7 +7006,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  vec2 asp = vec2(ratio, 1.0);\n  vec2 d = (uv - 0.5) * asp;\n  float r = length(d);\n  float front = progress * 1.3;\n  float w = exp(-pow((r - front) * 12.0, 2.0)) * 0.03;\n  vec2 q = uv + normalize(d + 1e-5) / asp * w;\n  return r < front ? getToColor(q) : getFromColor(q);\n}"
+"code": "vec4 transition(vec2 uv) {\n  vec2 asp = vec2(ratio, 1.0);\n  vec2 d = (uv - 0.5) * asp;\n  float r = length(d);\n  float front = progress * 1.3;\n  float w = exp(-(((r - front) * 12.0) * ((r - front) * 12.0))) * 0.03;\n  vec2 q = uv + normalize(d + 1e-5) / asp * w;\n  return r < front ? getToColor(q) : getFromColor(q);\n}"
 },
 {
 "id": "rt_shutter",
@@ -7105,7 +7105,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float e = 1.0 - pow(1.0 - progress, 3.0);\n  float half_ = e * 0.5;\n  if (uv.y < 0.5 - half_) return getFromColor(vec2(uv.x, uv.y + half_));\n  if (uv.y > 0.5 + half_) return getFromColor(vec2(uv.x, uv.y - half_));\n  return getToColor(0.5 + (uv - 0.5) * (1.2 - 0.2 * e));\n}"
+"code": "vec4 transition(vec2 uv) {\n  float e = 1.0 - ((1.0 - progress) * (1.0 - progress) * (1.0 - progress));\n  float half_ = e * 0.5;\n  if (uv.y < 0.5 - half_) return getFromColor(vec2(uv.x, uv.y + half_));\n  if (uv.y > 0.5 + half_) return getFromColor(vec2(uv.x, uv.y - half_));\n  return getToColor(0.5 + (uv - 0.5) * (1.2 - 0.2 * e));\n}"
 },
 {
 "id": "rt_irisblur",
@@ -7159,7 +7159,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float y = 1.0 - p * 1.1 + 0.05;\n  vec3 c = uv.y > y ? getToColor(uv).rgb : getFromColor(uv).rgb;\n  float line = exp(-pow((uv.y - y) * 80.0, 2.0));\n  float glow = exp(-abs(uv.y - y) * 20.0) * 0.3;\n  return vec4(min(c + vec3(0.6, 0.9, 1.0) * (line + glow) * sin(p * 3.14159), vec3(1.0)), 1.0);\n}"
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float y = 1.0 - p * 1.1 + 0.05;\n  vec3 c = uv.y > y ? getToColor(uv).rgb : getFromColor(uv).rgb;\n  float line = exp(-(((uv.y - y) * 80.0) * ((uv.y - y) * 80.0)));\n  float glow = exp(-abs(uv.y - y) * 20.0) * 0.3;\n  return vec4(min(c + vec3(0.6, 0.9, 1.0) * (line + glow) * sin(p * 3.14159), vec3(1.0)), 1.0);\n}"
 },
 {
 "id": "rt_pixelrain",
@@ -7195,7 +7195,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float x = (uv.x + uv.y * 0.3) / 1.3;\n  float edge = p * 1.4 - 0.2;\n  vec3 c = x < edge ? getToColor(uv).rgb : getFromColor(uv).rgb;\n  float band = exp(-pow((x - edge) * 12.0, 2.0)) * sin(p * 3.14159);\n  return vec4(min(c + band * 0.9, vec3(1.0)), 1.0);\n}"
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float x = (uv.x + uv.y * 0.3) / 1.3;\n  float edge = p * 1.4 - 0.2;\n  vec3 c = x < edge ? getToColor(uv).rgb : getFromColor(uv).rgb;\n  float band = exp(-(((x - edge) * 12.0) * ((x - edge) * 12.0))) * sin(p * 3.14159);\n  return vec4(min(c + band * 0.9, vec3(1.0)), 1.0);\n}"
 },
 {
 "id": "rt_tileflip",
@@ -7231,7 +7231,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  if (p < 0.4) {\n    float h = 1.0 - smoothstep(0.0, 0.4, p);\n    h = max(h, 0.004);\n    vec2 q = vec2(uv.x, (uv.y - 0.5) / h + 0.5);\n    float w = 1.0 + (1.0 - h) * 0.2;\n    q.x = (uv.x - 0.5) / w + 0.5;\n    if (q.y < 0.0 || q.y > 1.0) return vec4(0.0, 0.0, 0.0, 1.0);\n    return getFromColor(q);\n  }\n  float t = (p - 0.4) / 0.6;\n  float h = max(1.0 - pow(1.0 - t, 3.0), 0.004);\n  vec2 q = vec2(uv.x, (uv.y - 0.5) / h + 0.5);\n  if (q.y < 0.0 || q.y > 1.0) return vec4(0.0, 0.0, 0.0, 1.0);\n  return getToColor(q);\n}"
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  if (p < 0.4) {\n    float h = 1.0 - smoothstep(0.0, 0.4, p);\n    h = max(h, 0.004);\n    vec2 q = vec2(uv.x, (uv.y - 0.5) / h + 0.5);\n    float w = 1.0 + (1.0 - h) * 0.2;\n    q.x = (uv.x - 0.5) / w + 0.5;\n    if (q.y < 0.0 || q.y > 1.0) return vec4(0.0, 0.0, 0.0, 1.0);\n    return getFromColor(q);\n  }\n  float t = (p - 0.4) / 0.6;\n  float h = max(1.0 - ((1.0 - t) * (1.0 - t) * (1.0 - t)), 0.004);\n  vec2 q = vec2(uv.x, (uv.y - 0.5) / h + 0.5);\n  if (q.y < 0.0 || q.y > 1.0) return vec4(0.0, 0.0, 0.0, 1.0);\n  return getToColor(q);\n}"
 },
 {
 "id": "rt_spiralzoom",
@@ -7312,7 +7312,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  vec2 d = uv - 0.5;\n  if (p < 0.5) {\n    float z = 1.0 + pow(p * 2.0, 3.0) * 6.0;\n    return getFromColor(d / z + 0.5) + vec4(vec3(pow(p * 2.0, 4.0) * 0.6), 0.0);\n  }\n  float t = (p - 0.5) * 2.0;\n  float z = 0.4 + 0.6 * (1.0 - pow(1.0 - t, 3.0));\n  vec2 q = d / z + 0.5;\n  float fl = pow(1.0 - t, 4.0) * 0.6;\n  if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) return vec4(vec3(fl), 1.0);\n  return getToColor(q) + vec4(vec3(fl), 0.0);\n}"
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  vec2 d = uv - 0.5;\n  if (p < 0.5) {\n    float z = 1.0 + pow(p * 2.0, 3.0) * 6.0;\n    return getFromColor(d / z + 0.5) + vec4(vec3(pow(p * 2.0, 4.0) * 0.6), 0.0);\n  }\n  float t = (p - 0.5) * 2.0;\n  float z = 0.4 + 0.6 * (1.0 - ((1.0 - t) * (1.0 - t) * (1.0 - t)));\n  vec2 q = d / z + 0.5;\n  float fl = (((1.0 - t) * (1.0 - t)) * ((1.0 - t) * (1.0 - t))) * 0.6;\n  if (q.x < 0.0 || q.x > 1.0 || q.y < 0.0 || q.y > 1.0) return vec4(vec3(fl), 1.0);\n  return getToColor(q) + vec4(vec3(fl), 0.0);\n}"
 },
 {
 "id": "rt_blindsrotate",
@@ -7384,7 +7384,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float s = 1.70158 * 1.4;\n  float e = 1.0 + (s + 1.0) * pow(p - 1.0, 3.0) + s * pow(p - 1.0, 2.0);\n  float x = uv.x - 1.0 + e;\n  float xa = uv.x + e;\n  if (x >= 0.0 && x <= 1.0) return getToColor(vec2(x, uv.y));\n  if (xa >= 0.0 && xa <= 1.0) return getFromColor(vec2(xa, uv.y));\n  return getToColor(vec2(clamp(x, 0.0, 1.0), uv.y));\n}"
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float s = 1.70158 * 1.4;\n  // (p - 1) is negative: multiply instead of pow(), which is undefined for negative bases on GPUs.\n  float q = p - 1.0;\n  float e = 1.0 + (s + 1.0) * q * q * q + s * q * q;\n  float x = uv.x - 1.0 + e;\n  float xa = uv.x + e;\n  if (x >= 0.0 && x <= 1.0) return getToColor(vec2(x, uv.y));\n  if (xa >= 0.0 && xa <= 1.0) return getFromColor(vec2(xa, uv.y));\n  return getToColor(vec2(clamp(x, 0.0, 1.0), uv.y));\n}"
 },
 {
 "id": "rt_spinout",
@@ -7429,6 +7429,6 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  vec2 d = uv - 0.5;\n  float flash = exp(-pow((p - 0.5) * 7.0, 2.0));\n  vec3 c;\n  if (p < 0.5) c = getFromColor(d / (1.0 + p * 0.8) + 0.5).rgb;\n  else c = getToColor(d / (1.0 + (1.0 - p) * 0.8) + 0.5).rgb;\n  return vec4(mix(c, vec3(1.0), flash * 0.8), 1.0);\n}"
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  vec2 d = uv - 0.5;\n  float flash = exp(-(((p - 0.5) * 7.0) * ((p - 0.5) * 7.0)));\n  vec3 c;\n  if (p < 0.5) c = getFromColor(d / (1.0 + p * 0.8) + 0.5).rgb;\n  else c = getToColor(d / (1.0 + (1.0 - p) * 0.8) + 0.5).rgb;\n  return vec4(mix(c, vec3(1.0), flash * 0.8), 1.0);\n}"
 }
 ]
