@@ -62,7 +62,7 @@ import com.reel.editor.model.ExportSettings
 import com.reel.editor.model.TimelineMath
 
 private val HEIGHTS = listOf(720 to "720p", 1080 to "1080p", 1440 to "2K", 2160 to "4K")
-private val RATES = listOf(24, 25, 30, 50, 60)
+private val RATES = listOf(24, 25, 30, 50, 60, 90, 120)
 
 /** One tap: what each platform plays best. Short-video apps want 9:16 at 1080p, plain H.264. */
 private class Preset(val name: String, val settings: ExportSettings, val vertical: Boolean)

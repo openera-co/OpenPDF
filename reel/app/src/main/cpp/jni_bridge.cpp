@@ -15,6 +15,7 @@
 #include "whisper.h"
 #include "image_ops.h"
 #include "looks.h"
+#include "interp.h"
 
 namespace {
 jstring str(JNIEnv* env, const char* s) { return env->NewStringUTF(s); }
@@ -244,6 +245,25 @@ JNIEXPORT jint JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceDrain(J
 
 JNIEXPORT jint JNICALL Java_com_reel_editor_nativebridge_NativeCore_voiceLatency(JNIEnv*, jobject, jlong h) {
     return reinterpret_cast<reel::VoiceChain*>(h)->latency();
+}
+
+/** Fills each of [outs] with the frame [times][i] of the way from a to b (RGBA, w x h, stride). */
+JNIEXPORT jboolean JNICALL Java_com_reel_editor_nativebridge_NativeCore_interpolate(JNIEnv* env, jobject, jobject a, jobject b, jint w, jint h, jint stride, jobjectArray outs, jfloatArray times) {
+    auto* pa = static_cast<uint8_t*>(env->GetDirectBufferAddress(a));
+    auto* pb = static_cast<uint8_t*>(env->GetDirectBufferAddress(b));
+    if (!pa || !pb || w < 8 || h < 8) return JNI_FALSE;
+    const jsize n = env->GetArrayLength(outs);
+    if (env->GetArrayLength(times) != n) return JNI_FALSE;
+    std::vector<float> t(n);
+    env->GetFloatArrayRegion(times, 0, n, t.data());
+    reel::Flow flow = reel::estimateFlow(pa, pb, w, h, stride);
+    for (jsize i = 0; i < n; ++i) {
+        jobject o = env->GetObjectArrayElement(outs, i);
+        auto* po = static_cast<uint8_t*>(env->GetDirectBufferAddress(o));
+        if (po) reel::interpolateFrame(pa, pb, w, h, stride, flow, t[i], po);
+        env->DeleteLocalRef(o);
+    }
+    return JNI_TRUE;
 }
 
 }  // extern "C"

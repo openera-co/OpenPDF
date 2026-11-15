@@ -806,7 +806,7 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     val work: StateFlow<Pair<String, Float>?> = _work
     private var reverser: com.reel.editor.media.Reverser? = null
 
-    fun cancelWork() { reverser?.cancelled = true }
+    fun cancelWork() { reverser?.cancelled = true; smoother?.cancelled = true }
 
     /** Plays the selected clip backwards (a reversed copy is made once), or back forwards. */
     fun reverseClip() {
@@ -851,6 +851,53 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    /**
+     * Frame interpolation: swaps the selected clip for a copy with new frames made between the
+     * real ones (up to 120 fps), so slow motion stays fluid. Again to go back to the original.
+     */
+    fun smoothClip() {
+        val sel = _selection.value as? Selection.ClipSel ?: return
+        val c = _project.value.clips.firstOrNull { it.id == sel.id } ?: return
+        if (c.kind == com.reel.editor.model.ClipKind.PHOTO) { toast("Photos don't move"); return }
+        c.smoothFrom?.let { src ->
+            updateClip(c.id) { it.copy(uri = src.uri, sourceDurationUs = src.sourceDurationUs, trimStartUs = src.trimStartUs, trimEndUs = src.trimEndUs, hasAudio = src.hasAudio, smoothFrom = null) }
+            toast("Original frames")
+            return
+        }
+        if (_work.value != null) return
+        preview.pause()
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            val dir = java.io.File(ctx.filesDir, "smooth").apply { mkdirs() }
+            val key = "${c.uri}|${c.trimStartUs}|${c.trimEndUs}".hashCode().toUInt().toString(16)
+            val out = java.io.File(dir, "smooth-$key.mp4")
+            val sm = com.reel.editor.media.Smoother(ctx).also { smoother = it }
+            _work.value = "Smooth" to 0f
+            try {
+                val ok = out.exists() || withContext(Dispatchers.IO) {
+                    if (ctx.filesDir.usableSpace < 300L shl 20) throw IllegalStateException("Not enough free space")
+                    sm.smooth(c.uri, c.trimStartUs, c.trimEndUs, c.hasAudio, out) { _work.value = "Smooth" to it }
+                }
+                if (!ok) return@launch
+                val dur = withContext(Dispatchers.IO) { MediaProbe.probeClip(ctx, Uri.fromFile(out))?.sourceDurationUs } ?: throw IllegalStateException("Smooth clip can't be read")
+                updateClip(c.id) {
+                    it.copy(
+                        uri = Uri.fromFile(out).toString(), sourceDurationUs = dur, trimStartUs = 0, trimEndUs = dur,
+                        smoothFrom = com.reel.editor.model.ReverseSource(it.uri, it.sourceDurationUs, it.trimStartUs, it.trimEndUs, it.hasAudio),
+                    )
+                }
+                toast("Smooth")
+            } catch (e: Exception) {
+                com.reel.editor.CrashReports.error("smooth", e)
+                toast(e.message ?: "Couldn't smooth this clip")
+            } finally {
+                smoother = null
+                _work.value = null
+            }
+        }
+    }
+    private var smoother: com.reel.editor.media.Smoother? = null
 
     /** Saves the frame under the playhead to the gallery (Pictures/Reel) at 1080p, as it will export. */
     fun saveFrame() {

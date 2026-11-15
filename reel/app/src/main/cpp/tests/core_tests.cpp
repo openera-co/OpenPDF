@@ -10,6 +10,7 @@
 #include "../audio_analysis.h"
 #include "../image_ops.h"
 #include "../looks.h"
+#include "../interp.h"
 
 static int failures = 0;
 #define CHECK(cond, ...)                                              \
@@ -215,6 +216,65 @@ static void testPcmAndHistogram() {
     CHECK(total == 4, "luma total %u", total);
 }
 
+// A textured scene (soft blobs) sampled with the picture moved by (ox, oy) pixels.
+static std::vector<uint8_t> scene(int w, int h, float ox, float oy) {
+    std::vector<uint8_t> img(static_cast<size_t>(w) * h * 4);
+    uint32_t seed = 7;
+    auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return (seed >> 8) / 16777216.f; };
+    struct B { float x, y, r, c[3]; };
+    std::vector<B> blobs(260);
+    for (auto& b : blobs) { b.x = rnd() * (w + 200) - 100; b.y = rnd() * (h + 200) - 100; b.r = 6 + rnd() * 16; for (float& c : b.c) c = rnd(); }
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x) {
+            float px = x - ox, py = y - oy;
+            float c[3] = {0.2f, 0.2f, 0.25f};
+            for (const auto& b : blobs) {
+                float dx = px - b.x, dy = py - b.y;
+                float k = std::exp(-(dx * dx + dy * dy) / (2 * b.r * b.r));
+                for (int i = 0; i < 3; ++i) c[i] += k * b.c[i] * 0.7f;
+            }
+            uint8_t* p = &img[(static_cast<size_t>(y) * w + x) * 4];
+            for (int i = 0; i < 3; ++i) p[i] = static_cast<uint8_t>(std::clamp(c[i], 0.f, 1.f) * 255);
+            p[3] = 255;
+        }
+    return img;
+}
+
+static double meanDiff(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b, int w, int h, int margin) {
+    double s = 0; long n = 0;
+    for (int y = margin; y < h - margin; ++y)
+        for (int x = margin; x < w - margin; ++x)
+            for (int c = 0; c < 3; ++c) { s += std::abs(a[(static_cast<size_t>(y) * w + x) * 4 + c] - b[(static_cast<size_t>(y) * w + x) * 4 + c]); ++n; }
+    return s / n;
+}
+
+static void testInterpolation() {
+    const int w = 640, h = 360;
+    for (auto [dx, dy] : {std::pair<float, float>{12.f, -6.f}, {-30.f, 10.f}, {3.5f, 2.f}}) {
+        auto a = scene(w, h, 0, 0), b = scene(w, h, dx, dy);
+        reel::Flow f = reel::estimateFlow(a.data(), b.data(), w, h, w * 4);
+        float vx, vy;
+        f.at(w / 2.f, h / 2.f, vx, vy);
+        CHECK(std::fabs(vx - dx) < 1.0f && std::fabs(vy - dy) < 1.0f, "flow (%.2f, %.2f) for (%.1f, %.1f)", vx, vy, dx, dy);
+        std::vector<uint8_t> mid(a.size());
+        reel::interpolateFrame(a.data(), b.data(), w, h, w * 4, f, 0.5f, mid.data());
+        auto truth = scene(w, h, dx / 2, dy / 2);
+        double e = meanDiff(mid, truth, w, h, 40);
+        double blend = 0;
+        {
+            std::vector<uint8_t> cross(a.size());
+            for (size_t i = 0; i < a.size(); ++i) cross[i] = static_cast<uint8_t>((a[i] + b[i] + 1) / 2);
+            blend = meanDiff(cross, truth, w, h, 40);
+        }
+        std::printf("interp (%.1f,%.1f): error %.2f, plain crossfade %.2f\n", dx, dy, e, blend);
+        CHECK(e < 2.5 && e < blend * 0.35, "interpolated frame error %.2f (crossfade %.2f)", e, blend);
+        // The ends are the frames themselves.
+        std::vector<uint8_t> t0(a.size());
+        reel::interpolateFrame(a.data(), b.data(), w, h, w * 4, f, 0.f, t0.data());
+        CHECK(meanDiff(t0, a, w, h, 0) < 0.6, "t=0 is frame A (%.2f)", meanDiff(t0, a, w, h, 0));
+    }
+}
+
 int main() {
     testIdentityLut();
     testLookCatalog();
@@ -225,6 +285,7 @@ int main() {
     testBeatsOnDrums();
     testRms();
     testPcmAndHistogram();
+    testInterpolation();
     if (failures) {
         std::fprintf(stderr, "%d failure(s)\n", failures);
         return 1;

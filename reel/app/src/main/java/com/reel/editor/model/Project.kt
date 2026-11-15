@@ -115,6 +115,8 @@ data class Clip(
     val crop: CropRect = CropRect(),
     /** Set while the clip plays a reversed copy: what to go back to. */
     val reversedFrom: ReverseSource? = null,
+    /** Set when frame interpolation made a smooth copy: the clip as it was before. */
+    val smoothFrom: ReverseSource? = null,
     /** A blurred or pixelated region (usually a face), fixed or following tracked keyframes. */
     val privacy: Privacy? = null,
     val adjust: Adjustments = Adjustments(),

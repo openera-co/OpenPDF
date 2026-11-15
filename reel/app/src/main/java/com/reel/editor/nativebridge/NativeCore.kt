@@ -64,4 +64,10 @@ object NativeCore {
     external fun voiceDrain(handle: Long, out: java.nio.ByteBuffer, maxFrames: Int): Int
 
     external fun voiceLatency(handle: Long): Int
+
+    /**
+     * Frame interpolation: fills each of [outs] (direct RGBA buffers like [a] and [b]) with the
+     * frame [times][i] (0..1) of the way from [a] to [b], following the motion between them.
+     */
+    external fun interpolate(a: java.nio.ByteBuffer, b: java.nio.ByteBuffer, w: Int, h: Int, stride: Int, outs: Array<java.nio.ByteBuffer>, times: FloatArray): Boolean
 }

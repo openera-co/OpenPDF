@@ -70,7 +70,7 @@ fun SettingsSheet(onClose: () -> Unit) {
             listOf(720 to "720p", 1080 to "1080p", 1440 to "2K", 2160 to "4K").forEach { (h, label) -> Chip(label, height == h) { height = h; Settings.setExportHeight(ctx, h) } }
         }
         Section(Icons.Rounded.Speed, "Frame rate") {
-            listOf(24, 30, 60).forEach { f -> Chip("$f fps", fps == f) { fps = f; Settings.setExportFps(ctx, f) } }
+            listOf(24, 30, 60, 120).forEach { f -> Chip("$f fps", fps == f) { fps = f; Settings.setExportFps(ctx, f) } }
         }
         Section(Icons.Rounded.SystemUpdate, "Updates") { Chip("Update source", false) { updates = true } }
         Section(Icons.Rounded.CleaningServices, "Storage") {

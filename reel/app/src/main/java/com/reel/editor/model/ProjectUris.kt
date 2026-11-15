@@ -6,7 +6,7 @@ object ProjectUris {
     private fun isMedia(u: String) = u.startsWith("content:") || u.startsWith("file:") || u.startsWith("media/")
 
     fun all(p: Project): Set<String> = buildSet {
-        p.clips.forEach { c -> add(c.uri); c.reversedFrom?.let { add(it.uri) }; c.cutout.imageUri?.let { add(it) } }
+        p.clips.forEach { c -> add(c.uri); c.reversedFrom?.let { add(it.uri) }; c.smoothFrom?.let { add(it.uri) }; c.cutout.imageUri?.let { add(it) } }
         p.audio.forEach { add(it.uri) }
         p.overlays.forEach { add(it.uri) }
         p.stickers.forEach { add(it.source) }
@@ -16,7 +16,7 @@ object ProjectUris {
         fun m(u: String) = if (isMedia(u)) f(u) else u
         return p.copy(
             clips = p.clips.map { c ->
-                c.copy(uri = m(c.uri), reversedFrom = c.reversedFrom?.let { it.copy(uri = m(it.uri)) }, cutout = c.cutout.copy(imageUri = c.cutout.imageUri?.let(::m)))
+                c.copy(uri = m(c.uri), reversedFrom = c.reversedFrom?.let { it.copy(uri = m(it.uri)) }, smoothFrom = c.smoothFrom?.let { it.copy(uri = m(it.uri)) }, cutout = c.cutout.copy(imageUri = c.cutout.imageUri?.let(::m)))
             },
             audio = p.audio.map { it.copy(uri = m(it.uri)) },
             overlays = p.overlays.map { it.copy(uri = m(it.uri)) },

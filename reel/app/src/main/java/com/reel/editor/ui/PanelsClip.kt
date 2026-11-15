@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Grain
 import androidx.compose.material.icons.rounded.InvertColors
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.SlowMotionVideo
 import androidx.compose.material.icons.rounded.Opacity
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Refresh
@@ -163,6 +164,11 @@ fun SpeedPanel(vm: EditorViewModel, clip: Clip, onClose: () -> Unit) {
             Icon(Icons.Rounded.Mic, null, tint = C.Soft, modifier = Modifier.size(18.dp))
             Text("Keep pitch", style = Body, modifier = Modifier.padding(start = 10.dp).weight(1f))
             Switch(clip.keepPitch, { v -> vm.updateClip(clip.id) { it.copy(keepPitch = v) } }, colors = SwitchDefaults.colors(checkedTrackColor = C.Accent))
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.SlowMotionVideo, null, tint = C.Soft, modifier = Modifier.size(18.dp))
+            Text("Smooth", style = Body, modifier = Modifier.padding(start = 10.dp).weight(1f))
+            Switch(clip.smoothFrom != null, { vm.smoothClip() }, colors = SwitchDefaults.colors(checkedTrackColor = C.Accent))
         }
         Spacer(Modifier.height(8.dp))
     }
