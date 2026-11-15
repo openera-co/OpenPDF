@@ -130,7 +130,7 @@ fun AddLayerPanel(vm: EditorViewModel, onClose: () -> Unit) {
                 picker.open(PickerRequest(setOf(MediaLibrary.Kind.VIDEO, MediaLibrary.Kind.PHOTO), multi = true) { uris -> if (uris.isNotEmpty()) { vm.addOverlays(uris); vm.openPanel(null) } })
             }
             AddTile(Icons.Rounded.Tune, "Adjust", C.Accent, Modifier.weight(1f)) { vm.addAdjustmentLayer() }
-            AddTile(Icons.Rounded.TextFields, "Text", C.TextTrack, Modifier.weight(1f)) { vm.addText() }
+            AddTile(Icons.Rounded.TextFields, "Text", C.TextTrack, Modifier.weight(1f)) { vm.openPanel(Panel.TEXT_TEMPLATES) }
             AddTile(Icons.Rounded.EmojiEmotions, "Sticker", C.Effect, Modifier.weight(1f)) { vm.openPanel(Panel.STICKERS) }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -251,7 +251,7 @@ fun AdjustLayerPanel(vm: EditorViewModel, l: AdjustmentLayer, onClose: () -> Uni
             }
             else -> {
                 val tick = rememberThumbTick()
-                val src = rememberTargetSource(vm, vm.targetClip())
+                val src = rememberPlayheadSource(vm)
                 val currentFx = l.effects.firstOrNull()
                 LazyVerticalGrid(GridCells.Fixed(5), Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 190.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     item { FxTile("None", currentFx == null, Icons.Rounded.Block) { vm.updateAdjustLayer(l.id) { it.copy(effects = emptyList()) } } }

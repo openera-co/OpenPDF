@@ -74,11 +74,10 @@ fun rememberThumbTick(): State<Int> {
     return tick
 }
 
-/** Bundled preview pictures: a person, a sunset and a scene above Earth. */
+/** Bundled preview pictures: a person and a thing (an apple floating above Earth). */
 object Samples {
     const val PERSON = "person"
-    const val SCENE = "scene"
-    const val SCENE2 = "scene2"
+    const val THING = "thing"
     private val cache = HashMap<String, Bitmap?>()
 
     fun bitmap(context: android.content.Context, name: String): Bitmap? = synchronized(cache) {
@@ -100,7 +99,7 @@ fun rememberSampleSource(name: String): FxSource? {
 @Suppress("UNUSED_PARAMETER")
 @Composable
 fun rememberClipSource(vm: EditorViewModel, clip: Clip?, localUs: Long, tag: String = ""): FxSource? =
-    rememberSampleSource(when (tag) { "a" -> Samples.SCENE; "b" -> Samples.SCENE2; else -> Samples.PERSON })
+    rememberSampleSource(when (tag) { "a" -> Samples.PERSON; "b" -> Samples.THING; else -> Samples.PERSON })
 
 /**
  * The playhead in half-second steps, following it only while paused: scrubbing updates the
@@ -118,15 +117,15 @@ fun rememberPausedPlayheadUs(vm: EditorViewModel): Long? {
     return pos.takeIf { it >= 0 }
 }
 
-/** Effect and filter previews: the bundled person picture. */
+/** Filter and look previews: the bundled person picture. */
 @Composable
 @Suppress("UNUSED_PARAMETER")
 fun rememberTargetSource(vm: EditorViewModel, clip: Clip?): FxSource? = rememberSampleSource(Samples.PERSON)
 
-/** Timed effect previews: the bundled person picture. */
+/** Effect previews: the bundled thing picture. */
 @Composable
 @Suppress("UNUSED_PARAMETER")
-fun rememberPlayheadSource(vm: EditorViewModel): FxSource? = rememberSampleSource(Samples.PERSON)
+fun rememberPlayheadSource(vm: EditorViewModel): FxSource? = rememberSampleSource(Samples.THING)
 
 /** Tile for a filter, effect or clip animation, rendered with its real shader. */
 @Composable

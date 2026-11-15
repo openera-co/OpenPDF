@@ -139,6 +139,7 @@ fun TextPanel(vm: EditorViewModel, layer: TextLayer, startTab: Int, onClose: () 
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(12.dp)).background(C.Bg).padding(14.dp).focusRequester(focus),
                 )
                 LaunchedEffect(layer.id) { delay(150); runCatching { focus.requestFocus() } }
+                if (!layer.isCaption) TextStylePresets(layer.style) { st -> update { it.copy(style = st.copy(sizeSp = it.style.sizeSp, align = it.style.align, curve = it.style.curve)) } }
                 FontPicker(layer.style.font) { id -> update { it.copy(style = it.style.copy(font = id)) } }
                 Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     listOf(TextAlignment.START to Icons.Rounded.FormatAlignLeft, TextAlignment.CENTER to Icons.Rounded.FormatAlignCenter, TextAlignment.END to Icons.Rounded.FormatAlignRight).forEach { (a, ic) ->

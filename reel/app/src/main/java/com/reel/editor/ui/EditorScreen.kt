@@ -488,7 +488,7 @@ private fun Toolbar(
             Selection.None -> {
                 ToolButton(Icons.Rounded.ContentCut, "Edit") { vm.clipAtPlayhead()?.let { vm.select(Selection.ClipSel(it.id)) } ?: addClips() }
                 ToolButton(Icons.Rounded.LibraryMusic, "Audio") { vm.select(Selection.None); vm.openPanel(Panel.AUDIO) }
-                ToolButton(Icons.Rounded.TextFields, "Text") { vm.addText() }
+                ToolButton(Icons.Rounded.TextFields, "Text") { vm.openPanel(Panel.TEXT_TEMPLATES) }
                 ToolButton(Icons.Rounded.Layers, "Layer") { vm.openPanel(Panel.ADD_LAYER) }
                 ToolButton(Icons.Rounded.ClosedCaption, "Captions") { vm.openPanel(Panel.CAPTIONS) }
                 ToolButton(Icons.Rounded.EmojiEmotions, "Stickers") { vm.openPanel(Panel.STICKERS) }
@@ -621,6 +621,7 @@ private fun PanelHost(vm: EditorViewModel, panel: Panel, picking: Boolean, onPic
         Panel.FILTERS -> FiltersPanel(vm, onClose)
         Panel.ADJUST -> clip?.let { AdjustPanel(vm, it, onClose) }
         Panel.EFFECTS -> EffectsPanel(vm, onClose)
+        Panel.TEXT_TEMPLATES -> TextTemplatesPanel(vm, onClose)
         Panel.TEXT_EDIT -> text?.let { TextPanel(vm, it, 0, onClose) }
         Panel.TEXT_STYLE -> text?.let { TextPanel(vm, it, 1, onClose) }
         Panel.TEXT_ANIM -> when {

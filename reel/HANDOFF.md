@@ -2,8 +2,8 @@
 
 Reel is a mobile video editor for Android, in the style of CapCut and VN: a timeline with clips,
 text, stickers, shapes, overlays and audio. It has hundreds of effects and transitions, on-device
-captions, background cutout, head tracking and in-app updates. Current version: **1.6.0**
-(versionCode 8).
+captions, background cutout, head tracking and in-app updates. Current version: **1.6.2**
+(versionCode 10).
 
 This document is for whoever picks the project up next: how to build it, where things live, how it
 is tested and released, what is known to be weak, and what is still to do.
@@ -25,7 +25,7 @@ is tested and released, what is known to be weak, and what is still to do.
 cd reel
 tools/fetch_model.sh                 # 264 MB speech model, not in git (checksum-verified)
 gradle :app:assembleDebug            # debug build
-gradle :app:testDebugUnitTest        # 78 JVM tests (a few call python3 + Pillow if present)
+gradle :app:testDebugUnitTest        # 81 JVM tests (a few call python3 + Pillow if present)
 gradle :app:assembleRelease          # needs signing.properties + the keystore (see below)
 ```
 
@@ -97,6 +97,10 @@ tools/update/  make_update.py (update patches) + README
    layers, timed effects.
 5. **Final:** text, stickers and shapes. Captions are drawn last, so they sit on top.
 
+Effect previews in the pickers use two bundled pictures (`assets/samples`, credits in
+`CREDITS.txt`): a CC0 portrait for filters, looks and clip animations, and a public-domain NASA photo
+of an apple floating above Earth for effects. Transitions go from one to the other.
+
 The preview and the export share this path. Only the preview honours "hold to see the original".
 
 ### Data model notes
@@ -106,8 +110,12 @@ The preview and the export share this path. Only the preview honours "hold to se
   then save.
 - Captions remember the source clip and media time they came from (`anchor*` fields). When clips
   are trimmed, split or moved, the captions follow; captions whose speech was cut are removed.
-- Track switches (eye / speaker / lock) live in `Project.tracks`. Hidden tracks are left out of both
-  the preview and the export (`RenderPlans.visible`).
+- Track switches live in `Project.tracks`. They work like a desktop editor's: a hidden track stays
+  on screen at 35% opacity while paused (`RenderPlans.build(ghostHidden = true)`, pushed by
+  `PreviewController` on every play/pause), and it is left out of playback and export
+  (`RenderPlans.visible`). Hiding never deselects; only locking does. Each timeline row starts with
+  an icon for its type. Video: eye, sound, lock. Overlays: eye, sound (if any), lock. Text and
+  stickers: eye, lock. Effects: an fx on/off switch, lock. Music and voice: sound, lock, no eye.
 
 ---
 
@@ -116,6 +124,9 @@ The preview and the export share this path. Only the preview honours "hold to se
 - **Editing:** trim, split, reorder, speed and speed curves, freeze, replace, duplicate, reverse,
   crop, rotate, flip, extract audio, transitions.
 - **Selection:** multi-select, copy and paste style, undo and redo with a history list.
+- **Text templates:** 34 ready-made designs in 7 categories (titles, lower thirds, social, quotes,
+  neon, retro, moments), built from text plus shapes and staggered animations
+  (`model/TextTemplates.kt`), with live rendered tiles; one-tap style presets on any text.
 - **Layers:** text (61 bundled fonts, gradient, curved text, 30+ animations including
   letter-by-letter), stickers, 12 shapes, overlays (picture in picture with 9 blend modes, masks
   and chroma key), adjustment layers.
@@ -140,9 +151,9 @@ The preview and the export share this path. Only the preview honours "hold to se
 
 ## 5. Testing
 
-- **JVM unit tests:** 78, in `app/src/test`. Run with `gradle :app:testDebugUnitTest`. The GIF and
+- **JVM unit tests:** 81, in `app/src/test`. Run with `gradle :app:testDebugUnitTest`. The GIF and
   update-patch tests shell out to `python3` (and Pillow); they are skipped if those are missing.
-- **Device tests:** 22, in `app/src/androidTest`. They run on an emulator or a phone with
+- **Device tests:** 26, in `app/src/androidTest`. They run on an emulator or a phone with
   `gradle :app:assembleDebugAndroidTest`, then
   `adb shell am instrument -w com.reel.editor.debug.test/androidx.test.runner.AndroidJUnitRunner`.
   They export real videos and check pixels: layers, overlays, adjustment layers, crop, face blur,
@@ -184,7 +195,7 @@ APK from the installed one. It verifies the SHA-256, then installs through `Pack
 falls back to the full APK when no patch fits. Updating from 1.3.0 or older needs one manual install
 of 1.4.0 or later, because the updater arrived in 1.4.0.
 
-Release APKs sent to the owner so far: 1.0 through 1.6.0. Patches exist for 1.4.0 → 1.6.0 and
+Release APKs sent to the owner so far: 1.0 through 1.6.2. Patches exist for 1.4.0 → 1.6.0 and
 1.5.0 → 1.6.0.
 
 ---
@@ -211,7 +222,7 @@ Release APKs sent to the owner so far: 1.0 through 1.6.0. Patches exist for 1.4.
 
 - Stabilization; smooth slow motion (frame interpolation); proxy editing for 4K.
 - Tracking any object, not just heads; separating voice from music.
-- Sound effects and royalty-free music libraries; title templates; one-tap templates. These need
+- Sound effects and royalty-free music libraries; one-tap video templates. These need
   licensed content.
 - A first-run walkthrough of the gestures; tablet and landscape layout.
 - Translating the UI into other languages. All strings are currently hard-coded in Compose and need

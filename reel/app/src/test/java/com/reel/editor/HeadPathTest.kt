@@ -56,6 +56,14 @@ class HeadPathTest {
         assertTrue(TrackFlags().toggle(TrackFlags.Kind.LOCK, "text").toggle(TrackFlags.Kind.LOCK, "text").locked.isEmpty())
     }
 
+    @Test fun hiddenEffectsShowFaintlyWhileEditing() {
+        val fx = com.reel.editor.model.TimedFx(fx = com.reel.editor.model.FxRef("vhs", intensity = 0.8f), startUs = 0, durationUs = 1)
+        val p = Project(effects = listOf(fx), tracks = TrackFlags(hidden = setOf(TrackFlags.EFFECTS)))
+        assertTrue(RenderPlans.visible(p).effects.isEmpty())
+        assertEquals(0.8f * RenderPlans.GHOST, RenderPlans.ghosted(p).effects.single().fx.intensity, 1e-5f)
+        assertEquals(p.copy(tracks = TrackFlags()), RenderPlans.ghosted(p.copy(tracks = TrackFlags())))
+    }
+
     @Test fun simplifyKeepsShapeWithFewerKeys() {
         val keys = (0..100).map { i -> com.reel.editor.model.Keyframe(i * 100_000L, Transform(x = if (i < 50) 0.3f + i * 0.004f else 0.5f, y = 0.5f)) }
         val s = HeadPath.simplify(keys)

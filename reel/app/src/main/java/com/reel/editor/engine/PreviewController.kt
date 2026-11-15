@@ -44,6 +44,8 @@ class PreviewController(context: Context) {
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             _playing.value = isPlaying
+            // Hidden tracks show faintly while paused and vanish while playing.
+            if (latest?.tracks?.hidden?.isNotEmpty() == true && structure != null) refreshPlans()
             if (isPlaying) tick()
         }
 
@@ -147,10 +149,16 @@ class PreviewController(context: Context) {
             main.removeCallbacks(rebuild)
             main.postDelayed(rebuild, if (structure == null) 0 else 140)
         } else {
-            val (w, h) = RenderPlans.canvasSize(project, CompositionFactory.PREVIEW_HEIGHT)
-            live.set(RenderPlans.build(project, FxCatalog.get(app), w, h))
-            redraw()
+            refreshPlans()
         }
+    }
+
+    /** Pushes fresh plans for the latest project: hidden tracks ghosted unless playing. */
+    private fun refreshPlans() {
+        val project = latest ?: return
+        val (w, h) = RenderPlans.canvasSize(project, CompositionFactory.PREVIEW_HEIGHT)
+        live.set(RenderPlans.build(project, FxCatalog.get(app), w, h, ghostHidden = !_playing.value && !wantPlay))
+        redraw()
     }
 
     private val rebuild = Runnable {
@@ -164,6 +172,10 @@ class PreviewController(context: Context) {
             return@Runnable
         }
         durationUs = built.durationUs
+        if (p.tracks.hidden.isNotEmpty()) {
+            val (w, h) = RenderPlans.canvasSize(p, CompositionFactory.PREVIEW_HEIGHT)
+            live.set(RenderPlans.build(p, FxCatalog.get(app), w, h, ghostHidden = !wantPlay))
+        }
         val pl = ensurePlayer()
         val pos = _positionUs.value.coerceIn(0, (durationUs - 1).coerceAtLeast(0))
         _error.value = null

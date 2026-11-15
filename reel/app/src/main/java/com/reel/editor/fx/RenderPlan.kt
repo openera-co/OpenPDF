@@ -42,6 +42,8 @@ data class LayerUse(
     val text: TextLayer? = null,
     val sticker: StickerLayer? = null,
     val shape: com.reel.editor.model.ShapeLayer? = null,
+    /** On a hidden track: drawn faintly while editing, never in playback or export. */
+    val ghost: Boolean = false,
 )
 
 /** An adjustment layer resolved for rendering. */
@@ -73,6 +75,10 @@ data class RenderPlan(
     val flipV: Boolean,
     /** The video track's eye is off: draw only the layers above it, on black. */
     val hideVideo: Boolean = false,
+    /** The video track is hidden but the paused editor still shows it faintly. */
+    val ghostVideo: Boolean = false,
+    /** Overlays on a hidden track, drawn faintly while editing. */
+    val ghostOverlays: Set<String> = emptySet(),
     val crop: com.reel.editor.model.CropRect = com.reel.editor.model.CropRect(),
     val mask: com.reel.editor.model.Mask = com.reel.editor.model.Mask(),
     val privacy: com.reel.editor.model.Privacy? = null,
@@ -132,10 +138,47 @@ object RenderPlans {
     fun displaySize(c: Clip): Pair<Int, Int> =
         if (c.rotationDegrees % 180 != 0) c.sourceHeight to c.sourceWidth else c.sourceWidth to c.sourceHeight
 
-    fun build(project: Project, catalog: FxCatalog, canvasW: Int, canvasH: Int): List<RenderPlan> {
+    /** How strongly hidden items show while editing. */
+    const val GHOST = 0.35f
+
+    /**
+     * Builds every clip's plan. Export and playback leave hidden tracks out. With [ghostHidden]
+     * (the paused editor) hidden tracks are kept but drawn faintly, like hidden layers in a
+     * desktop editor that still show where they are while you work.
+     */
+    fun build(project: Project, catalog: FxCatalog, canvasW: Int, canvasH: Int, ghostHidden: Boolean = false): List<RenderPlan> {
         val placed = TimelineMath.place(project.clips)
-        val shown = visible(project)
-        return placed.map { p -> plan(shown, catalog, p, placed, canvasW, canvasH) }
+        val shown = if (ghostHidden) ghosted(project) else visible(project)
+        val t = project.tracks
+        val hidden = { k: String -> t.isHidden(k) }
+        val ghostIds = if (!ghostHidden) emptySet() else buildSet {
+            if (hidden(com.reel.editor.model.TrackFlags.TEXT)) project.texts.forEach { add(it.id) }
+            if (hidden(com.reel.editor.model.TrackFlags.STICKERS)) { project.stickers.forEach { add(it.id) }; project.shapes.forEach { add(it.id) } }
+        }
+        val ghostOverlays = if (ghostHidden && hidden(com.reel.editor.model.TrackFlags.OVERLAYS)) project.overlays.map { it.id }.toSet() else emptySet()
+        return placed.map { p ->
+            val plan = plan(shown, catalog, p, placed, canvasW, canvasH)
+            if (!ghostHidden) plan
+            else plan.copy(
+                hideVideo = false,
+                ghostVideo = hidden(com.reel.editor.model.TrackFlags.VIDEO),
+                layers = plan.layers.map { if (it.id in ghostIds) it.copy(ghost = true) else it },
+                ghostOverlays = ghostOverlays,
+            )
+        }
+    }
+
+    /** Hidden effects, filters and adjustment layers keep working while editing, but faintly. */
+    fun ghosted(project: Project): Project {
+        val t = project.tracks
+        if (!t.isHidden(com.reel.editor.model.TrackFlags.EFFECTS)) return project
+        return project.copy(
+            effects = project.effects.map { it.copy(fx = it.fx.copy(intensity = it.fx.intensity * GHOST)) },
+            filters = project.filters.map { it.copy(amount = it.amount * GHOST) },
+            adjustments = project.adjustments.map { a ->
+                a.copy(amount = a.amount * GHOST, amountKeys = a.amountKeys.map { k -> k.copy(value = k.value * GHOST) })
+            },
+        )
     }
 
     /** The project as the eye switches on the timeline leave it: hidden tracks are dropped. */

@@ -235,7 +235,7 @@ class OverlayRenderer(private val context: Context, private val catalog: FxCatal
      * Blends [o] at timeline time [global] over the canvas texture [dst] into the currently bound
      * framebuffer. Returns false if the overlay was not drawn (caller keeps [dst]).
      */
-    fun draw(o: OverlayClip, global: Long, dst: Int, canvasW: Int, canvasH: Int, outFb: Int): Boolean {
+    fun draw(o: OverlayClip, global: Long, dst: Int, canvasW: Int, canvasH: Int, outFb: Int, opacityScale: Float = 1f): Boolean {
         val local = global - o.startUs
         if (local < 0 || local >= o.timelineDurationUs) return false
         val motion = TextMotion.at(o.animIn, o.animOut, null, local, o.timelineDurationUs)
@@ -254,7 +254,7 @@ class OverlayRenderer(private val context: Context, private val catalog: FxCatal
         p.set("uCenter", t.x + motion.dx, 1f - (t.y + motion.dy))
         p.set("uScale", t.scale * motion.scale * motion.sx, t.scale * motion.scale * motion.sy)
         p.set("uRotation", Math.toRadians((t.rotation + motion.rotationDeg).toDouble()).toFloat())
-        p.set("uOpacity", (t.opacity * motion.opacity).coerceIn(0f, 1f))
+        p.set("uOpacity", (t.opacity * motion.opacity * opacityScale).coerceIn(0f, 1f))
         p.set("uBlend", o.blend.ordinal.toFloat())
         val m = o.mask
         p.set("uMaskShape", if (m.shape == MaskShape.NONE) 0f else m.shape.ordinal.toFloat())

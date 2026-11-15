@@ -53,6 +53,7 @@ data class TrackFlags(
         const val TEXT = "text"
         const val STICKERS = "stickers"
         const val OVERLAYS = "overlays"
+        const val AUDIO = "audio"
     }
 }
 

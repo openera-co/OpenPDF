@@ -27,6 +27,14 @@ import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.AutoFixHigh
+import androidx.compose.material.icons.rounded.AutoFixOff
+import androidx.compose.material.icons.rounded.TextFields
+import androidx.compose.material.icons.rounded.EmojiEmotions
+import androidx.compose.material.icons.rounded.PictureInPicture
+import androidx.compose.material.icons.rounded.Videocam
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -378,7 +386,7 @@ fun Timeline(
                 }
                 // A hidden video track stays visible on the timeline, just dimmed.
                 if (project.tracks.isHidden(TrackFlags.VIDEO) && placed.isNotEmpty()) {
-                    drawRect(C.Track.copy(alpha = 0.65f), Offset(xOf(0), clipY), Size(xOf(total) - xOf(0), clipH))
+                    drawRect(C.Track.copy(alpha = 0.45f), Offset(xOf(0), clipY), Size(xOf(total) - xOf(0), clipH))
                 }
                 // Transition markers
                 for (p in placed) if (p.index > 0) {
@@ -663,10 +671,20 @@ private fun TrackSwitch(icon: androidx.compose.ui.graphics.vector.ImageVector, l
     ) { androidx.compose.material3.Icon(icon, label, tint = if (on) C.Soft else C.Accent, modifier = Modifier.size(15.dp)) }
 }
 
+/** A small, non-clickable icon naming the kind of track a row holds. */
+@Composable
+private fun TrackBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String) {
+    Box(Modifier.size(width = 18.dp, height = 26.dp), contentAlignment = Alignment.Center) {
+        androidx.compose.material3.Icon(icon, label, tint = C.Soft.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+    }
+}
+
 /**
- * The column at the left of the timeline: per track, the switches that make sense for it. Video
- * can be muted or hidden; text, stickers and effects hidden or locked; overlays hidden, muted or
- * locked; each music lane muted. "on" is the normal state, so switched-off icons stand out.
+ * The column at the left of the timeline. Every row starts with an icon for its kind of track,
+ * then the switches that make sense for that kind:
+ * video: show, sound, lock; overlays: show, sound (if any), lock; text and stickers: show, lock;
+ * effects: on/off, lock; music and voice: sound, lock (no eye, there is nothing to see).
+ * Hidden tracks stay faintly visible while editing and are left out of playback and export.
  */
 @Composable
 private fun TrackColumn(
@@ -677,51 +695,67 @@ private fun TrackColumn(
     val density = LocalDensity.current
     val t = project.tracks
     val sw = with(density) { 26.dp.toPx() }
-    val colW = 88.dp
+    val colW = 104.dp
     Box(Modifier.width(colW).fillMaxHeight().background(androidx.compose.ui.graphics.Brush.horizontalGradient(0.75f to C.Track, 1f to C.Track.copy(alpha = 0f))))
     @Composable
     fun RowOf(y: Float, h: Float, content: @Composable () -> Unit) {
         val top = y + (h - sw) / 2
         if (top + sw < rulerH || top > heightPx) return
-        Row(Modifier.offset { IntOffset(with(density) { 6.dp.roundToPx() }, top.roundToInt()) }, horizontalArrangement = Arrangement.spacedBy(2.dp)) { content() }
+        Row(Modifier.offset { IntOffset(with(density) { 4.dp.roundToPx() }, top.roundToInt()) }, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) { content() }
     }
+    @Composable fun Eye(key: String, label: String) =
+        TrackSwitch(if (t.isHidden(key)) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, label, !t.isHidden(key)) { actions.toggleTrack(TrackFlags.Kind.HIDE, key) }
+    @Composable fun Lock(key: String, label: String) =
+        TrackSwitch(if (t.isLocked(key)) Icons.Rounded.Lock else Icons.Rounded.LockOpen, label, !t.isLocked(key)) { actions.toggleTrack(TrackFlags.Kind.LOCK, key) }
+    @Composable fun Sound(key: String, label: String) =
+        TrackSwitch(if (t.isMuted(key)) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp, label, !t.isMuted(key)) { actions.toggleTrack(TrackFlags.Kind.MUTE, key) }
     for ((g, rows) in layout.groupRows) {
         val y = rowY(rows.first)
         when (g) {
             com.reel.editor.model.TrackLayout.Group.EFFECTS -> RowOf(y, barH) {
-                TrackSwitch(if (t.isHidden(TrackFlags.EFFECTS)) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, "Show effects", !t.isHidden(TrackFlags.EFFECTS)) { actions.toggleTrack(TrackFlags.Kind.HIDE, TrackFlags.EFFECTS) }
-                TrackSwitch(if (t.isLocked(TrackFlags.EFFECTS)) Icons.Rounded.Lock else Icons.Rounded.LockOpen, "Lock effects", !t.isLocked(TrackFlags.EFFECTS)) { actions.toggleTrack(TrackFlags.Kind.LOCK, TrackFlags.EFFECTS) }
+                TrackBadge(Icons.Rounded.AutoAwesome, "Effects")
+                val off = t.isHidden(TrackFlags.EFFECTS)
+                TrackSwitch(if (off) Icons.Rounded.AutoFixOff else Icons.Rounded.AutoFixHigh, "Effects on", !off) { actions.toggleTrack(TrackFlags.Kind.HIDE, TrackFlags.EFFECTS) }
+                Lock(TrackFlags.EFFECTS, "Lock effects")
             }
             com.reel.editor.model.TrackLayout.Group.TEXT -> RowOf(y, barH) {
-                TrackSwitch(if (t.isHidden(TrackFlags.TEXT)) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, "Show text", !t.isHidden(TrackFlags.TEXT)) { actions.toggleTrack(TrackFlags.Kind.HIDE, TrackFlags.TEXT) }
-                TrackSwitch(if (t.isLocked(TrackFlags.TEXT)) Icons.Rounded.Lock else Icons.Rounded.LockOpen, "Lock text", !t.isLocked(TrackFlags.TEXT)) { actions.toggleTrack(TrackFlags.Kind.LOCK, TrackFlags.TEXT) }
+                TrackBadge(Icons.Rounded.TextFields, "Text")
+                Eye(TrackFlags.TEXT, "Show text")
+                Lock(TrackFlags.TEXT, "Lock text")
             }
             com.reel.editor.model.TrackLayout.Group.STICKERS -> RowOf(y, barH) {
-                TrackSwitch(if (t.isHidden(TrackFlags.STICKERS)) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, "Show stickers and shapes", !t.isHidden(TrackFlags.STICKERS)) { actions.toggleTrack(TrackFlags.Kind.HIDE, TrackFlags.STICKERS) }
-                TrackSwitch(if (t.isLocked(TrackFlags.STICKERS)) Icons.Rounded.Lock else Icons.Rounded.LockOpen, "Lock stickers and shapes", !t.isLocked(TrackFlags.STICKERS)) { actions.toggleTrack(TrackFlags.Kind.LOCK, TrackFlags.STICKERS) }
+                TrackBadge(Icons.Rounded.EmojiEmotions, "Stickers")
+                Eye(TrackFlags.STICKERS, "Show stickers and shapes")
+                Lock(TrackFlags.STICKERS, "Lock stickers and shapes")
             }
             com.reel.editor.model.TrackLayout.Group.OVERLAYS -> RowOf(y, barH) {
-                TrackSwitch(if (t.isHidden(TrackFlags.OVERLAYS)) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, "Show overlays", !t.isHidden(TrackFlags.OVERLAYS)) { actions.toggleTrack(TrackFlags.Kind.HIDE, TrackFlags.OVERLAYS) }
-                if (project.overlays.any { it.hasAudio }) TrackSwitch(if (t.isMuted(TrackFlags.OVERLAYS)) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp, "Overlay sound", !t.isMuted(TrackFlags.OVERLAYS)) { actions.toggleTrack(TrackFlags.Kind.MUTE, TrackFlags.OVERLAYS) }
-                TrackSwitch(if (t.isLocked(TrackFlags.OVERLAYS)) Icons.Rounded.Lock else Icons.Rounded.LockOpen, "Lock overlays", !t.isLocked(TrackFlags.OVERLAYS)) { actions.toggleTrack(TrackFlags.Kind.LOCK, TrackFlags.OVERLAYS) }
+                TrackBadge(Icons.Rounded.PictureInPicture, "Overlays")
+                Eye(TrackFlags.OVERLAYS, "Show overlays")
+                if (project.overlays.any { it.hasAudio }) Sound(TrackFlags.OVERLAYS, "Overlay sound")
+                Lock(TrackFlags.OVERLAYS, "Lock overlays")
             }
         }
     }
     if (project.clips.isNotEmpty()) {
         val top = clipY + (clipH - sw * 2 - with(density) { 4.dp.toPx() }) / 2
         if (top + sw * 2 > rulerH && top < heightPx) {
-            Column(Modifier.offset { IntOffset(with(density) { 6.dp.roundToPx() }, top.roundToInt()) }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    TrackSwitch(if (t.isMuted(TrackFlags.VIDEO)) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp, "Video sound", !t.isMuted(TrackFlags.VIDEO)) { actions.toggleTrack(TrackFlags.Kind.MUTE, TrackFlags.VIDEO) }
-                    TrackSwitch(if (t.isHidden(TrackFlags.VIDEO)) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, "Show video", !t.isHidden(TrackFlags.VIDEO)) { actions.toggleTrack(TrackFlags.Kind.HIDE, TrackFlags.VIDEO) }
+            Row(Modifier.offset { IntOffset(with(density) { 4.dp.roundToPx() }, top.roundToInt()) }, verticalAlignment = Alignment.CenterVertically) {
+                TrackBadge(Icons.Rounded.Videocam, "Video")
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Eye(TrackFlags.VIDEO, "Show video")
+                        Sound(TrackFlags.VIDEO, "Video sound")
+                    }
+                    Lock(TrackFlags.VIDEO, "Lock video")
                 }
-                TrackSwitch(if (t.isLocked(TrackFlags.VIDEO)) Icons.Rounded.Lock else Icons.Rounded.LockOpen, "Lock video", !t.isLocked(TrackFlags.VIDEO)) { actions.toggleTrack(TrackFlags.Kind.LOCK, TrackFlags.VIDEO) }
             }
         }
     }
     audioLanes.forEachIndexed { i, (ids, muted) ->
         RowOf(audioY + i * (audioH + gap), audioH) {
+            TrackBadge(Icons.Rounded.MusicNote, "Audio")
             TrackSwitch(if (muted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp, "Audio sound", !muted) { actions.muteAudio(ids, !muted) }
+            Lock(TrackFlags.AUDIO, "Lock audio")
         }
     }
 }

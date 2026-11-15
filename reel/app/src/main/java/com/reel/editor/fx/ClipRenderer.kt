@@ -298,7 +298,7 @@ class ClipRenderer(
         p.set("uCmRot", Math.toRadians(m.rotation.toDouble()).toFloat())
         p.set("uCmFeather", m.feather)
         p.set("uCmInvert", if (m.invert) 1f else 0f)
-        p.set("uOpacity", if (plan.hideVideo) 0f else t.opacity)
+        p.set("uOpacity", if (plan.hideVideo) 0f else if (plan.ghostVideo) t.opacity * RenderPlans.GHOST else t.opacity)
         val bg = plan.background
         p.set("uBgMode", if (bg.mode == BackgroundMode.BLUR && !plan.hideVideo) 1f else 0f)
         if (plan.hideVideo) p.set("uBgColor", 0f, 0f, 0f)
@@ -439,7 +439,7 @@ class ClipRenderer(
         for (o in plan.overlays) if (global >= o.startUs && global < o.endUs) {
             out += Pass({ src, _, _ ->
                 val target = currentTarget
-                if (!overlays.draw(o, global, src, plan.canvasWidth, plan.canvasHeight, target)) {
+                if (!overlays.draw(o, global, src, plan.canvasWidth, plan.canvasHeight, target, if (o.id in plan.ghostOverlays) RenderPlans.GHOST else 1f)) {
                     GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, target)
                     GLES20.glViewport(0, 0, plan.canvasWidth, plan.canvasHeight)
                     passthrough(src)
@@ -545,7 +545,7 @@ class ClipRenderer(
             p.set("uCenter", cx, 1f - cy)
             p.set("uSize", widthUnits * motion.sx, heightUnits * motion.sy)
             p.set("uRotation", Math.toRadians((t.rotation + motion.rotationDeg).toDouble()).toFloat())
-            p.set("uOpacity", (t.opacity * motion.opacity).coerceIn(0f, 1f))
+            p.set("uOpacity", (t.opacity * motion.opacity * (if (layer.ghost) RenderPlans.GHOST else 1f)).coerceIn(0f, 1f))
             p.draw()
         }
         GLES20.glDisable(GLES20.GL_BLEND)

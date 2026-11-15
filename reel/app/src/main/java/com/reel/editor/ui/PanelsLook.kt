@@ -123,8 +123,8 @@ fun FiltersPanel(vm: EditorViewModel, onClose: () -> Unit) {
         }
     }
     val base by produceState<Bitmap?>(null) {
-        // Looks preview on the bundled sunset, not the timeline video.
-        value = withContext(Dispatchers.IO) { Samples.bitmap(ctx, Samples.SCENE)?.let { Bitmap.createScaledBitmap(it, (it.width * 96f / it.height).roundToInt().coerceAtLeast(1), 96, true) } }
+        // Looks preview on the bundled portrait, not the timeline video.
+        value = withContext(Dispatchers.IO) { Samples.bitmap(ctx, Samples.PERSON)?.let { Bitmap.createScaledBitmap(it, (it.width * 96f / it.height).roundToInt().coerceAtLeast(1), 96, true) } }
     }
     val currentLook = timed?.lookId ?: clip?.lookId
     val currentShader = timed?.shaderFx?.id ?: clip?.filter?.id

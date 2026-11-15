@@ -60,12 +60,13 @@ fun trackKeyOf(s: Selection): String? = when (s) {
     is Selection.StickerSel, is Selection.ShapeSel -> com.reel.editor.model.TrackFlags.STICKERS
     is Selection.EffectSel, is Selection.FilterSel, is Selection.AdjustSel -> com.reel.editor.model.TrackFlags.EFFECTS
     is Selection.OverlaySel -> com.reel.editor.model.TrackFlags.OVERLAYS
+    is Selection.AudioSel -> com.reel.editor.model.TrackFlags.AUDIO
     else -> null
 }
 
 enum class Panel {
     SPEED, VOLUME, ANIMATION, FILTERS, ADJUST, EFFECTS, TRANSITION, TEXT_EDIT, TEXT_STYLE, TEXT_ANIM,
-    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE, SHAPE, ADJUST_LAYER, OVERLAY, MASK, ADD_LAYER, TRACK, PRIVACY, HISTORY
+    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE, SHAPE, ADJUST_LAYER, OVERLAY, MASK, ADD_LAYER, TRACK, PRIVACY, HISTORY, TEXT_TEMPLATES
 }
 
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
@@ -511,6 +512,17 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
         openPanel(Panel.TEXT_EDIT)
     }
 
+    /** Adds a ready-made text design at the playhead and selects its main text. */
+    fun addTextTemplate(t: com.reel.editor.model.TextTemplates.Template) {
+        val p = _project.value
+        val total = TimelineMath.duration(p)
+        val start = preview.positionUs.value.coerceAtMost((total - 500_000).coerceAtLeast(0))
+        val (next, id) = com.reel.editor.model.TextTemplates.apply(p, t, start, (total - start).coerceAtLeast(1_000_000))
+        edit { next }
+        select(Selection.TextSel(id))
+        openPanel(null)
+    }
+
     fun addSticker(source: String) {
         val t = preview.positionUs.value
         val total = TimelineMath.duration(_project.value)
@@ -604,8 +616,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleTrack(kind: com.reel.editor.model.TrackFlags.Kind, key: String) {
         edit { p -> p.copy(tracks = p.tracks.toggle(kind, key)) }
-        // Nothing hidden or locked stays selected.
-        if (kind != com.reel.editor.model.TrackFlags.Kind.MUTE && trackKeyOf(_selection.value) == key) select(Selection.None)
+        // Hidden items stay on screen (faintly) and selectable; only a lock drops the selection.
+        if (kind == com.reel.editor.model.TrackFlags.Kind.LOCK && trackKeyOf(_selection.value) == key) select(Selection.None)
     }
 
     fun muteAudio(ids: List<String>, muted: Boolean) = edit { p -> p.copy(audio = p.audio.map { if (it.id in ids) it.copy(muted = muted) else it }) }
