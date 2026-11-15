@@ -120,8 +120,18 @@ object Exporter {
                 r.release()
                 val frameUs = 1_000_000L / fps
                 val times = (0 until ((durationMs * 1000) / frameUs).toInt().coerceAtLeast(1)).map { it * frameUs }
+                // One palette for the whole GIF, from the colours of a few frames across it.
+                val sampleAt = times.filterIndexed { i, _ -> i % maxOf(1, times.size / 8) == 0 }.take(8)
+                val samples = IntArray(sampleAt.size * ((w + 1) / 2) * ((h + 1) / 2))
+                var ns = 0
+                com.reel.editor.track.FrameSampler(app, android.net.Uri.fromFile(video).toString(), maxOf(w, h)).sample(sampleAt, { false }) { _, bmp ->
+                    val b = if (bmp.width == w && bmp.height == h) bmp else android.graphics.Bitmap.createScaledBitmap(bmp, w, h, true)
+                    val all = IntArray(w * h).also { b.getPixels(it, 0, w, 0, 0, w, h) }
+                    for (y in 0 until h step 2) for (x in 0 until w step 2) if (ns < samples.size) samples[ns++] = all[y * w + x]
+                }
+                val palette = if (ns > 0) com.reel.editor.media.GifPalette.build(samples.copyOf(ns)) else null
                 gifFile.outputStream().buffered(1 shl 16).use { os ->
-                    val gw = GifWriterHolder.create(os, w, h, (100 / fps).coerceAtLeast(2))
+                    val gw = GifWriterHolder.create(os, w, h, (100 / fps).coerceAtLeast(2), palette)
                     val px = IntArray(w * h)
                     val ok = com.reel.editor.track.FrameSampler(app, android.net.Uri.fromFile(video).toString(), maxOf(w, h)).sample(times, { transformer == null && _state.value is ExportState.Cancelled }) { i, bmp ->
                         val b = if (bmp.width == w && bmp.height == h) bmp else android.graphics.Bitmap.createScaledBitmap(bmp, w, h, true)
@@ -143,7 +153,7 @@ object Exporter {
     }
 
     private object GifWriterHolder {
-        fun create(os: java.io.OutputStream, w: Int, h: Int, delayCs: Int) = com.reel.editor.media.GifWriter(os, w, h, delayCs)
+        fun create(os: java.io.OutputStream, w: Int, h: Int, delayCs: Int, palette: IntArray?) = com.reel.editor.media.GifWriter(os, w, h, delayCs, palette)
     }
 
     private fun publishAudio(context: Context, file: File): Uri {
