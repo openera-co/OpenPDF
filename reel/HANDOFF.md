@@ -2,7 +2,7 @@
 
 Reel is a mobile video editor for Android, in the style of CapCut and VN: a timeline with clips,
 text, stickers, shapes, overlays and audio. It has hundreds of effects and transitions, on-device
-captions, background cutout, head tracking and in-app updates. Current version: **1.6.4**
+captions, background cutout, head tracking and in-app updates. Current version: **1.6.5**
 (versionCode 10).
 
 This document is for whoever picks the project up next: how to build it, where things live, how it
@@ -78,8 +78,8 @@ app/src/main/java/com/reel/editor/
   ui/          Compose screens and panels (EditorScreen, Timeline, Panels*, MediaPicker, ...)
 app/src/main/cpp/  JNI core: looks (LUT generator), audio analysis, voice DSP, image ops,
                captions core; third_party/whisper.cpp vendored (v1.9.5, CPU only)
-app/src/main/assets/fx/  GLSL library: 245 transitions (211 from gl-transitions, MIT, plus 34 of
-               our own), 78 filters, 90 effects, 30 clip animations, internal shaders (canvas,
+app/src/main/assets/fx/  GLSL library: 267 transitions (211 from gl-transitions, MIT, plus 34 of
+               our own), 96 filters, 110 effects, 39 clip animations, internal shaders (canvas,
                grade, overlay_blend, privacy, ...)
 tools/fx/      shader sources and tools: library.glsl (filters, effects, clip animations; built by
                build_library.py), reel_transitions.glsl (our transitions; build_transitions.py),
@@ -211,7 +211,7 @@ APK from the installed one. It verifies the SHA-256, then installs through `Pack
 falls back to the full APK when no patch fits. Updating from 1.3.0 or older needs one manual install
 of 1.4.0 or later, because the updater arrived in 1.4.0.
 
-Release APKs sent to the owner so far: 1.0 through 1.6.4. Patches exist for 1.4.0 → 1.6.0 and
+Release APKs sent to the owner so far: 1.0 through 1.6.5. Patches exist for 1.4.0 → 1.6.0 and
 1.5.0 → 1.6.0.
 
 ---
