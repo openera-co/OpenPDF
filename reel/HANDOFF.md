@@ -78,9 +78,12 @@ app/src/main/java/com/reel/editor/
   ui/          Compose screens and panels (EditorScreen, Timeline, Panels*, MediaPicker, ...)
 app/src/main/cpp/  JNI core: looks (LUT generator), audio analysis, voice DSP, image ops,
                captions core; third_party/whisper.cpp vendored (v1.9.5, CPU only)
-app/src/main/assets/fx/  GLSL library: 211 transitions (gl-transitions, MIT), 89 filters/effects,
-               internal shaders (canvas, grade, overlay_blend, privacy, ...)
-tools/fx/      shader import/validation (validate_shaders.py uses glslangValidator)
+app/src/main/assets/fx/  GLSL library: 245 transitions (211 from gl-transitions, MIT, plus 34 of
+               our own), 78 filters, 90 effects, 30 clip animations, internal shaders (canvas,
+               grade, overlay_blend, privacy, ...)
+tools/fx/      shader sources and tools: library.glsl (filters, effects, clip animations; built by
+               build_library.py), reel_transitions.glsl (our transitions; build_transitions.py),
+               validate_shaders.py (glslangValidator), render_check.py (renders everything)
 tools/update/  make_update.py (update patches) + README
 ```
 
@@ -168,7 +171,12 @@ The preview and the export share this path. Only the preview honours "hold to se
   reverse, GIF, sound only, project packing, head tracking on a real interview clip (a public-domain
   NASA video in `androidTest/assets/talk.mp4`), voice, fonts and captions.
 - **Shaders:** `python3 tools/fx/validate_shaders.py` compiles every GLSL file with
-  glslangValidator.
+  glslangValidator. `tools/fx/render_check.py <dir>` renders every filter, effect, animation and
+  transition on a headless GPU (Mesa through EGL) with the app's own source assembly, on the bundled
+  portrait and apple pictures. It checks that filters change the picture, effects move, animations
+  end on the untouched clip and transitions start on clip A and end on clip B, and it writes contact
+  sheets for a visual pass. It takes about a minute. `FxThumbsDeviceTest` runs the same checks on a
+  phone's GPU. Known subtle ones that the checks flag on purpose: Chromatic, Smooth, Film grain.
 
 Notes on the emulator used during development (API 30, x86_64, software GPU, `-accel off`):
 

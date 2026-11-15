@@ -1135,11 +1135,18 @@ vec4 effect(vec2 uv) {
 
 //== id: woodcut | Woodcut | filter | Art
 vec4 effect(vec2 uv) {
+  vec2 px = 1.0 / uResolution;
   float l = luma(getColor(uv).rgb);
-  float lines = sin((uv.y + noise(uv * 6.0) * 0.05) * uResolution.y * 0.45) * 0.5 + 0.5;
-  float ink = step(lines, 1.0 - l);
+  l = smoothstep(0.1, 0.9, l);
+  // Carved lines about 5 px apart that bend a little; thicker where the picture is dark.
+  float y = uv.y * uResolution.y / 5.0 + noise(uv * 5.0) * 1.5;
+  float line = abs(fract(y) - 0.5) * 2.0;
+  float ink = step(line, (1.0 - l) * 1.1);
+  float gx = luma(getColor(uv + vec2(px.x, 0.0)).rgb) - luma(getColor(uv - vec2(px.x, 0.0)).rgb);
+  float gy = luma(getColor(uv + vec2(0.0, px.y)).rgb) - luma(getColor(uv - vec2(0.0, px.y)).rgb);
+  float edge = smoothstep(0.08, 0.25, length(vec2(gx, gy)));
   vec3 paper = vec3(0.95, 0.9, 0.8);
-  return vec4(mix(paper, vec3(0.12, 0.08, 0.06), ink), 1.0);
+  return vec4(mix(paper, vec3(0.12, 0.08, 0.06), max(ink, edge)), 1.0);
 }
 
 //== id: risograph | Riso | filter | Art
@@ -1727,7 +1734,7 @@ vec4 effect(vec2 uv) {
     vec2 q = (uv - p) * asp;
     q = vec2(cos(a) * q.x - sin(a) * q.y, sin(a) * q.x + cos(a) * q.y);
     q.x *= 1.8;
-    float s = 0.012 + 0.01 * rand(vec2(fi, 14.0));
+    float s = 0.022 + 0.014 * rand(vec2(fi, 14.0));
     float m = smoothstep(s, s * 0.7, length(q));
     c = mix(c, vec3(1.0, 0.72, 0.8), m * 0.9);
   }
@@ -1746,7 +1753,7 @@ vec4 effect(vec2 uv) {
     vec2 q = (uv - p) * asp;
     q = vec2(cos(a) * q.x - sin(a) * q.y, sin(a) * q.x + cos(a) * q.y);
     q.x *= 2.2;
-    float s = 0.02;
+    float s = 0.03 + 0.012 * rand(vec2(fi, 25.0));
     float m = smoothstep(s, s * 0.75, length(q));
     vec3 col = mix(vec3(0.85, 0.35, 0.05), vec3(0.95, 0.7, 0.1), rand(vec2(fi, 24.0)));
     c = mix(c, col, m);
@@ -2019,7 +2026,7 @@ vec4 effect(vec2 uv) {
 vec4 effect(vec2 uv) {
   float n = noise(uv * 6.0) * 0.6 + noise(uv * 18.0) * 0.4;
   float r = length(uv - 0.5) * 1.2;
-  float v = r * 0.6 + n * 0.5;
+  float v = r * 0.6 + n * 0.5 - 0.25;
   float show = smoothstep(uProgress * 1.2, uProgress * 1.2 - 0.06, v);
   if (uProgress > 0.99) show = 1.0;
   return vec4(getColor(uv).rgb * show, 1.0);

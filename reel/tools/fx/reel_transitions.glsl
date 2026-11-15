@@ -276,7 +276,7 @@ vec4 transition(vec2 uv) {
   vec2 asp = vec2(ratio, 1.0);
   vec2 d = (uv - 0.5) * asp;
   float a = atan(d.y, d.x) + p * 3.0;
-  float r = length(d) * (1.0 + k);
+  float r = length(d) * (1.0 - 0.45 * k);
   float seg = 6.2831853 / 6.0;
   a = abs(mod(a, seg) - seg * 0.5);
   vec2 q = vec2(cos(a), sin(a)) * r / asp + 0.5;
@@ -317,9 +317,9 @@ vec4 transition(vec2 uv) {
   vec2 d = (uv - 0.5) * asp;
   float r = progress * 1.25;
   float l = length(d);
-  float lens = l < r ? (1.0 - smoothstep(r * 0.6, r, l)) * 0.15 : 0.0;
+  float lens = l < r ? (1.0 - smoothstep(r * 0.6, r, l)) * 0.15 * (1.0 - progress) : 0.0;
   vec2 q = 0.5 + d * (1.0 - lens) / asp;
-  float rim = smoothstep(0.01, 0.0, abs(l - r)) * 0.5;
+  float rim = smoothstep(0.01, 0.0, abs(l - r)) * 0.5 * (1.0 - progress);
   return (l < r ? getToColor(q) : getFromColor(uv)) + vec4(vec3(rim), 0.0);
 }
 

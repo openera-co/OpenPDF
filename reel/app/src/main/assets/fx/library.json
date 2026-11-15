@@ -1318,7 +1318,7 @@
 "kind": "filter",
 "category": "Art",
 "params": [],
-"code": "vec4 effect(vec2 uv) {\n  float l = luma(getColor(uv).rgb);\n  float lines = sin((uv.y + noise(uv * 6.0) * 0.05) * uResolution.y * 0.45) * 0.5 + 0.5;\n  float ink = step(lines, 1.0 - l);\n  vec3 paper = vec3(0.95, 0.9, 0.8);\n  return vec4(mix(paper, vec3(0.12, 0.08, 0.06), ink), 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 1.0 / uResolution;\n  float l = luma(getColor(uv).rgb);\n  l = smoothstep(0.1, 0.9, l);\n  // Carved lines about 5 px apart that bend a little; thicker where the picture is dark.\n  float y = uv.y * uResolution.y / 5.0 + noise(uv * 5.0) * 1.5;\n  float line = abs(fract(y) - 0.5) * 2.0;\n  float ink = step(line, (1.0 - l) * 1.1);\n  float gx = luma(getColor(uv + vec2(px.x, 0.0)).rgb) - luma(getColor(uv - vec2(px.x, 0.0)).rgb);\n  float gy = luma(getColor(uv + vec2(0.0, px.y)).rgb) - luma(getColor(uv - vec2(0.0, px.y)).rgb);\n  float edge = smoothstep(0.08, 0.25, length(vec2(gx, gy)));\n  vec3 paper = vec3(0.95, 0.9, 0.8);\n  return vec4(mix(paper, vec3(0.12, 0.08, 0.06), max(ink, edge)), 1.0);\n}"
 },
 {
 "id": "risograph",
@@ -1826,7 +1826,7 @@
 "kind": "effect",
 "category": "Weather",
 "params": [],
-"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 18; i++) {\n    float fi = float(i);\n    float sp = 0.06 + 0.06 * rand(vec2(fi, 11.0));\n    vec2 p = vec2(fract(rand(vec2(fi, 12.0)) + uTime * 0.03), fract(uTime * sp + rand(vec2(fi, 13.0))) * 1.2 - 0.1);\n    p.x += 0.05 * sin(uTime * 1.3 + fi * 2.0);\n    float a = uTime * 1.5 + fi;\n    vec2 q = (uv - p) * asp;\n    q = vec2(cos(a) * q.x - sin(a) * q.y, sin(a) * q.x + cos(a) * q.y);\n    q.x *= 1.8;\n    float s = 0.012 + 0.01 * rand(vec2(fi, 14.0));\n    float m = smoothstep(s, s * 0.7, length(q));\n    c = mix(c, vec3(1.0, 0.72, 0.8), m * 0.9);\n  }\n  return vec4(c, 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 18; i++) {\n    float fi = float(i);\n    float sp = 0.06 + 0.06 * rand(vec2(fi, 11.0));\n    vec2 p = vec2(fract(rand(vec2(fi, 12.0)) + uTime * 0.03), fract(uTime * sp + rand(vec2(fi, 13.0))) * 1.2 - 0.1);\n    p.x += 0.05 * sin(uTime * 1.3 + fi * 2.0);\n    float a = uTime * 1.5 + fi;\n    vec2 q = (uv - p) * asp;\n    q = vec2(cos(a) * q.x - sin(a) * q.y, sin(a) * q.x + cos(a) * q.y);\n    q.x *= 1.8;\n    float s = 0.022 + 0.014 * rand(vec2(fi, 14.0));\n    float m = smoothstep(s, s * 0.7, length(q));\n    c = mix(c, vec3(1.0, 0.72, 0.8), m * 0.9);\n  }\n  return vec4(c, 1.0);\n}"
 },
 {
 "id": "leaves",
@@ -1834,7 +1834,7 @@
 "kind": "effect",
 "category": "Weather",
 "params": [],
-"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 14; i++) {\n    float fi = float(i);\n    float sp = 0.07 + 0.05 * rand(vec2(fi, 21.0));\n    vec2 p = vec2(rand(vec2(fi, 22.0)) + 0.08 * sin(uTime * 0.9 + fi), fract(uTime * sp + rand(vec2(fi, 23.0))) * 1.2 - 0.1);\n    float a = uTime * 2.0 + fi;\n    vec2 q = (uv - p) * asp;\n    q = vec2(cos(a) * q.x - sin(a) * q.y, sin(a) * q.x + cos(a) * q.y);\n    q.x *= 2.2;\n    float s = 0.02;\n    float m = smoothstep(s, s * 0.75, length(q));\n    vec3 col = mix(vec3(0.85, 0.35, 0.05), vec3(0.95, 0.7, 0.1), rand(vec2(fi, 24.0)));\n    c = mix(c, col, m);\n  }\n  return vec4(c, 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 14; i++) {\n    float fi = float(i);\n    float sp = 0.07 + 0.05 * rand(vec2(fi, 21.0));\n    vec2 p = vec2(rand(vec2(fi, 22.0)) + 0.08 * sin(uTime * 0.9 + fi), fract(uTime * sp + rand(vec2(fi, 23.0))) * 1.2 - 0.1);\n    float a = uTime * 2.0 + fi;\n    vec2 q = (uv - p) * asp;\n    q = vec2(cos(a) * q.x - sin(a) * q.y, sin(a) * q.x + cos(a) * q.y);\n    q.x *= 2.2;\n    float s = 0.03 + 0.012 * rand(vec2(fi, 25.0));\n    float m = smoothstep(s, s * 0.75, length(q));\n    vec3 col = mix(vec3(0.85, 0.35, 0.05), vec3(0.95, 0.7, 0.1), rand(vec2(fi, 24.0)));\n    c = mix(c, col, m);\n  }\n  return vec4(c, 1.0);\n}"
 },
 {
 "id": "storm",
@@ -2058,7 +2058,7 @@
 "kind": "anim",
 "category": "Light",
 "params": [],
-"code": "vec4 effect(vec2 uv) {\n  float n = noise(uv * 6.0) * 0.6 + noise(uv * 18.0) * 0.4;\n  float r = length(uv - 0.5) * 1.2;\n  float v = r * 0.6 + n * 0.5;\n  float show = smoothstep(uProgress * 1.2, uProgress * 1.2 - 0.06, v);\n  if (uProgress > 0.99) show = 1.0;\n  return vec4(getColor(uv).rgb * show, 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  float n = noise(uv * 6.0) * 0.6 + noise(uv * 18.0) * 0.4;\n  float r = length(uv - 0.5) * 1.2;\n  float v = r * 0.6 + n * 0.5 - 0.25;\n  float show = smoothstep(uProgress * 1.2, uProgress * 1.2 - 0.06, v);\n  if (uProgress > 0.99) show = 1.0;\n  return vec4(getColor(uv).rgb * show, 1.0);\n}"
 },
 {
 "id": "anim_splitopen",

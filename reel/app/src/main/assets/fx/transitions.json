@@ -7042,7 +7042,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float k = sin(p * 3.14159);\n  vec2 asp = vec2(ratio, 1.0);\n  vec2 d = (uv - 0.5) * asp;\n  float a = atan(d.y, d.x) + p * 3.0;\n  float r = length(d) * (1.0 + k);\n  float seg = 6.2831853 / 6.0;\n  a = abs(mod(a, seg) - seg * 0.5);\n  vec2 q = vec2(cos(a), sin(a)) * r / asp + 0.5;\n  q = mix(uv, clamp(q, 0.0, 1.0), k);\n  return mix(getFromColor(q), getToColor(q), smoothstep(0.4, 0.6, p));\n}"
+"code": "vec4 transition(vec2 uv) {\n  float p = progress;\n  float k = sin(p * 3.14159);\n  vec2 asp = vec2(ratio, 1.0);\n  vec2 d = (uv - 0.5) * asp;\n  float a = atan(d.y, d.x) + p * 3.0;\n  float r = length(d) * (1.0 - 0.45 * k);\n  float seg = 6.2831853 / 6.0;\n  a = abs(mod(a, seg) - seg * 0.5);\n  vec2 q = vec2(cos(a), sin(a)) * r / asp + 0.5;\n  q = mix(uv, clamp(q, 0.0, 1.0), k);\n  return mix(getFromColor(q), getToColor(q), smoothstep(0.4, 0.6, p));\n}"
 },
 {
 "id": "rt_waveslide",
@@ -7078,7 +7078,7 @@
 "author": "Reel",
 "license": "MIT",
 "params": [],
-"code": "vec4 transition(vec2 uv) {\n  vec2 asp = vec2(ratio, 1.0);\n  vec2 d = (uv - 0.5) * asp;\n  float r = progress * 1.25;\n  float l = length(d);\n  float lens = l < r ? (1.0 - smoothstep(r * 0.6, r, l)) * 0.15 : 0.0;\n  vec2 q = 0.5 + d * (1.0 - lens) / asp;\n  float rim = smoothstep(0.01, 0.0, abs(l - r)) * 0.5;\n  return (l < r ? getToColor(q) : getFromColor(uv)) + vec4(vec3(rim), 0.0);\n}"
+"code": "vec4 transition(vec2 uv) {\n  vec2 asp = vec2(ratio, 1.0);\n  vec2 d = (uv - 0.5) * asp;\n  float r = progress * 1.25;\n  float l = length(d);\n  float lens = l < r ? (1.0 - smoothstep(r * 0.6, r, l)) * 0.15 * (1.0 - progress) : 0.0;\n  vec2 q = 0.5 + d * (1.0 - lens) / asp;\n  float rim = smoothstep(0.01, 0.0, abs(l - r)) * 0.5 * (1.0 - progress);\n  return (l < r ? getToColor(q) : getFromColor(uv)) + vec4(vec3(rim), 0.0);\n}"
 },
 {
 "id": "rt_lightleak",

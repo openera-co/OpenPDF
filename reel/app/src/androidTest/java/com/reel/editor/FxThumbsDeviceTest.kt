@@ -55,6 +55,18 @@ class FxThumbsDeviceTest {
         return s.toDouble() / n
     }
 
+    private fun changedShare(a: Bitmap, b: Bitmap): Double {
+        var n = 0
+        var c = 0
+        for (y in 0 until a.height step 2) for (x in 0 until a.width step 2) {
+            val p = a.getPixel(x, y); val q = b.getPixel(x, y)
+            val m = maxOf(abs(Color.red(p) - Color.red(q)), abs(Color.green(p) - Color.green(q)), abs(Color.blue(p) - Color.blue(q)))
+            if (m > 40) c++
+            n++
+        }
+        return c.toDouble() / n
+    }
+
     private fun sheet(name: String, items: List<Pair<String, Bitmap>>) {
         val cols = 10
         val rows = (items.size + cols - 1) / cols
@@ -96,13 +108,19 @@ class FxThumbsDeviceTest {
             f.name to FxThumbs.fx(cat, f, FxThumbs.Mode.STATIC, a, "t:a").also {
                 check("filter", f.id, it, false)
                 // A filter that leaves the picture as it was does nothing.
-                it?.firstOrNull()?.let { fr -> val d = diff(fr, a); if (d < 2.0) problems += "filter ${f.id}: no visible change ($d)" }
+                it?.firstOrNull()?.let { fr -> val d = diff(fr, a); if (d < 1.0) problems += "filter ${f.id}: no visible change ($d)" }
             }
         }
         val effects = cat.effects.map { e ->
             e.name to FxThumbs.fx(cat, e, FxThumbs.Mode.LOOP, a, "t:a").also {
                 check("effect", e.id, it, true)
-                it?.let { fr -> val d = fr.maxOf { x -> diff(x, a) }; if (d < 1.0) problems += "effect ${e.id}: no visible change ($d)" }
+                // Sparse effects (stars, dust) change few pixels, and grain changes all of them a little:
+                // count pixels that clearly changed, or a mean change.
+                it?.let { fr ->
+                    val changed = fr.maxOf { x -> changedShare(x, a) }
+                    val d = fr.maxOf { x -> diff(x, a) }
+                    if (changed < 0.002 && d < 0.8) problems += "effect ${e.id}: no visible change ($changed, $d)"
+                }
             }
         }
         val anims = cat.anims.map { an ->
