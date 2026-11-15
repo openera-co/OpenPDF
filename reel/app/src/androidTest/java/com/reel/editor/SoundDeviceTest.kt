@@ -75,16 +75,24 @@ class SoundDeviceTest {
         assertTrue("kick has faded before the ding", gap < kick * 0.3)
     }
 
+    @Test
+    fun laneProbe() {
+        val n = InstrumentationRegistry.getArguments().getString("lanes")?.toInt() ?: return
+        overlapping(n)
+    }
+
     /** Five quiet sounds hold five lanes; a sixth, loud one must still be heard. */
     @Test
-    fun manyOverlappingSoundsAreAllMixed() {
+    fun manyOverlappingSoundsAreAllMixed() = overlapping(5)
+
+    private fun overlapping(quiet: Int) {
         val v = File(ctx.cacheDir, "a.mp4")
         inst.context.assets.open("a.mp4").use { i -> v.outputStream().use { i.copyTo(it) } }
         val clip = MediaProbe.probeClip(ctx, Uri.fromFile(v))!!.copy(muted = true)
         val wind = SoundFx.byId("wind")!!
         val wf = SoundFx.file(ctx.filesDir, wind)
         val wdur = (wf.length() - 44) / 2 * 1_000_000L / SoundFx.RATE
-        val fillers = (0 until 5).map { i -> AudioItem(uri = Uri.fromFile(wf).toString(), title = "w$i", kind = AudioKind.SOUND, sourceDurationUs = wdur, startUs = i * 50_000L, volume = 0.001f) }
+        val fillers = (0 until quiet).map { i -> AudioItem(uri = Uri.fromFile(wf).toString(), title = "w$i", kind = AudioKind.SOUND, sourceDurationUs = wdur, startUs = i * 50_000L, volume = 0.001f) }
         val kick = SoundFx.byId("kick")!!
         val kf = SoundFx.file(ctx.filesDir, kick)
         val kdur = (kf.length() - 44) / 2 * 1_000_000L / SoundFx.RATE
@@ -95,7 +103,7 @@ class SoundDeviceTest {
         var e = 0.0
         for (i in a until b) e += pcm.samples[i] * pcm.samples[i]
         val rms = sqrt(e / (b - a))
-        Log.i(TAG, "SOUNDS sixth lane rms=$rms")
+        Log.i(TAG, "SOUNDS lanes=${quiet + 1} rms=$rms")
         assertTrue("the sixth overlapping sound is in the export ($rms)", rms > 0.05)
     }
 
