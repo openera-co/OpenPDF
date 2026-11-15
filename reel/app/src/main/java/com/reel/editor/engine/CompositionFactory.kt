@@ -117,7 +117,7 @@ object CompositionFactory {
                 val lane = lanes.firstOrNull { l -> l.last().let { it.startUs + (it.trimEndUs - it.trimStartUs) } <= a.startUs } ?: mutableListOf<Src>().also { lanes += it }
                 lane += a
             }
-            for (lane in lanes.take(4)) {
+            for (lane in lanes.take(MAX_AUDIO_LANES)) {
                 val sb = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
                 var t = 0L
                 for (a in lane) {
@@ -139,6 +139,12 @@ object CompositionFactory {
         }
         return Built(cb.build(), w, h, total)
     }
+
+    /**
+     * Sounds playing at the same moment, each on its own sequence. Sound effects stack up quickly,
+     * so this leaves room for several on top of music and a voiceover.
+     */
+    const val MAX_AUDIO_LANES = 8
 
     /** Waveform levels per second, as produced by AudioAnalyzer. */
     const val LEVELS_PER_SEC = 40

@@ -68,6 +68,7 @@ object C {
     val Effect = Color(0xFFA78BFA)
     val Music = Color(0xFF2DD4BF)
     val Voice = Color(0xFFFF4D5E)
+    val Sfx = Color(0xFFFFC23D)
     val Overlay = Color(0xFFF472B6)
     val Good = Color(0xFF3DDC84)
 }

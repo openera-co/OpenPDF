@@ -66,7 +66,7 @@ fun trackKeyOf(s: Selection): String? = when (s) {
 
 enum class Panel {
     SPEED, VOLUME, ANIMATION, FILTERS, ADJUST, EFFECTS, TRANSITION, TEXT_EDIT, TEXT_STYLE, TEXT_ANIM,
-    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE, SHAPE, ADJUST_LAYER, OVERLAY, MASK, ADD_LAYER, TRACK, PRIVACY, HISTORY, TEXT_TEMPLATES
+    STICKERS, AUDIO, CANVAS, KEYFRAMES, CHROMA, CROP, EXPORT, CAPTIONS, CUTOUT, BEATS, VOICE, SHAPE, ADJUST_LAYER, OVERLAY, MASK, ADD_LAYER, TRACK, PRIVACY, HISTORY, TEXT_TEMPLATES, STABILIZE
 }
 
 class EditorViewModel(app: Application) : AndroidViewModel(app) {
@@ -327,6 +327,24 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
             edit { it.copy(audio = it.audio + item) }
             select(Selection.AudioSel(item.id))
             analyzeUri(item.uri, item.id)
+        }
+    }
+
+    /** Adds a built-in sound effect at the playhead, on its own audio track. */
+    fun addSound(s: com.reel.editor.media.SoundFx.Sfx) {
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            val f = withContext(Dispatchers.IO) { runCatching { com.reel.editor.media.SoundFx.file(ctx.filesDir, s) }.getOrNull() }
+            if (f == null) { toast("Couldn't make that sound"); return@launch }
+            val dur = (f.length() - 44) / 2 * 1_000_000L / com.reel.editor.media.SoundFx.RATE
+            val item = com.reel.editor.model.AudioItem(
+                uri = Uri.fromFile(f).toString(), title = s.name, kind = com.reel.editor.model.AudioKind.SOUND,
+                sourceDurationUs = dur, startUs = preview.positionUs.value,
+            )
+            edit { it.copy(audio = it.audio + item) }
+            select(Selection.AudioSel(item.id))
+            // Waveform only: beats mean nothing on a sound effect.
+            analyzeUri(item.uri)
         }
     }
 
@@ -868,7 +886,8 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
     val trackProgress: StateFlow<Float?> = _trackProgress
     private var tracker: com.reel.editor.track.HeadTracker? = null
 
-    fun cancelTracking() { tracker?.cancelled = true }
+    fun cancelTracking() { tracker?.cancelled = true; stabilizer?.cancelled = true }
+    private var stabilizer: com.reel.editor.track.Stabilizer? = null
 
     /**
      * Makes the selected layer follow the head in the video under it: one keyframe every 150 ms,
@@ -1018,6 +1037,47 @@ class EditorViewModel(app: Application) : AndroidViewModel(app) {
                 toast("Reframe failed")
             } finally {
                 tracker = null
+                _trackProgress.value = null
+            }
+        }
+    }
+
+    /**
+     * Smooths out camera shake in the selected clip: [strength] 0 light, 1 normal, 2 strong. The
+     * result is the clip's keyframes (small moves, turns and a slight zoom), so it can be undone.
+     */
+    fun stabilizeClip(strength: Int) {
+        val sel = _selection.value as? Selection.ClipSel ?: return
+        if (_trackProgress.value != null) return
+        val p0 = _project.value
+        val pc = TimelineMath.place(p0.clips).firstOrNull { it.clip.id == sel.id } ?: return
+        if (pc.clip.kind == com.reel.editor.model.ClipKind.PHOTO) { toast("Photos don't shake"); return }
+        preview.pause()
+        _trackProgress.value = 0f
+        val sigma = floatArrayOf(5f, 10f, 18f)[strength.coerceIn(0, 2)]
+        val maxZoom = floatArrayOf(1.08f, 1.14f, 1.22f)[strength.coerceIn(0, 2)]
+        viewModelScope.launch {
+            val st = com.reel.editor.track.Stabilizer(getApplication()).also { stabilizer = it }
+            try {
+                val res = withContext(Dispatchers.Default) { st.analyze(pc.clip, pc.durationUs) { _trackProgress.value = it } }
+                if (st.cancelled) return@launch
+                if (res == null) { toast("Couldn't read this clip"); return@launch }
+                val (times, motions) = res
+                val corr = com.reel.editor.model.Stabilize.corrections(motions, sigma)
+                val (cw, chh) = com.reel.editor.fx.RenderPlans.canvasSize(p0, 1280)
+                val (dw, dh) = com.reel.editor.fx.RenderPlans.displaySize(pc.clip)
+                val cr = pc.clip.crop
+                val keys = com.reel.editor.model.Stabilize.keyframes(
+                    times, corr, pc.clip.transform, dw * cr.w / (dh.coerceAtLeast(1) * cr.h), cw.toFloat() / chh,
+                    pc.clip.fit == com.reel.editor.model.Fit.FILL, maxZoom,
+                )
+                updateClip(pc.clip.id) { it.copy(keyframes = com.reel.editor.model.HeadPath.simplify(keys, 0.0015f)) }
+                toast("Stabilized")
+            } catch (e: Exception) {
+                com.reel.editor.CrashReports.error("stabilize", e)
+                toast("Stabilize failed")
+            } finally {
+                stabilizer = null
                 _trackProgress.value = null
             }
         }

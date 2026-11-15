@@ -591,8 +591,8 @@ private fun DrawScope.drawWave(peaks: FloatArray, fromUs: Long, toUs: Long, x0: 
 }
 
 private fun DrawScope.drawAudio(a: com.reel.editor.model.AudioItem, x0: Float, x1: Float, y: Float, h: Float, peaks: FloatArray?, selected: Boolean, corner: Float, scale: Float, m: TextMeasurer) {
-    val color = if (a.kind == com.reel.editor.model.AudioKind.VOICEOVER) C.Voice else C.Music
-    val fill = if (a.kind == com.reel.editor.model.AudioKind.VOICEOVER) Color(0xFF3A1218) else Color(0xFF0F3B37)
+    val color = when (a.kind) { com.reel.editor.model.AudioKind.VOICEOVER -> C.Voice; com.reel.editor.model.AudioKind.SOUND -> C.Sfx; else -> C.Music }
+    val fill = when (a.kind) { com.reel.editor.model.AudioKind.VOICEOVER -> Color(0xFF3A1218); com.reel.editor.model.AudioKind.SOUND -> Color(0xFF3D2E0A); else -> Color(0xFF0F3B37) }
     drawRoundRect(fill, Offset(x0, y), Size(x1 - x0, h), CornerRadius(corner))
     clipRect(max(0f, x0), y, min(size.width, x1), y + h) {
         if (peaks != null) drawWave(peaks, a.trimStartUs, a.trimEndUs, x0, x1, y + h * 0.35f, h * 0.6f, color.copy(alpha = 0.9f))

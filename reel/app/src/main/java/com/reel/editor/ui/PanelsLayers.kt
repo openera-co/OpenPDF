@@ -60,6 +60,7 @@ import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.TextFields
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Gradient
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.ZoomOutMap
 import androidx.compose.material.icons.rounded.Diamond
 import androidx.compose.material3.Icon
@@ -277,6 +278,7 @@ fun AudioPanel(vm: EditorViewModel, onClose: () -> Unit) {
     val selected = (selection as? Selection.AudioSel)?.let { s -> project.audio.firstOrNull { it.id == s.id } }
     val picker = LocalPicker.current
     val pickMusic = { picker.open(PickerRequest(setOf(com.reel.editor.media.MediaLibrary.Kind.AUDIO), multi = false, audioFromVideo = true) { u -> u.firstOrNull()?.let { vm.addAudio(it, AudioKind.MUSIC) } }) }
+    var showSounds by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf<Pair<MediaRecorder, File>?>(null) }
     var recStart by remember { mutableLongStateOf(0L) }
     var recPos by remember { mutableLongStateOf(0L) }
@@ -372,15 +374,20 @@ fun AudioPanel(vm: EditorViewModel, onClose: () -> Unit) {
                 BigAction(if (recording != null) Icons.Rounded.Stop else Icons.Rounded.Mic, if (recording != null) formatTime(elapsed * 1000) else "Voiceover", C.Voice, Modifier.weight(1f)) {
                     if (recording != null) stopRec() else startRec()
                 }
+                BigAction(Icons.Rounded.GraphicEq, "Sounds", C.Sfx, Modifier.weight(1f), selected = showSounds) { showSounds = !showSounds }
             }
+            if (showSounds) SoundsGrid(vm)
         }
         Spacer(Modifier.height(8.dp))
     }
 }
 
 @Composable
-private fun BigAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.height(84.dp).clip(RoundedCornerShape(16.dp)).background(C.Surface2).clickable(role = Role.Button, onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+private fun BigAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, color: Color, modifier: Modifier, selected: Boolean = false, onClick: () -> Unit) {
+    Column(
+        modifier.height(84.dp).clip(RoundedCornerShape(16.dp)).background(if (selected) color.copy(alpha = 0.16f) else C.Surface2).clickable(role = Role.Button, onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    ) {
         Icon(icon, null, tint = color, modifier = Modifier.size(26.dp))
         Spacer(Modifier.height(8.dp))
         Text(label, style = Body)

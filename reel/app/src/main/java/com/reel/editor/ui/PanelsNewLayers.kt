@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.ZoomOutMap
 import androidx.compose.material.icons.rounded.Face
+import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CenterFocusStrong
 import androidx.compose.material.icons.automirrored.rounded.FormatAlignLeft
@@ -405,6 +406,30 @@ fun TrackPanel(vm: EditorViewModel, clipMode: Boolean, onClose: () -> Unit) {
                 Spacer(Modifier.weight(1f))
                 Icon(Icons.Rounded.ZoomOutMap, "Follow size", tint = if (followSize) C.Accent else C.Muted)
                 Switch(followSize, { followSize = it }, colors = SwitchDefaults.colors(checkedTrackColor = C.Accent))
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** Smooths camera shake in the selected clip at one of three strengths. */
+@Composable
+fun StabilizePanel(vm: EditorViewModel, onClose: () -> Unit) {
+    val progress by vm.trackProgress.collectAsStateCompat()
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SheetHeader("Stabilize", Icons.Rounded.Vibration, iconTint = C.Accent, onClose = { vm.cancelTracking(); onClose() }, onDone = onClose)
+        val p = progress
+        if (p != null) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.material3.LinearProgressIndicator(progress = { p }, modifier = Modifier.weight(1f).height(4.dp).clip(CircleShape), color = C.Accent, trackColor = C.Surface2)
+                Text("${(p * 100).roundToInt()}%", style = Mono)
+                IconBtn(Icons.Rounded.Close, "Stop", background = C.Surface2, size = 36.dp) { vm.cancelTracking() }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton(Icons.Rounded.Vibration, "Light") { vm.stabilizeClip(0) }
+                PillButton(Icons.Rounded.Vibration, "Normal", accent = true) { vm.stabilizeClip(1) }
+                PillButton(Icons.Rounded.Vibration, "Strong") { vm.stabilizeClip(2) }
             }
         }
         Spacer(Modifier.height(8.dp))

@@ -69,6 +69,7 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.RotateRight
 import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.Face
+import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Category
@@ -508,6 +509,7 @@ private fun Toolbar(
                 ToolButton(Icons.Rounded.AutoAwesome, "Effects") { vm.openPanel(Panel.EFFECTS) }
                 ToolButton(Icons.Rounded.Diamond, "Keyframes") { vm.openPanel(Panel.KEYFRAMES) }
                 ToolButton(Icons.Rounded.Face, "Reframe") { vm.openPanel(Panel.TRACK) }
+                ToolButton(Icons.Rounded.Vibration, "Stabilize") { vm.openPanel(Panel.STABILIZE) }
                 ToolButton(Icons.Rounded.InvertColors, "Chroma") { vm.openPanel(Panel.CHROMA) }
                 ToolButton(Icons.Rounded.ContentCut, "Cutout", active = vm.targetClip()?.cutout?.enabled == true) { vm.openPanel(Panel.CUTOUT) }
                 ToolButton(Icons.Rounded.Crop, "Crop") { vm.openPanel(Panel.CROP) }
@@ -643,6 +645,7 @@ private fun PanelHost(vm: EditorViewModel, panel: Panel, picking: Boolean, onPic
         Panel.HISTORY -> HistoryPanel(vm, onClose)
         Panel.PRIVACY -> clip?.let { PrivacyPanel(vm, it, onClose) }
         Panel.TRACK -> TrackPanel(vm, clipMode = selection is Selection.ClipSel, onClose = onClose)
+        Panel.STABILIZE -> StabilizePanel(vm, onClose = onClose)
         Panel.SHAPE -> shape?.let { ShapePanel(vm, it, onClose) }
         Panel.ADJUST_LAYER -> adjustLayer?.let { AdjustLayerPanel(vm, it, onClose) }
         Panel.OVERLAY -> overlay?.let { OverlayPanel(vm, it, onClose) }
