@@ -2995,17 +2995,17 @@ vec4 effect(vec2 uv) {
 }
 
 //== id: hdr | HDR | filter | Detail
-//== param: strength float 1.0 0.2 2.0
+//== param: strength float 0.6 0.2 2.0
 vec4 effect(vec2 uv) {
   vec2 px = 3.0 / uResolution;
   vec3 c = getColor(uv).rgb;
   vec3 b = vec3(0.0);
   for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) b += getColor(uv + vec2(float(x), float(y)) * px).rgb;
   b /= 25.0;
-  vec3 d = c + (c - b) * 1.6 * strength;
+  vec3 d = c + (c - b) * 1.2 * strength;
   float l = luma(d);
-  d = mix(vec3(l), d, 1.25);
-  d = d / (d + 0.35) * 1.35;
+  d = mix(vec3(l), d, 1.15);
+  d = mix(d, d / (d + 0.35) * 1.35, 0.7);
   return vec4(clamp(d, 0.0, 1.0), 1.0);
 }
 
@@ -3555,8 +3555,8 @@ vec4 effect(vec2 uv) {
     s += 1.0 / length(vec2(sin(i.x + t) / 0.02, cos(i.y + t) / 0.02));
   }
   s = clamp(s / 4.0 * 3.0, 0.0, 1.0);
-  float light = s * s * 1.6;
-  return vec4(min(c * vec3(0.85, 0.97, 1.05) + vec3(0.6, 0.9, 1.0) * light * 0.45, vec3(1.0)), 1.0);
+  float light = sqrt(s) * 0.55;
+  return vec4(min(c * vec3(0.82, 0.96, 1.06) + vec3(0.6, 0.9, 1.0) * light * 0.9, vec3(1.0)), 1.0);
 }
 
 //== id: spin360 | Spin 360 | effect | Motion
@@ -4391,7 +4391,7 @@ vec4 effect(vec2 uv) {
     float fi = float(i);
     float sp = 0.12 + rand(vec2(fi, 1.0)) * 0.15;
     vec2 p = vec2(rand(vec2(fi, 2.0)) + sin(uTime * 1.3 + fi) * 0.03, fract(rand(vec2(fi, 3.0)) + uTime * sp) * 1.3 - 0.15);
-    vec2 d = (uv - p) * asp / (0.025 + rand(vec2(fi, 4.0)) * 0.03);
+    vec2 d = (uv - p) * asp / (0.07 + rand(vec2(fi, 4.0)) * 0.06);
     d.y = -d.y + 0.3;
     float a = atan(d.x, d.y) / PI;
     float r = length(d);
