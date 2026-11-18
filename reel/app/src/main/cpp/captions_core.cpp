@@ -106,6 +106,10 @@ bool Transcriber::transcribe(const std::vector<float>& samples, const Transcribe
             ++counted;
         }
         w.prob = counted ? prob / counted : 0.f;
+        // Timestamps can run a few hundred ms past the audio; a caption must not outlast its clip.
+        const int64_t audioMs = static_cast<int64_t>(samples.size()) / 16;
+        w.startMs = std::min<int64_t>(w.startMs, audioMs);
+        w.endMs = std::min<int64_t>(w.endMs, audioMs);
         if (w.endMs < w.startMs) w.endMs = w.startMs;
         out.push_back(std::move(w));
     }
