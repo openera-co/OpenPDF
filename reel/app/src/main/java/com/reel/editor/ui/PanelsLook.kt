@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -197,9 +198,15 @@ fun FiltersPanel(vm: EditorViewModel, onClose: () -> Unit) {
         } else {
             val tick = rememberThumbTick()
             val src = rememberTargetSource(vm, clip)
+            // Hundreds of shader filters: grouped by category, like the effects panel.
+            val artCats = remember { listOf("All") + catalog.filters.map { it.category }.distinct() }
+            var artCat by rememberSaveable { mutableStateOf(catalog.fx(currentShader ?: "")?.category ?: artCats.getOrElse(1) { "All" }) }
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                artCats.forEach { Chip(it, it == artCat) { artCat = it } }
+            }
             LazyVerticalGrid(GridCells.Fixed(5), Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 200.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item { FxTile("None", currentShader == null, Icons.Rounded.Block) { applyShader(null) } }
-                items(catalog.filters, key = { it.id }) { f -> ShaderFxTile(catalog, f, com.reel.editor.fx.FxThumbs.Mode.STATIC, src, tick, currentShader == f.id, fxBrush(f), Icons.Rounded.FilterVintage) { applyShader(f.id) } }
+                items(catalog.filters.filter { artCat == "All" || it.category == artCat }, key = { it.id }) { f -> ShaderFxTile(catalog, f, com.reel.editor.fx.FxThumbs.Mode.STATIC, src, tick, currentShader == f.id, fxBrush(f), Icons.Rounded.FilterVintage) { applyShader(f.id) } }
             }
             val ref = timed?.shaderFx ?: clip?.filter
             if (ref != null) {

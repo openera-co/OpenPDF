@@ -6,6 +6,9 @@ import re
 
 HERE = os.path.dirname(__file__)
 src = open(os.path.join(HERE, "library.glsl")).read()
+# Colour grades generated from a table by grades.py.
+if os.path.exists(os.path.join(HERE, "grades.glsl")):
+    src += "\n" + open(os.path.join(HERE, "grades.glsl")).read()
 out = []
 blocks = re.split(r"(?m)^//== id: ", src)[1:]
 for b in blocks:

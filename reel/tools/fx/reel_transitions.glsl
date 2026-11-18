@@ -1108,3 +1108,298 @@ vec4 transition(vec2 uv) {
   }
   return vec4(mix(a, b, smoothstep(0.3, 0.7, progress)) / 16.0, 1.0);
 }
+
+//== id: rt_circleopen | Circle Grow | Shape
+vec4 transition(vec2 uv) {
+  float r = length((uv - 0.5) * vec2(ratio, 1.0));
+  float R = progress * length(vec2(ratio, 1.0) * 0.5) * 1.02;
+  return mix(getFromColor(uv), getToColor(uv), smoothstep(R + 0.01, R - 0.01, r) * step(0.0001, progress));
+}
+
+//== id: rt_circleclose | Circle Close | Shape
+vec4 transition(vec2 uv) {
+  float r = length((uv - 0.5) * vec2(ratio, 1.0));
+  float R = (1.0 - progress) * length(vec2(ratio, 1.0) * 0.5) * 1.02;
+  float m = smoothstep(R - 0.01, R + 0.01, r);
+  if (progress >= 1.0) m = 1.0;
+  return mix(getFromColor(uv), getToColor(uv), m);
+}
+
+//== id: rt_boxin | Box In | Shape
+vec4 transition(vec2 uv) {
+  vec2 d = abs(uv - 0.5);
+  float s = progress * 0.5 * 1.001;
+  return mix(getFromColor(uv), getToColor(uv), step(max(d.x, d.y), s) * step(0.0001, progress));
+}
+
+//== id: rt_boxout | Box Out | Shape
+vec4 transition(vec2 uv) {
+  vec2 d = abs(uv - 0.5);
+  float s = (1.0 - progress) * 0.5;
+  float m = step(s, max(d.x, d.y));
+  if (progress <= 0.0) m = 0.0;
+  return mix(getFromColor(uv), getToColor(uv), m);
+}
+
+//== id: rt_triangles2 | Triangle Reveal | Shape
+vec4 transition(vec2 uv) {
+  vec2 g = uv * vec2(ratio, 1.0) * 5.0;
+  vec2 cell = floor(g);
+  vec2 f = fract(g);
+  float up = step(f.x, f.y);
+  float delay = (cell.x + cell.y + up) / (ratio * 5.0 + 6.0);
+  float p = clamp((progress - delay * 0.6) / 0.4, 0.0, 1.0);
+  return mix(getFromColor(uv), getToColor(uv), step(0.5, p));
+}
+
+//== id: rt_venetianv | Vertical Blinds | Shape
+vec4 transition(vec2 uv) {
+  float f = fract(uv.x * 10.0);
+  return mix(getFromColor(uv), getToColor(uv), step(f, progress * 1.001));
+}
+
+//== id: rt_barsrandom | Random Bars | Shape
+vec4 transition(vec2 uv) {
+  float r = fract(sin(floor(uv.x * 40.0) * 12.9898) * 43758.5453);
+  return mix(getFromColor(uv), getToColor(uv), step(r, progress * 1.001 - 0.0005));
+}
+
+//== id: rt_clockwipe | Clock | Shape
+vec4 transition(vec2 uv) {
+  vec2 d = uv - 0.5;
+  float a = atan(d.x, d.y) / 6.2831853 + 0.5;
+  return mix(getFromColor(uv), getToColor(uv), step(a, progress * 1.001));
+}
+
+//== id: rt_slidedown | Slide Down | Slide
+vec4 transition(vec2 uv) {
+  float p = progress * progress * (3.0 - 2.0 * progress);
+  float y = uv.y - (1.0 - p);
+  return y >= 0.0 ? getToColor(vec2(uv.x, y)) : getFromColor(uv);
+}
+
+//== id: rt_slideupover | Slide Over | Slide
+vec4 transition(vec2 uv) {
+  float p = progress * progress * (3.0 - 2.0 * progress);
+  float y = uv.y + (1.0 - p);
+  return y <= 1.0 ? getToColor(vec2(uv.x, y)) : getFromColor(uv) * (1.0 - p * 0.4);
+}
+
+//== id: rt_reveal | Reveal | Slide
+vec4 transition(vec2 uv) {
+  float p = progress * progress * (3.0 - 2.0 * progress);
+  float x = uv.x + p;
+  return x <= 1.0 ? getFromColor(vec2(x, uv.y)) : getToColor(uv);
+}
+
+//== id: rt_splitv | Split Vertical | Slide
+vec4 transition(vec2 uv) {
+  float p = progress * progress * (3.0 - 2.0 * progress);
+  float top = step(0.5, uv.y);
+  float y = top > 0.5 ? uv.y - p * 0.5 : uv.y + p * 0.5;
+  bool fromHere = top > 0.5 ? y >= 0.5 : y <= 0.5;
+  return fromHere ? getFromColor(vec2(uv.x, y)) : getToColor(uv);
+}
+
+//== id: rt_carousel | Carousel | Slide
+vec4 transition(vec2 uv) {
+  float p = progress * progress * (3.0 - 2.0 * progress);
+  float x = uv.x + p;
+  float s = 1.0 - sin(p * 3.14159) * 0.15;
+  vec2 q = vec2(fract(x), 0.5 + (uv.y - 0.5) / s);
+  float inside = step(0.0, q.y) * step(q.y, 1.0);
+  vec4 c = x < 1.0 ? getFromColor(q) : getToColor(q);
+  return c * inside;
+}
+
+//== id: rt_ripplewipe | Ripple Wipe | Warp
+vec4 transition(vec2 uv) {
+  float k = sin(progress * 3.14159);
+  float edge = progress * 1.2 - 0.1;
+  float d = uv.x - edge;
+  vec2 q = clamp(uv + vec2(0.0, sin(d * 60.0) * 0.01 * k * smoothstep(0.2, 0.0, abs(d))), 0.0, 1.0);
+  return mix(getFromColor(q), getToColor(q), step(uv.x, edge));
+}
+
+//== id: rt_stretchh | Stretch | Warp
+vec4 transition(vec2 uv) {
+  float p = progress;
+  float k = sin(p * 3.14159);
+  vec2 q = vec2(0.5 + (uv.x - 0.5) / (1.0 + k * 2.0), uv.y);
+  return mix(getFromColor(q), getToColor(q), smoothstep(0.4, 0.6, p));
+}
+
+//== id: rt_sinewarp | Sine Warp | Warp
+vec4 transition(vec2 uv) {
+  float k = sin(progress * 3.14159);
+  vec2 q = clamp(uv + vec2(sin(uv.y * 20.0 + progress * 12.0), cos(uv.x * 14.0 + progress * 10.0)) * 0.025 * k, 0.0, 1.0);
+  return mix(getFromColor(q), getToColor(q), smoothstep(0.35, 0.65, progress));
+}
+
+//== id: rt_bulge | Bulge | Warp
+vec4 transition(vec2 uv) {
+  float k = sin(progress * 3.14159);
+  vec2 d = uv - 0.5;
+  float r = length(d);
+  vec2 q = clamp(0.5 + d * (1.0 - k * 0.7 * smoothstep(0.6, 0.0, r)), 0.0, 1.0);
+  return mix(getFromColor(q), getToColor(q), smoothstep(0.4, 0.6, progress));
+}
+
+//== id: rt_pinch | Pinch | Warp
+vec4 transition(vec2 uv) {
+  float k = sin(progress * 3.14159);
+  vec2 d = uv - 0.5;
+  float r = length(d);
+  vec2 q = clamp(0.5 + d * (1.0 + k * 1.5 * smoothstep(0.7, 0.0, r)), 0.0, 1.0);
+  return mix(getFromColor(q), getToColor(q), smoothstep(0.4, 0.6, progress));
+}
+
+//== id: rt_zoomrotate | Zoom Spin | Zoom
+vec4 transition(vec2 uv) {
+  float p = progress;
+  vec2 d = (uv - 0.5) * vec2(ratio, 1.0);
+  float a = p < 0.5 ? p * p * 12.0 : -(1.0 - p) * (1.0 - p) * 12.0;
+  float z = p < 0.5 ? 1.0 + p * p * 6.0 : 1.0 + (1.0 - p) * (1.0 - p) * 6.0;
+  vec2 q = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / z / vec2(ratio, 1.0) + 0.5;
+  vec2 m = 1.0 - abs(1.0 - mod(q, 2.0));
+  return p < 0.5 ? getFromColor(m) : getToColor(m);
+}
+
+//== id: rt_zoomoutin | Zoom Out In | Zoom
+vec4 transition(vec2 uv) {
+  float p = progress;
+  float z = p < 0.5 ? 1.0 - p * 1.2 : 1.0 - (1.0 - p) * 1.2;
+  vec2 q = 0.5 + (uv - 0.5) / z;
+  vec2 m = 1.0 - abs(1.0 - mod(q, 2.0));
+  float inside = step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0);
+  vec4 c = p < 0.5 ? getFromColor(m) : getToColor(m);
+  return c * mix(0.4, 1.0, inside);
+}
+
+//== id: rt_zoomblurin | Zoom Rush | Zoom
+vec4 transition(vec2 uv) {
+  float k = sin(progress * 3.14159);
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 12; i++) {
+    float s = 1.0 + k * 0.4 * float(i) / 11.0;
+    vec2 q = 0.5 + (uv - 0.5) / s;
+    acc += progress < 0.5 ? getFromColor(q).rgb : getToColor(q).rgb;
+  }
+  return vec4(acc / 12.0, 1.0);
+}
+
+//== id: rt_lightburst | Light Burst | Light
+vec4 transition(vec2 uv) {
+  float k = sin(progress * 3.14159);
+  vec2 d = (uv - 0.5) * vec2(ratio, 1.0);
+  float a = atan(d.y, d.x);
+  float rays = 0.5 + 0.5 * sin(a * 16.0 + progress * 6.0);
+  vec3 c = mix(getFromColor(uv).rgb, getToColor(uv).rgb, smoothstep(0.4, 0.6, progress));
+  vec3 light = vec3(1.0, 0.95, 0.85) * (rays * 0.5 + 0.5) * k * smoothstep(0.9, 0.0, length(d));
+  return vec4(min(c + light, vec3(1.0)), 1.0);
+}
+
+//== id: rt_dipwhite | Dip to White | Light
+vec4 transition(vec2 uv) {
+  float p = progress;
+  vec3 c = p < 0.5 ? getFromColor(uv).rgb : getToColor(uv).rgb;
+  return vec4(mix(c, vec3(1.0), 1.0 - abs(p * 2.0 - 1.0)), 1.0);
+}
+
+//== id: rt_dipcolor | Rainbow Dip | Light
+vec4 transition(vec2 uv) {
+  float p = progress;
+  vec3 c = p < 0.5 ? getFromColor(uv).rgb : getToColor(uv).rgb;
+  vec3 tone = 0.5 + 0.5 * cos(6.2831 * (p + vec3(0.0, 0.33, 0.67)));
+  return vec4(mix(c, tone, 1.0 - abs(p * 2.0 - 1.0)), 1.0);
+}
+
+//== id: rt_exposure | Exposure | Light
+vec4 transition(vec2 uv) {
+  float k = sin(progress * 3.14159);
+  vec3 c = mix(getFromColor(uv).rgb, getToColor(uv).rgb, smoothstep(0.35, 0.65, progress));
+  return vec4(min(c * (1.0 + k * 3.0), vec3(1.0)), 1.0);
+}
+
+//== id: rt_glitchslice | Glitch Slice | Glitch
+vec4 transition(vec2 uv) {
+  float k = sin(progress * 3.14159);
+  float row = floor(uv.y * 30.0);
+  float r = fract(sin(row * 78.233 + floor(progress * 16.0)) * 43758.5453);
+  float shift = (r - 0.5) * 0.3 * k;
+  vec2 q = vec2(fract(uv.x + shift), uv.y);
+  float m = step(r, progress);
+  if (progress >= 1.0) m = 1.0;
+  if (progress <= 0.0) m = 0.0;
+  return mix(getFromColor(q), getToColor(q), m);
+}
+
+//== id: rt_rgbsplit2 | Chroma Cut | Glitch
+vec4 transition(vec2 uv) {
+  float k = sin(progress * 3.14159) * 0.05;
+  vec4 a = vec4(getFromColor(clamp(uv + vec2(k, 0.0), 0.0, 1.0)).r, getFromColor(uv).g, getFromColor(clamp(uv - vec2(k, 0.0), 0.0, 1.0)).b, 1.0);
+  vec4 b = vec4(getToColor(clamp(uv + vec2(k, 0.0), 0.0, 1.0)).r, getToColor(uv).g, getToColor(clamp(uv - vec2(k, 0.0), 0.0, 1.0)).b, 1.0);
+  return mix(a, b, step(0.5, progress));
+}
+
+//== id: rt_pixelmelt | Pixel Melt | Glitch
+vec4 transition(vec2 uv) {
+  float k = sin(progress * 3.14159);
+  float size = 1.0 + k * 40.0;
+  vec2 cells = vec2(ratio * 400.0, 400.0) / size;
+  vec2 q = (floor(uv * cells) + 0.5) / cells;
+  float col = floor(uv.x * cells.x);
+  float drip = fract(sin(col * 12.9898) * 43758.5453) * 0.2 * k;
+  q.y = clamp(q.y + drip, 0.0, 1.0);
+  if (progress <= 0.0 || progress >= 1.0) q = uv;
+  return progress < 0.5 ? getFromColor(q) : getToColor(q);
+}
+
+//== id: rt_crossfade2 | Smooth Fade | Basic
+vec4 transition(vec2 uv) {
+  float p = progress * progress * (3.0 - 2.0 * progress);
+  return mix(getFromColor(uv), getToColor(uv), p);
+}
+
+//== id: rt_fadegray | Fade Through Gray | Basic
+vec4 transition(vec2 uv) {
+  float p = progress;
+  vec3 a = getFromColor(uv).rgb;
+  vec3 b = getToColor(uv).rgb;
+  float k = 1.0 - abs(p * 2.0 - 1.0);
+  vec3 c = p < 0.5 ? a : b;
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  return vec4(mix(c, vec3(l), k), 1.0);
+}
+
+//== id: rt_blurfade | Blur Fade | Basic
+vec4 transition(vec2 uv) {
+  float k = sin(progress * 3.14159);
+  vec3 a = vec3(0.0);
+  vec3 b = vec3(0.0);
+  for (int i = 0; i < 12; i++) {
+    float an = float(i) * 2.39996;
+    float r = sqrt(float(i) / 12.0) * 0.02 * k;
+    vec2 q = clamp(uv + vec2(cos(an), sin(an)) * r, 0.0, 1.0);
+    a += getFromColor(q).rgb;
+    b += getToColor(q).rgb;
+  }
+  return vec4(mix(a, b, progress) / 12.0, 1.0);
+}
+
+//== id: rt_wipediag | Soft Diagonal | Basic
+vec4 transition(vec2 uv) {
+  float e = progress * 2.2 - 0.1;
+  float m = smoothstep(e + 0.05, e - 0.05, uv.x + uv.y);
+  if (progress >= 1.0) m = 1.0;
+  if (progress <= 0.0) m = 0.0;
+  return mix(getFromColor(uv), getToColor(uv), m);
+}
+
+//== id: rt_wipeup | Wipe Up | Basic
+vec4 transition(vec2 uv) {
+  float m = smoothstep(progress * 1.1 - 0.05 + 0.03, progress * 1.1 - 0.05 - 0.03, uv.y);
+  if (progress >= 1.0) m = 1.0;
+  if (progress <= 0.0) m = 0.0;
+  return mix(getFromColor(uv), getToColor(uv), m);
+}
