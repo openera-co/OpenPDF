@@ -63,6 +63,13 @@ class ClipRenderer(
     private var inH = 0
     private var workW = 0
     private var workH = 0
+    private var fxScale = 1f
+    private var workFxW = 0f
+    private var workFxH = 0f
+
+    /** uResolution for library shaders: the pass's size as it would be in the 720p preview. */
+    private fun fxResolution(w: Int, h: Int): Pair<Float, Float> =
+        if (w == workW && h == workH && workFxW > 0f) workFxW to workFxH else w * fxScale to h * fxScale
     private val workTex = IntArray(2)
     private val workFb = IntArray(2)
     private val canvasTex = IntArray(2)
@@ -90,6 +97,11 @@ class ClipRenderer(
         val k = min(1f, cover * 1.05f)
         workW = (inputWidth * k).roundToInt().coerceAtLeast(2)
         workH = (inputHeight * k).roundToInt().coerceAtLeast(2)
+        // Library shaders measure sizes in pixels (dot size, blur radius, cell size). They are given the
+        // size the frame has in the 720p preview, so a 1080p or 4K export looks like the preview.
+        fxScale = com.reel.editor.engine.CompositionFactory.PREVIEW_HEIGHT.toFloat() / min(plan.canvasWidth, plan.canvasHeight)
+        workFxW = inputWidth * cover * fxScale
+        workFxH = inputHeight * cover * fxScale
         return Size(plan.canvasWidth, plan.canvasHeight)
     }
 
@@ -260,7 +272,8 @@ class ClipRenderer(
         val p = prog("fx:${use.def.id}") { catalog.singleSource(use.def) } ?: return passthrough(src)
         p.use()
         p.texture("uTex", src, 0)
-        p.set("uResolution", w.toFloat(), h.toFloat())
+        val (rw, rh) = fxResolution(w, h)
+        p.set("uResolution", rw, rh)
         p.set("uTime", timeSec)
         p.set("uDuration", durSec)
         p.set("uProgress", if (durSec > 0f) (timeSec / durSec).coerceIn(0f, 1f) else 0f)
@@ -475,7 +488,8 @@ class ClipRenderer(
         val p = prog("fx:${def.id}") { catalog.singleSource(def) } ?: return passthrough(src)
         p.use()
         p.texture("uTex", src, 0)
-        p.set("uResolution", w.toFloat(), h.toFloat())
+        val (rw, rh) = fxResolution(w, h)
+        p.set("uResolution", rw, rh)
         p.set("uTime", local / 1e6f)
         p.set("uProgress", visibility)
         p.set("uIntensity", 1f)
