@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Play button with two motion echoes and a spark: video, in motion. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M35.75,41.25 L62.00,55.00 L35.75,68.75 Z" android:fillColor="#FFFFFF" android:fillAlpha="0.2" android:strokeColor="#FFFFFF" android:strokeAlpha="0.2" android:strokeWidth="5.50" android:strokeLineJoin="round"/>
+    <path android:pathData="M41.25,41.25 L67.50,55.00 L41.25,68.75 Z" android:fillColor="#FFFFFF" android:fillAlpha="0.42" android:strokeColor="#FFFFFF" android:strokeAlpha="0.42" android:strokeWidth="5.50" android:strokeLineJoin="round"/>
+    <path android:pathData="M47.75,41.25 L74.00,55.00 L47.75,68.75 Z" android:fillColor="#FFFFFF" android:fillAlpha="1.0" android:strokeColor="#FFFFFF" android:strokeAlpha="1.0" android:strokeWidth="5.50" android:strokeLineJoin="round"/>
+    <path android:pathData="M76.5,35 l1.9,4.6 4.6,1.9 -4.6,1.9 -1.9,4.6 -1.9,-4.6 -4.6,-1.9 4.6,-1.9z" android:fillColor="#FFF3C4"/>
+</vector>

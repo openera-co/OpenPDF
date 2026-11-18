@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- Media3 unstable and experimental APIs are opted into for the whole module through
+         compiler flags in build.gradle.kts; the annotation-based check cannot see those. -->
+    <issue id="UnsafeOptInUsageError" severity="ignore" />
+    <!-- Versions are pinned on purpose: newer Compose and AGP releases need compileSdk 37. -->
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="NewerVersionAvailable" severity="ignore" />
+</lint>
