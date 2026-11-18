@@ -4391,6 +4391,7 @@ vec4 effect(vec2 uv) {
     float fi = float(i);
     float sp = 0.12 + rand(vec2(fi, 1.0)) * 0.15;
     vec2 p = vec2(rand(vec2(fi, 2.0)) + sin(uTime * 1.3 + fi) * 0.03, fract(rand(vec2(fi, 3.0)) + uTime * sp) * 1.3 - 0.15);
+    if (abs(uv.x - p.x) > 0.12 || abs(uv.y - p.y) > 0.14) continue;
     vec2 d = (uv - p) * asp / (0.07 + rand(vec2(fi, 4.0)) * 0.06);
     d.y = -d.y + 0.3;
     float a = atan(d.x, d.y) / PI;
@@ -4675,6 +4676,7 @@ vec4 effect(vec2 uv) {
     float fi = float(i);
     float x = rand(vec2(fi, 1.0));
     float y = fract(1.0 - (uTime * (0.15 + rand(vec2(fi, 2.0)) * 0.2) + rand(vec2(fi, 3.0))));
+    if (abs(uv.x - x) > 0.03 || uv.y - y < 0.0 || uv.y - y > 0.12) continue;
     float wx = x + sin(uTime * 3.0 + fi + uv.y * 20.0) * 0.015;
     float d = abs((uv.x - wx) * asp.x);
     float len = smoothstep(0.0, 0.02, uv.y - y) * smoothstep(0.12, 0.08, uv.y - y);

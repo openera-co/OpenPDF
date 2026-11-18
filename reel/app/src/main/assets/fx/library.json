@@ -4092,7 +4092,7 @@
 "kind": "effect",
 "category": "Party",
 "params": [],
-"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 10; i++) {\n    float fi = float(i);\n    float sp = 0.12 + rand(vec2(fi, 1.0)) * 0.15;\n    vec2 p = vec2(rand(vec2(fi, 2.0)) + sin(uTime * 1.3 + fi) * 0.03, fract(rand(vec2(fi, 3.0)) + uTime * sp) * 1.3 - 0.15);\n    vec2 d = (uv - p) * asp / (0.07 + rand(vec2(fi, 4.0)) * 0.06);\n    d.y = -d.y + 0.3;\n    float a = atan(d.x, d.y) / PI;\n    float r = length(d);\n    float h = abs(a);\n    float shape = (13.0 * h - 22.0 * h * h + 10.0 * h * h * h) / (6.0 - 5.0 * h);\n    float m = smoothstep(0.05, 0.0, r - shape * 0.5);\n    c = mix(c, vec3(1.0, 0.25 + 0.2 * rand(vec2(fi, 5.0)), 0.45), m * 0.9);\n  }\n  return vec4(c, 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 10; i++) {\n    float fi = float(i);\n    float sp = 0.12 + rand(vec2(fi, 1.0)) * 0.15;\n    vec2 p = vec2(rand(vec2(fi, 2.0)) + sin(uTime * 1.3 + fi) * 0.03, fract(rand(vec2(fi, 3.0)) + uTime * sp) * 1.3 - 0.15);\n    if (abs(uv.x - p.x) > 0.12 || abs(uv.y - p.y) > 0.14) continue;\n    vec2 d = (uv - p) * asp / (0.07 + rand(vec2(fi, 4.0)) * 0.06);\n    d.y = -d.y + 0.3;\n    float a = atan(d.x, d.y) / PI;\n    float r = length(d);\n    float h = abs(a);\n    float shape = (13.0 * h - 22.0 * h * h + 10.0 * h * h * h) / (6.0 - 5.0 * h);\n    float m = smoothstep(0.05, 0.0, r - shape * 0.5);\n    c = mix(c, vec3(1.0, 0.25 + 0.2 * rand(vec2(fi, 5.0)), 0.45), m * 0.9);\n  }\n  return vec4(c, 1.0);\n}"
 },
 {
 "id": "sparkletrail",
@@ -4310,7 +4310,7 @@
 "kind": "effect",
 "category": "Party",
 "params": [],
-"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 18; i++) {\n    float fi = float(i);\n    float x = rand(vec2(fi, 1.0));\n    float y = fract(1.0 - (uTime * (0.15 + rand(vec2(fi, 2.0)) * 0.2) + rand(vec2(fi, 3.0))));\n    float wx = x + sin(uTime * 3.0 + fi + uv.y * 20.0) * 0.015;\n    float d = abs((uv.x - wx) * asp.x);\n    float len = smoothstep(0.0, 0.02, uv.y - y) * smoothstep(0.12, 0.08, uv.y - y);\n    float m = smoothstep(0.006, 0.002, d) * len;\n    c = mix(c, hsv2rgb(vec3(rand(vec2(fi, 4.0)), 0.75, 1.0)), m);\n  }\n  return vec4(c, 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 18; i++) {\n    float fi = float(i);\n    float x = rand(vec2(fi, 1.0));\n    float y = fract(1.0 - (uTime * (0.15 + rand(vec2(fi, 2.0)) * 0.2) + rand(vec2(fi, 3.0))));\n    if (abs(uv.x - x) > 0.03 || uv.y - y < 0.0 || uv.y - y > 0.12) continue;\n    float wx = x + sin(uTime * 3.0 + fi + uv.y * 20.0) * 0.015;\n    float d = abs((uv.x - wx) * asp.x);\n    float len = smoothstep(0.0, 0.02, uv.y - y) * smoothstep(0.12, 0.08, uv.y - y);\n    float m = smoothstep(0.006, 0.002, d) * len;\n    c = mix(c, hsv2rgb(vec3(rand(vec2(fi, 4.0)), 0.75, 1.0)), m);\n  }\n  return vec4(c, 1.0);\n}"
 },
 {
 "id": "popcorn",
