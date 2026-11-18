@@ -77,13 +77,18 @@ app/src/main/java/com/reel/editor/
   update/      Updater (in-app updates with binary patches)
   ui/          Compose screens and panels (EditorScreen, Timeline, Panels*, MediaPicker, ...)
 app/src/main/cpp/  JNI core: looks (LUT generator), audio analysis, voice DSP, image ops,
-               captions core; third_party/whisper.cpp vendored (v1.9.5, CPU only)
-app/src/main/assets/fx/  GLSL library: 307 transitions (211 from gl-transitions, MIT, plus 96 of
-               our own), 145 filters, 157 effects, 54 clip animations, internal shaders (canvas,
+               captions core; third_party/whisper.cpp vendored (v1.9.5, CPU only, one local patch
+               marked "Reel patch": the abort callback also reaches the scheduler's backends, so
+               Cancel stops the encoder mid-window instead of after a whole 30 s window)
+app/src/main/assets/fx/  GLSL library: 340 transitions (211 from gl-transitions, MIT, plus 129 of
+               our own), 264 filters (78 of them colour grades), 210 effects, 72 clip animations,
+               internal shaders (canvas,
                grade, overlay_blend, privacy, ...)
 tools/fx/      shader sources and tools: library.glsl (filters, effects, clip animations; built by
                build_library.py), reel_transitions.glsl (our transitions; build_transitions.py),
-               validate_shaders.py (glslangValidator), render_check.py (renders everything)
+               validate_shaders.py (glslangValidator), render_check.py (renders everything),
+               grades.py (writes grades.glsl, the colour-grade pack, from one table),
+               make_test_clip.py + fx_video_check.py (every filter and effect over moving footage)
 tools/update/  make_update.py (update patches) + README
 ```
 
@@ -191,6 +196,16 @@ The preview and the export share this path. Only the preview honours "hold to se
   and names, well-formed params, and no GLSL ES 3 constructs (`texture(`, `round(`, `%`, shifts,
   `switch`, `uint`...), which GLSL ES 1.00 drivers reject. Transitions have no shared helpers: a
   transition that needs `rand`, `noise` or `PI` defines its own (`rand_`, `noise_`, `PI_`).
+- **Shader rules:** library shaders get `uResolution` as the frame's size in the 720p preview
+  (`ClipRenderer.fxResolution`), not the real pass size, so sizes in pixels (dots, cells, blur
+  radius) look the same in a 1080p or 4K export as in the preview. Wide blurs must not use a square
+  tap grid (it draws a lattice of sharp ghost copies, which in the face blur could leave a face
+  recognisable): use a golden-angle spiral turned by a fixed per-pixel angle (`softBlur` in
+  canvas.frag, the Blur filter, privacy.frag).
+- **Real footage:** `python3 tools/fx/make_test_clip.py clip.npy` builds an 8 s moving clip from
+  natural photos (handheld portrait, pan, zoom, cuts); `tools/fx/fx_video_check.py clip.npy out`
+  renders every filter and effect over it and reports flicker against the footage, dead frames,
+  crushed tones and preview/export mismatch, with strips of anything flagged (about 8 minutes).
 - **Shaders:** `python3 tools/fx/validate_shaders.py` compiles every GLSL file with
   glslangValidator. `tools/fx/render_check.py <dir>` renders every filter, effect, animation and
   transition on a headless GPU (Mesa through EGL) with the app's own source assembly, on the bundled
@@ -260,6 +275,13 @@ release key). Patches exist for 1.4.0 → 1.6.0 and
 - Remove pauses works on clips at one speed (not speed curves) and leaves layers above in place.
 - On the software emulator, exports with heavy audio can go more than 25 s between output samples;
   the exporter allows 2 minutes before calling an export stuck.
+- **Export pacing on the emulator:** its OMX decoder drops about 4 frames in the first 200 ms of
+  every clip in an export (the renderer never receives them; same with or without B-frames), so
+  each clip start holds its first frame ~150 ms. Phones first shipped on Android 12+ have no OMX
+  video decoders and should not do this; run `PacingDeviceTest` on a real phone to confirm. It is
+  strict on phones and allows exactly this on emulators.
+- Auto captions on the software emulator take 15+ minutes for 20 s of speech; the same model on the
+  build machine's CPU takes 9.5 s. `captions_test` (host) checks the NASA clip word for word.
 - Not tapped through on the emulator yet: caption Merge and the Share project send sheet. Their
   logic is covered by unit and device tests.
 
