@@ -67,13 +67,25 @@ object MediaProbe {
             r.setDataSource(context, uri)
             val dur = (r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L) * 1000
             if (dur <= 0) return null
-            val name = title ?: r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: uri.lastPathSegment ?: "Audio"
+            // A MediaStore uri's last segment is a row id ("23"): prefer the file's display name.
+            val name = title ?: r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)?.takeIf { it.isNotBlank() }
+                ?: displayName(context, uri) ?: uri.lastPathSegment ?: "Audio"
             AudioItem(uri = uri.toString(), title = name, kind = kind, sourceDurationUs = dur, startUs = startUs)
         } catch (e: Exception) {
             null
         } finally {
             r.release()
         }
+    }
+
+    /** The file name a content provider shows for [uri], without its extension. */
+    fun displayName(context: Context, uri: Uri): String? = try {
+        if (uri.scheme == "file") uri.lastPathSegment?.substringBeforeLast('.')
+        else context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0)?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } else null
+        }
+    } catch (e: Exception) {
+        null
     }
 
     private fun videoTrackDurationUs(context: Context, uri: Uri): Long? {
