@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -106,7 +107,10 @@ fun FiltersPanel(vm: EditorViewModel, onClose: () -> Unit) {
     val catalog = remember { FxCatalog.get(ctx) }
     val project by vm.project.collectAsStateCompat()
     val selection by vm.selection.collectAsStateCompat()
-    val clip = vm.targetClip()
+    // Read the project state here: targetClip() reads the view model directly, and with a clip
+    // selected nothing else in this panel read `project`, so picking a filter never redrew the
+    // panel (no highlight on the new tile, the old filter's sliders stayed).
+    val clip = remember(project, selection) { vm.targetClip() }
     val timed = (selection as? Selection.FilterSel)?.let { s -> project.filters.firstOrNull { it.id == s.id } }
     var tab by remember { mutableIntStateOf(if (clip?.filter != null || timed?.shaderFx != null) 1 else 0) }
     var userVersion by remember { mutableIntStateOf(0) }
@@ -204,20 +208,33 @@ fun FiltersPanel(vm: EditorViewModel, onClose: () -> Unit) {
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 artCats.forEach { Chip(it, it == artCat) { artCat = it } }
             }
-            LazyVerticalGrid(GridCells.Fixed(5), Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 200.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val ref = timed?.shaderFx ?: clip?.filter
+            // With a filter picked, its sliders sit below the grid. The grid keeps one full row of
+            // tiles and the sliders scroll; before, each slider squeezed the grid until no tile
+            // could be tapped.
+            val gridMod = if (ref != null) Modifier.height(100.dp) else Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 200.dp)
+            LazyVerticalGrid(GridCells.Fixed(5), gridMod.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 item { FxTile("None", currentShader == null, Icons.Rounded.Block) { applyShader(null) } }
                 items(catalog.filters.filter { artCat == "All" || it.category == artCat }, key = { it.id }) { f -> ShaderFxTile(catalog, f, com.reel.editor.fx.FxThumbs.Mode.STATIC, src, tick, currentShader == f.id, fxBrush(f), Icons.Rounded.FilterVintage) { applyShader(f.id) } }
             }
-            val ref = timed?.shaderFx ?: clip?.filter
-            if (ref != null) {
+            if (ref != null) Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 val amount = timed?.amount ?: ref.intensity
                 ValueSlider(Icons.Rounded.Tune, "Intensity", amount * 100, 0f..100f, { "${it.roundToInt()}" }, C.Accent, default = 100f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
                     if (timed != null) vm.live { p -> p.copy(filters = p.filters.map { if (it.id == timed.id) it.copy(amount = v / 100f) else it }) }
                     else if (clip != null) vm.updateClip(clip.id, true) { it.copy(filter = it.filter?.copy(intensity = v / 100f)) }
                 }
                 catalog.fx(ref.id)?.let { def -> ParamSliders(vm, def, ref) { r -> if (timed != null) vm.live { p -> p.copy(filters = p.filters.map { if (it.id == timed.id) it.copy(shaderFx = r) else it }) } else if (clip != null) vm.updateClip(clip.id, true) { it.copy(filter = r) } } }
+                FilterActions(vm, clip, timed)
             }
         }
+        if (!(tab == 1 && (timed?.shaderFx ?: clip?.filter) != null)) FilterActions(vm, clip, timed)
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** Apply to all / As track (clip filter) or Delete (timed filter). */
+@Composable
+private fun FilterActions(vm: EditorViewModel, clip: com.reel.editor.model.Clip?, timed: com.reel.editor.model.TimedFilter?) {
         Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (timed == null && clip != null) {
                 PillButton(Icons.Rounded.ContentCopy, "Apply to all") {
@@ -227,8 +244,6 @@ fun FiltersPanel(vm: EditorViewModel, onClose: () -> Unit) {
                 PillButton(Icons.Rounded.Layers, "As track") { vm.addTimedFilter(clip.lookId ?: "fresh".takeIf { clip.filter == null }, clip.filter?.id) }
             } else if (timed != null) PillButton(Icons.Rounded.Delete, "Delete") { vm.deleteSelected() }
         }
-        Spacer(Modifier.height(8.dp))
-    }
 }
 
 @Composable
@@ -275,7 +290,8 @@ fun EffectsPanel(vm: EditorViewModel, onClose: () -> Unit) {
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             cats.forEach { Chip(it, it == cat) { cat = it } }
         }
-        LazyVerticalGrid(GridCells.Fixed(4), Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 180.dp).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val gridMod = if (sel != null) Modifier.height(116.dp) else Modifier.weight(1f, fill = false).heightIn(min = 116.dp, max = 180.dp)
+        LazyVerticalGrid(GridCells.Fixed(4), gridMod.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(catalog.effects.filter { it.category == cat }, key = { it.id }) { e ->
                 ShaderFxTile(catalog, e, com.reel.editor.fx.FxThumbs.Mode.LOOP, src, tick, sel?.fx?.id == e.id, fxBrush(e), Icons.Rounded.AutoAwesome) {
                     if (sel != null) vm.edit { p -> p.copy(effects = p.effects.map { if (it.id == sel.id) it.copy(fx = FxRef(e.id)) else it }) }
@@ -284,7 +300,7 @@ fun EffectsPanel(vm: EditorViewModel, onClose: () -> Unit) {
                 }
             }
         }
-        if (sel != null) {
+        if (sel != null) Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             ValueSlider(Icons.Rounded.Tune, "Intensity", sel.fx.intensity * 100, 0f..100f, { "${it.roundToInt()}" }, C.Effect, default = 100f, onStart = vm::beginGesture, onEnd = vm::endGesture) { v ->
                 vm.live { p -> p.copy(effects = p.effects.map { if (it.id == sel.id) it.copy(fx = it.fx.copy(intensity = v / 100f)) else it }) }
             }

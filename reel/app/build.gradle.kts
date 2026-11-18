@@ -23,8 +23,8 @@ android {
         applicationId = "com.reel.editor"
         minSdk = 26
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.9.0"
+        versionCode = 17
+        versionName = "1.10.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Where the app looks for updates (an update.json from tools/update/make_update.py).
         // Set with -Preel.updateUrl=... or in gradle.properties; users can also enter one in the app.
