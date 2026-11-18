@@ -77,6 +77,16 @@ object Exporter {
         }.start()
     }
 
+    /** Whether some encoder for [mime] takes exactly [w] x [h] (not just [h] x [w]). */
+    private fun supportsSize(mime: String, w: Int, h: Int): Boolean = try {
+        android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
+            info.isEncoder && info.supportedTypes.any { it.equals(mime, ignoreCase = true) } &&
+                info.getCapabilitiesForType(mime).videoCapabilities?.isSizeSupported(w, h) == true
+        }
+    } catch (e: Exception) {
+        true
+    }
+
     private fun startBuilt(app: Context, project: Project, settings: ExportSettings, built: CompositionFactory.Built, dir: File, gif: Boolean, audio: Boolean, fps: Int) {
         val base = "${project.name.replace(Regex("[^A-Za-z0-9_-]"), "_").ifEmpty { "Reel" }}_${System.currentTimeMillis()}"
         val out = File(dir, if (audio) "$base.m4a" else "$base.mp4")
@@ -90,7 +100,10 @@ object Exporter {
             .setVideoMimeType(mime)
             .setAudioMimeType(MimeTypes.AUDIO_AAC)
             .setEncoderFactory(encoder)
-            .setPortraitEncodingEnabled(true)
+            // Upright (portrait) encoding only where an encoder takes that size. Many encoders stop
+            // at 1920x1088: asked for 1080x1920 upright, the fallback shrank the video to 594x1056.
+            // Otherwise the frame is encoded turned (1920x1080) and tagged to play upright.
+            .setPortraitEncodingEnabled(supportsSize(mime, built.canvasWidth, built.canvasHeight))
             // Heavy effects on a slow phone can leave long gaps between output samples; only a
             // really stuck export should fail.
             .setMaxDelayBetweenMuxerSamplesMs(120_000)

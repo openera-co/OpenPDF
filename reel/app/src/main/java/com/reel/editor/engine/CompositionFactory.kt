@@ -34,6 +34,11 @@ object CompositionFactory {
         val plans = RenderPlans.build(project, catalog, w, h)
         live?.set(plans)
         val placed = TimelineMath.place(project.clips)
+        // Media3 mixes at the first input's sample rate: a 22 kHz voice clip would pull 44.1 kHz
+        // music down to 22 kHz in the export. Every source is brought to one rate first.
+        val exporting = exportFps != null || premixInto != null
+        fun mixRate(chain: List<AudioProcessor>): List<AudioProcessor> =
+            if (!exporting) chain else chain + androidx.media3.common.audio.SonicAudioProcessor().apply { setOutputSampleRateHz(AudioPremix.RATE) }
 
         val items = project.clips.mapIndexed { i, clip ->
             val plan = plans[i]
@@ -57,7 +62,7 @@ object CompositionFactory {
                 SpeedMath.mediaToTimeline(clip.speed, clip.trimmedDurationUs, media)
             }, extraGain = if (keyed) { off -> com.reel.editor.model.interpolateValue(clip.volume, clip.volumeKeys, off) } else null)
             val b = EditedMediaItem.Builder(item)
-                .setEffects(Effects(audio, listOf(ClipRenderEffect(context, plan, live))))
+                .setEffects(Effects(mixRate(audio), listOf(ClipRenderEffect(context, plan, live))))
             if (clip.kind == ClipKind.PHOTO) {
                 b.setDurationUs(clip.trimmedDurationUs).setFrameRate(30)
             } else {
@@ -139,7 +144,7 @@ object CompositionFactory {
                     val mi = MediaItem.Builder().setUri(a.uri).setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder().setStartPositionUs(a.trimStartUs).setEndPositionUs(a.trimEndUs).build(),
                     ).build()
-                    sb.addItem(EditedMediaItem.Builder(mi).setRemoveVideo(true).setDurationUs(a.sourceDurationUs).setEffects(Effects(a.fx, emptyList())).build())
+                    sb.addItem(EditedMediaItem.Builder(mi).setRemoveVideo(true).setDurationUs(a.sourceDurationUs).setEffects(Effects(mixRate(a.fx), emptyList())).build())
                     t = a.startUs + (a.trimEndUs - a.trimStartUs)
                 }
                 sequences += sb.build()
