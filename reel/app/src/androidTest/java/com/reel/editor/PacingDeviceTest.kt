@@ -139,5 +139,28 @@ class PacingDeviceTest {
         }
     }
 
+    @Test
+    fun portraitExportKeepsItsResolution() {
+        // A 9:16 project at 1080p must come out 1080x1920 as shown (stored turned plus a rotation
+        // tag where the encoder stops at 1920x1088), not shrunk to fit the encoder upright.
+        val a = MediaProbe.probeClip(ctx, asset("a.mp4"))!!.copy(trimEndUs = 1_000_000)
+        val p = Project(name = "Portrait", clips = listOf(a)).let { it.copy(canvas = it.canvas.copy(ratio = com.reel.editor.model.AspectRatio.R9_16)) }
+        val d = export(p, ExportSettings(height = 1080, fps = 30))
+        try {
+            val r = android.media.MediaMetadataRetriever().apply { setDataSource(d.file.absolutePath) }
+            val w = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)!!.toInt()
+            val h = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)!!.toInt()
+            val rot = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toInt() ?: 0
+            r.release()
+            val (sw, sh) = if (rot % 180 == 0) w to h else h to w
+            Log.i(TAG, "portrait stored ${w}x$h rotation $rot -> shown ${sw}x$sh")
+            assertEquals(1080, sw)
+            assertEquals(1920, sh)
+        } finally {
+            runCatching { ctx.contentResolver.delete(d.uri, null, null) }
+            d.file.delete()
+        }
+    }
+
     companion object { const val TAG = "ReelPacingTest" }
 }
