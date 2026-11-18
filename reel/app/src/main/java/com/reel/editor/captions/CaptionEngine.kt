@@ -12,10 +12,14 @@ import com.reel.editor.model.TimedWord
 import com.reel.editor.model.TimelineMath
 import com.reel.editor.nativebridge.NativeCore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.exp
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -51,9 +55,33 @@ class CaptionEngine(private val context: Context) {
                     val pcm16 = NativeCore.resample(pcm.samples, pcm.sampleRate, 16_000)
                     val span = s.mediaEndUs - s.mediaStartUs
                     val base = done
-                    val res = NativeCore.speechTranscribe(handle, pcm16, language, translate, threads()) { pct ->
-                        progress(Progress(Stage.LISTENING, (base + span * pct / 100).toFloat() / total))
+                    // The model reports progress once per 30 s window, so a short clip would sit at
+                    // 0% until it is done. In between, move the bar on an estimate from this phone's
+                    // measured speed; the model's own reports take over when they come.
+                    val reported = java.util.concurrent.atomic.AtomicInteger(0)
+                    val expectedMs = (span / 1000.0 * speedFactor()).coerceAtLeast(1500.0)
+                    val started = System.nanoTime()
+                    val res = coroutineScope {
+                        val ticker = launch {
+                            while (isActive) {
+                                delay(250)
+                                val t = (System.nanoTime() - started) / 1e6
+                                // Approaches 90% of this clip's share; never claims it is finished.
+                                val est = (0.9 * (1 - exp(-t / expectedMs))).coerceAtMost(0.9)
+                                val pct = maxOf(reported.get() / 100.0, est)
+                                progress(Progress(Stage.LISTENING, (base + span * pct).toFloat() / total))
+                            }
+                        }
+                        try {
+                            NativeCore.speechTranscribe(handle, pcm16, language, translate, threads()) { pct ->
+                                reported.set(pct)
+                                progress(Progress(Stage.LISTENING, (base + span * pct / 100).toFloat() / total))
+                            }
+                        } finally {
+                            ticker.cancel()
+                        }
                     }
+                    learnSpeed(span, System.nanoTime() - started)
                     currentCoroutineContext().ensureActive()
                     done += span
                     if (res == null) continue
@@ -84,6 +112,19 @@ class CaptionEngine(private val context: Context) {
     }
 
     private fun threads() = Runtime.getRuntime().availableProcessors().coerceIn(2, 6)
+
+    private val prefs by lazy { context.getSharedPreferences("captions", Context.MODE_PRIVATE) }
+
+    /** Milliseconds of work per second of audio on this phone (starts at a mid-range guess). */
+    private fun speedFactor(): Double = prefs.getFloat("ms_per_audio_s", 600f).toDouble()
+
+    private fun learnSpeed(spanUs: Long, tookNs: Long) {
+        if (spanUs < 2_000_000) return
+        val measured = (tookNs / 1e6) / (spanUs / 1e6)
+        // Smooth over runs; the 30 s window makes very short clips look slower per second.
+        val next = (speedFactor() * 0.6 + measured * 0.4).coerceIn(50.0, 20_000.0)
+        prefs.edit().putFloat("ms_per_audio_s", next.toFloat()).apply()
+    }
 
     /** Clip audio (unmuted video clips) and voiceovers, in timeline order. Music is skipped. */
     private fun sources(p: Project): List<Source> {
