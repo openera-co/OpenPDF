@@ -13,6 +13,7 @@ import androidx.media3.transformer.Effects
 import com.reel.editor.fx.ClipRenderEffect
 import com.reel.editor.fx.FxCatalog
 import com.reel.editor.fx.RenderPlans
+import com.reel.editor.media.MediaProbe
 import com.reel.editor.model.ClipKind
 import com.reel.editor.model.Project
 import com.reel.editor.model.SpeedMath
@@ -153,11 +154,20 @@ object CompositionFactory {
 
         val cb = Composition.Builder(sequences)
             .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)
-        if (exportFps != null) {
+        // Frame dropping only when some clip runs faster than the export. Media3's dropper restarts
+        // at every clip and lost the frames right after each start (a ~150 ms freeze at the start
+        // and at every cut, PacingDeviceTest); at or below the export rate nothing needs dropping.
+        if (exportFps != null && needsFrameDrop(context, project, exportFps)) {
             cb.setEffects(Effects(emptyList(), listOf(FrameDropEffect.createDefaultFrameDropEffect(exportFps.toFloat()))))
         }
         return Built(cb.build(), w, h, total)
     }
+
+    /** Whether any video clip's frame rate is clearly above [fps] (unknown rates count as 30). */
+    private fun needsFrameDrop(context: Context, project: Project, fps: Int): Boolean =
+        project.clips.any { c ->
+            c.kind == ClipKind.VIDEO && ((MediaProbe.frameRate(context, android.net.Uri.parse(c.uri)) ?: 30) * maxOf(c.speed.constant, c.speed.curve?.maxOrNull() ?: 0f)) > fps * 1.05f
+        }
 
     /**
      * Sounds playing at the same moment, each on its own sequence. Sound effects stack up quickly,
