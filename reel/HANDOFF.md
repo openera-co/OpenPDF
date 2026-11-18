@@ -199,6 +199,12 @@ The preview and the export share this path. Only the preview honours "hold to se
   sheets for a visual pass. It takes about a minute. `FxThumbsDeviceTest` runs the same checks on a
   phone's GPU. Known subtle ones that the checks flag on purpose: Chromatic, Smooth, Film grain.
 
+- **1.9.0 compatibility pass:** 105 JVM tests and lint (0 errors) pass. All native libraries in the
+  APK are 16 KB aligned (`readelf` LOAD align 0x4000 on arm64-v8a, armeabi-v7a, x86_64;
+  `zipalign -c -P 16` passes), as Android 15+ devices require. On an API 30 x86_64 emulator the app
+  installs and launches, and `FxThumbsDeviceTest` passes for all 663 shaders (about 14 minutes on the
+  software GPU).
+
 Notes on the emulator used during development (API 30, x86_64, software GPU, `-accel off`):
 
 - It is very slow. Exports take about 50× real time, and "System UI / Reel isn't responding"
