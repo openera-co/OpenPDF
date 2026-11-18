@@ -236,14 +236,20 @@ vec4 effect(vec2 uv) {
 //== id: tiltshift | Tilt shift | filter | Lens
 //== param: focus float 0.5 0.1 0.9
 vec4 effect(vec2 uv) {
-  float blur = smoothstep(0.08, 0.35, abs(uv.y - focus)) * 4.0 / uResolution.y;
+  vec2 R = smoothstep(0.08, 0.35, abs(uv.y - focus)) * 28.0 / uResolution;
+  float rot = rand(floor(uv * uResolution)) * 6.2831853;
   vec3 acc = vec3(0.0);
-  for (int i = -3; i <= 3; i++) {
-    for (int j = -3; j <= 3; j++) {
-      acc += getColor(uv + vec2(float(i), float(j)) * blur * vec2(uResolution.y / uResolution.x, 1.0) * 2.0).rgb;
-    }
+  float wsum = 0.0;
+  for (int i = 0; i < 36; i++) {
+    float fi = float(i) + 0.5;
+    float rr = sqrt(fi / 36.0);
+    float an = fi * 2.39996323 + rot;
+    float w = exp(-rr * rr * 2.0);
+    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;
+    wsum += w;
   }
-  vec3 c = acc / 49.0;
+  vec3 c = acc / wsum;
+
   vec3 hsv = rgb2hsv(c);
   hsv.y = min(1.0, hsv.y * 1.25);
   return vec4(hsv2rgb(hsv), 1.0);
@@ -318,17 +324,20 @@ vec4 effect(vec2 uv) {
 //== id: blur | Blur | filter | Detail
 //== param: radius float 6.0 1.0 20.0
 vec4 effect(vec2 uv) {
-  vec2 px = radius / uResolution / 3.0;
+  vec2 R = radius * 1.6 / uResolution;
+  float rot = rand(floor(uv * uResolution)) * 6.2831853;
   vec3 acc = vec3(0.0);
-  float w = 0.0;
-  for (int i = -3; i <= 3; i++) {
-    for (int j = -3; j <= 3; j++) {
-      float k = exp(-float(i * i + j * j) / 8.0);
-      acc += getColor(uv + vec2(float(i), float(j)) * px).rgb * k;
-      w += k;
-    }
+  float wsum = 0.0;
+  for (int i = 0; i < 36; i++) {
+    float fi = float(i) + 0.5;
+    float rr = sqrt(fi / 36.0);
+    float an = fi * 2.39996323 + rot;
+    float w = exp(-rr * rr * 2.0);
+    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;
+    wsum += w;
   }
-  return vec4(acc / w, 1.0);
+  vec3 c = acc / wsum;
+  return vec4(c, 1.0);
 }
 
 //== id: vignettefx | Vignette | filter | Detail
@@ -705,14 +714,20 @@ vec4 effect(vec2 uv) {
 
 //== id: focuspull | Focus pull | effect | Lens
 vec4 effect(vec2 uv) {
-  float r = (1.0 - uProgress) * 8.0 / uResolution.y;
+  vec2 R = (1.0 - uProgress) * 30.0 / uResolution;
+  float rot = rand(floor(uv * uResolution)) * 6.2831853;
   vec3 acc = vec3(0.0);
-  for (int i = -2; i <= 2; i++) {
-    for (int j = -2; j <= 2; j++) {
-      acc += getColor(uv + vec2(float(i), float(j)) * r * vec2(uResolution.y / uResolution.x, 1.0) * 1.5).rgb;
-    }
+  float wsum = 0.0;
+  for (int i = 0; i < 36; i++) {
+    float fi = float(i) + 0.5;
+    float rr = sqrt(fi / 36.0);
+    float an = fi * 2.39996323 + rot;
+    float w = exp(-rr * rr * 2.0);
+    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;
+    wsum += w;
   }
-  return vec4(acc / 25.0, 1.0);
+  vec3 c = acc / wsum;
+  return vec4(c, 1.0);
 }
 
 //== id: spotlight | Spotlight | effect | Light
@@ -822,14 +837,21 @@ vec4 effect(vec2 uv) {
 
 //== id: anim_blur | Blur in | anim | Basic
 vec4 effect(vec2 uv) {
-  float r = (1.0 - uProgress) * 12.0 / uResolution.y;
+  vec2 R = (1.0 - uProgress) * 60.0 / uResolution;
+  float rot = rand(floor(uv * uResolution)) * 6.2831853;
   vec3 acc = vec3(0.0);
-  for (int i = -2; i <= 2; i++) {
-    for (int j = -2; j <= 2; j++) {
-      acc += getColor(uv + vec2(float(i), float(j)) * r * vec2(uResolution.y / uResolution.x, 1.0) * 2.0).rgb;
-    }
+  float wsum = 0.0;
+  for (int i = 0; i < 36; i++) {
+    float fi = float(i) + 0.5;
+    float rr = sqrt(fi / 36.0);
+    float an = fi * 2.39996323 + rot;
+    float w = exp(-rr * rr * 2.0);
+    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;
+    wsum += w;
   }
-  return vec4(acc / 25.0 * min(1.0, 0.3 + uProgress), 1.0);
+  vec3 c = acc / wsum;
+  if (uProgress >= 1.0) c = getColor(uv).rgb;
+  return vec4(c * min(1.0, 0.3 + uProgress), 1.0);
 }
 
 //== id: anim_iris | Circle | anim | Shape

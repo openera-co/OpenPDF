@@ -392,7 +392,7 @@
 "max": 0.9
 }
 ],
-"code": "vec4 effect(vec2 uv) {\n  float blur = smoothstep(0.08, 0.35, abs(uv.y - focus)) * 4.0 / uResolution.y;\n  vec3 acc = vec3(0.0);\n  for (int i = -3; i <= 3; i++) {\n    for (int j = -3; j <= 3; j++) {\n      acc += getColor(uv + vec2(float(i), float(j)) * blur * vec2(uResolution.y / uResolution.x, 1.0) * 2.0).rgb;\n    }\n  }\n  vec3 c = acc / 49.0;\n  vec3 hsv = rgb2hsv(c);\n  hsv.y = min(1.0, hsv.y * 1.25);\n  return vec4(hsv2rgb(hsv), 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec2 R = smoothstep(0.08, 0.35, abs(uv.y - focus)) * 28.0 / uResolution;\n  float rot = rand(floor(uv * uResolution)) * 6.2831853;\n  vec3 acc = vec3(0.0);\n  float wsum = 0.0;\n  for (int i = 0; i < 36; i++) {\n    float fi = float(i) + 0.5;\n    float rr = sqrt(fi / 36.0);\n    float an = fi * 2.39996323 + rot;\n    float w = exp(-rr * rr * 2.0);\n    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;\n    wsum += w;\n  }\n  vec3 c = acc / wsum;\n\n  vec3 hsv = rgb2hsv(c);\n  hsv.y = min(1.0, hsv.y * 1.25);\n  return vec4(hsv2rgb(hsv), 1.0);\n}"
 },
 {
 "id": "softfocus",
@@ -521,7 +521,7 @@
 "max": 20.0
 }
 ],
-"code": "vec4 effect(vec2 uv) {\n  vec2 px = radius / uResolution / 3.0;\n  vec3 acc = vec3(0.0);\n  float w = 0.0;\n  for (int i = -3; i <= 3; i++) {\n    for (int j = -3; j <= 3; j++) {\n      float k = exp(-float(i * i + j * j) / 8.0);\n      acc += getColor(uv + vec2(float(i), float(j)) * px).rgb * k;\n      w += k;\n    }\n  }\n  return vec4(acc / w, 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec2 R = radius * 1.6 / uResolution;\n  float rot = rand(floor(uv * uResolution)) * 6.2831853;\n  vec3 acc = vec3(0.0);\n  float wsum = 0.0;\n  for (int i = 0; i < 36; i++) {\n    float fi = float(i) + 0.5;\n    float rr = sqrt(fi / 36.0);\n    float an = fi * 2.39996323 + rot;\n    float w = exp(-rr * rr * 2.0);\n    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;\n    wsum += w;\n  }\n  vec3 c = acc / wsum;\n  return vec4(c, 1.0);\n}"
 },
 {
 "id": "vignettefx",
@@ -907,7 +907,7 @@
 "kind": "effect",
 "category": "Lens",
 "params": [],
-"code": "vec4 effect(vec2 uv) {\n  float r = (1.0 - uProgress) * 8.0 / uResolution.y;\n  vec3 acc = vec3(0.0);\n  for (int i = -2; i <= 2; i++) {\n    for (int j = -2; j <= 2; j++) {\n      acc += getColor(uv + vec2(float(i), float(j)) * r * vec2(uResolution.y / uResolution.x, 1.0) * 1.5).rgb;\n    }\n  }\n  return vec4(acc / 25.0, 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec2 R = (1.0 - uProgress) * 30.0 / uResolution;\n  float rot = rand(floor(uv * uResolution)) * 6.2831853;\n  vec3 acc = vec3(0.0);\n  float wsum = 0.0;\n  for (int i = 0; i < 36; i++) {\n    float fi = float(i) + 0.5;\n    float rr = sqrt(fi / 36.0);\n    float an = fi * 2.39996323 + rot;\n    float w = exp(-rr * rr * 2.0);\n    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;\n    wsum += w;\n  }\n  vec3 c = acc / wsum;\n  return vec4(c, 1.0);\n}"
 },
 {
 "id": "spotlight",
@@ -1019,7 +1019,7 @@
 "kind": "anim",
 "category": "Basic",
 "params": [],
-"code": "vec4 effect(vec2 uv) {\n  float r = (1.0 - uProgress) * 12.0 / uResolution.y;\n  vec3 acc = vec3(0.0);\n  for (int i = -2; i <= 2; i++) {\n    for (int j = -2; j <= 2; j++) {\n      acc += getColor(uv + vec2(float(i), float(j)) * r * vec2(uResolution.y / uResolution.x, 1.0) * 2.0).rgb;\n    }\n  }\n  return vec4(acc / 25.0 * min(1.0, 0.3 + uProgress), 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec2 R = (1.0 - uProgress) * 60.0 / uResolution;\n  float rot = rand(floor(uv * uResolution)) * 6.2831853;\n  vec3 acc = vec3(0.0);\n  float wsum = 0.0;\n  for (int i = 0; i < 36; i++) {\n    float fi = float(i) + 0.5;\n    float rr = sqrt(fi / 36.0);\n    float an = fi * 2.39996323 + rot;\n    float w = exp(-rr * rr * 2.0);\n    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;\n    wsum += w;\n  }\n  vec3 c = acc / wsum;\n  if (uProgress >= 1.0) c = getColor(uv).rgb;\n  return vec4(c * min(1.0, 0.3 + uProgress), 1.0);\n}"
 },
 {
 "id": "anim_iris",
