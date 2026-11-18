@@ -2,8 +2,8 @@
 
 Reel is a mobile video editor for Android, in the style of CapCut and VN: a timeline with clips,
 text, stickers, shapes, overlays and audio. It has hundreds of effects and transitions, on-device
-captions, background cutout, head tracking and in-app updates. Current version: **1.8.0**
-(versionCode 10).
+captions, background cutout, head tracking and in-app updates. Current version: **1.9.0**
+(versionCode 16).
 
 This document is for whoever picks the project up next: how to build it, where things live, how it
 is tested and released, what is known to be weak, and what is still to do.
@@ -78,8 +78,8 @@ app/src/main/java/com/reel/editor/
   ui/          Compose screens and panels (EditorScreen, Timeline, Panels*, MediaPicker, ...)
 app/src/main/cpp/  JNI core: looks (LUT generator), audio analysis, voice DSP, image ops,
                captions core; third_party/whisper.cpp vendored (v1.9.5, CPU only)
-app/src/main/assets/fx/  GLSL library: 279 transitions (211 from gl-transitions, MIT, plus 68 of
-               our own), 102 filters, 119 effects, 39 clip animations, internal shaders (canvas,
+app/src/main/assets/fx/  GLSL library: 307 transitions (211 from gl-transitions, MIT, plus 96 of
+               our own), 145 filters, 157 effects, 54 clip animations, internal shaders (canvas,
                grade, overlay_blend, privacy, ...)
 tools/fx/      shader sources and tools: library.glsl (filters, effects, clip animations; built by
                build_library.py), reel_transitions.glsl (our transitions; build_transitions.py),
@@ -187,6 +187,10 @@ The preview and the export share this path. Only the preview honours "hold to se
   They export real videos and check pixels: layers, overlays, adjustment layers, crop, face blur,
   reverse, GIF, sound only, project packing, head tracking on a real interview clip (a public-domain
   NASA video in `androidTest/assets/talk.mp4`), voice, fonts and captions.
+- **Shader catalog:** `FxCatalogTest` (JVM) checks `library.json` and `transitions.json`: unique ids
+  and names, well-formed params, and no GLSL ES 3 constructs (`texture(`, `round(`, `%`, shifts,
+  `switch`, `uint`...), which GLSL ES 1.00 drivers reject. Transitions have no shared helpers: a
+  transition that needs `rand`, `noise` or `PI` defines its own (`rand_`, `noise_`, `PI_`).
 - **Shaders:** `python3 tools/fx/validate_shaders.py` compiles every GLSL file with
   glslangValidator. `tools/fx/render_check.py <dir>` renders every filter, effect, animation and
   transition on a headless GPU (Mesa through EGL) with the app's own source assembly, on the bundled
@@ -228,7 +232,8 @@ APK from the installed one. It verifies the SHA-256, then installs through `Pack
 falls back to the full APK when no patch fits. Updating from 1.3.0 or older needs one manual install
 of 1.4.0 or later, because the updater arrived in 1.4.0.
 
-Release APKs sent to the owner so far: 1.0 through 1.8.0. Patches exist for 1.4.0 → 1.6.0 and
+Release APKs sent to the owner so far: 1.0 through 1.8.0 (1.9.0 is built as debug only; it needs the
+release key). Patches exist for 1.4.0 → 1.6.0 and
 1.5.0 → 1.6.0.
 
 ---
