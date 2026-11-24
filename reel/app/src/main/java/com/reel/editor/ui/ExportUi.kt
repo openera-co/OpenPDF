@@ -35,6 +35,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -131,6 +132,7 @@ fun ExportSheet(vm: EditorViewModel, onClose: () -> Unit, onStart: () -> Unit) {
         Row(
             Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(16.dp)).background(C.Accent).clickable(role = Role.Button) {
                 vm.saveNow()
+                vm.preview.suspendForExport()
                 Exporter.start(vm.getApplication(), project, s)
                 onStart()
             },
@@ -170,6 +172,8 @@ fun ExportScreen(vm: EditorViewModel, onBackToEdit: () -> Unit, onHome: () -> Un
         first?.let { value = vm.thumbnails.frame(it.uri, it.trimStartUs, 720, it.kind == ClipKind.PHOTO) }
     }
     BackHandler { if (state is ExportState.Running) Unit else { Exporter.reset(); onBackToEdit() } }
+    // The preview gave up its decoders for the export; take them back once it has ended.
+    LaunchedEffect(state is ExportState.Running) { if (state !is ExportState.Running) vm.preview.resumeAfterExport() }
     Column(Modifier.fillMaxSize().background(C.Bg).statusBarsPadding().navigationBarsPadding().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             if (state !is ExportState.Running) IconBtn(Icons.Rounded.Close, "Home") { Exporter.reset(); onHome() }

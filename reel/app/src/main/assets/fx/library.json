@@ -392,7 +392,7 @@
 "max": 0.9
 }
 ],
-"code": "vec4 effect(vec2 uv) {\n  float blur = smoothstep(0.08, 0.35, abs(uv.y - focus)) * 4.0 / uResolution.y;\n  vec3 acc = vec3(0.0);\n  for (int i = -3; i <= 3; i++) {\n    for (int j = -3; j <= 3; j++) {\n      acc += getColor(uv + vec2(float(i), float(j)) * blur * vec2(uResolution.y / uResolution.x, 1.0) * 2.0).rgb;\n    }\n  }\n  vec3 c = acc / 49.0;\n  vec3 hsv = rgb2hsv(c);\n  hsv.y = min(1.0, hsv.y * 1.25);\n  return vec4(hsv2rgb(hsv), 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec2 R = smoothstep(0.08, 0.35, abs(uv.y - focus)) * 28.0 / uResolution;\n  float rot = rand(floor(uv * uResolution)) * 6.2831853;\n  vec3 acc = vec3(0.0);\n  float wsum = 0.0;\n  for (int i = 0; i < 36; i++) {\n    float fi = float(i) + 0.5;\n    float rr = sqrt(fi / 36.0);\n    float an = fi * 2.39996323 + rot;\n    float w = exp(-rr * rr * 2.0);\n    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;\n    wsum += w;\n  }\n  vec3 c = acc / wsum;\n\n  vec3 hsv = rgb2hsv(c);\n  hsv.y = min(1.0, hsv.y * 1.25);\n  return vec4(hsv2rgb(hsv), 1.0);\n}"
 },
 {
 "id": "softfocus",
@@ -521,7 +521,7 @@
 "max": 20.0
 }
 ],
-"code": "vec4 effect(vec2 uv) {\n  vec2 px = radius / uResolution / 3.0;\n  vec3 acc = vec3(0.0);\n  float w = 0.0;\n  for (int i = -3; i <= 3; i++) {\n    for (int j = -3; j <= 3; j++) {\n      float k = exp(-float(i * i + j * j) / 8.0);\n      acc += getColor(uv + vec2(float(i), float(j)) * px).rgb * k;\n      w += k;\n    }\n  }\n  return vec4(acc / w, 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec2 R = radius * 1.6 / uResolution;\n  float rot = rand(floor(uv * uResolution)) * 6.2831853;\n  vec3 acc = vec3(0.0);\n  float wsum = 0.0;\n  for (int i = 0; i < 36; i++) {\n    float fi = float(i) + 0.5;\n    float rr = sqrt(fi / 36.0);\n    float an = fi * 2.39996323 + rot;\n    float w = exp(-rr * rr * 2.0);\n    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;\n    wsum += w;\n  }\n  vec3 c = acc / wsum;\n  return vec4(c, 1.0);\n}"
 },
 {
 "id": "vignettefx",
@@ -907,7 +907,7 @@
 "kind": "effect",
 "category": "Lens",
 "params": [],
-"code": "vec4 effect(vec2 uv) {\n  float r = (1.0 - uProgress) * 8.0 / uResolution.y;\n  vec3 acc = vec3(0.0);\n  for (int i = -2; i <= 2; i++) {\n    for (int j = -2; j <= 2; j++) {\n      acc += getColor(uv + vec2(float(i), float(j)) * r * vec2(uResolution.y / uResolution.x, 1.0) * 1.5).rgb;\n    }\n  }\n  return vec4(acc / 25.0, 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec2 R = (1.0 - uProgress) * 30.0 / uResolution;\n  float rot = rand(floor(uv * uResolution)) * 6.2831853;\n  vec3 acc = vec3(0.0);\n  float wsum = 0.0;\n  for (int i = 0; i < 36; i++) {\n    float fi = float(i) + 0.5;\n    float rr = sqrt(fi / 36.0);\n    float an = fi * 2.39996323 + rot;\n    float w = exp(-rr * rr * 2.0);\n    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;\n    wsum += w;\n  }\n  vec3 c = acc / wsum;\n  return vec4(c, 1.0);\n}"
 },
 {
 "id": "spotlight",
@@ -1019,7 +1019,7 @@
 "kind": "anim",
 "category": "Basic",
 "params": [],
-"code": "vec4 effect(vec2 uv) {\n  float r = (1.0 - uProgress) * 12.0 / uResolution.y;\n  vec3 acc = vec3(0.0);\n  for (int i = -2; i <= 2; i++) {\n    for (int j = -2; j <= 2; j++) {\n      acc += getColor(uv + vec2(float(i), float(j)) * r * vec2(uResolution.y / uResolution.x, 1.0) * 2.0).rgb;\n    }\n  }\n  return vec4(acc / 25.0 * min(1.0, 0.3 + uProgress), 1.0);\n}"
+"code": "vec4 effect(vec2 uv) {\n  vec2 R = (1.0 - uProgress) * 60.0 / uResolution;\n  float rot = rand(floor(uv * uResolution)) * 6.2831853;\n  vec3 acc = vec3(0.0);\n  float wsum = 0.0;\n  for (int i = 0; i < 36; i++) {\n    float fi = float(i) + 0.5;\n    float rr = sqrt(fi / 36.0);\n    float an = fi * 2.39996323 + rot;\n    float w = exp(-rr * rr * 2.0);\n    acc += getColor(uv + vec2(cos(an), sin(an)) * rr * R).rgb * w;\n    wsum += w;\n  }\n  vec3 c = acc / wsum;\n  if (uProgress >= 1.0) c = getColor(uv).rgb;\n  return vec4(c * min(1.0, 0.3 + uProgress), 1.0);\n}"
 },
 {
 "id": "anim_iris",
@@ -2665,5 +2665,2627 @@
 "category": "Light",
 "params": [],
 "code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 16; i++) {\n    float fi = float(i);\n    vec2 p = vec2(rand(vec2(fi, 11.0)), rand(vec2(fi, 13.0)));\n    float tw = pow(max(0.0, sin(uTime * (2.0 + rand(vec2(fi, 3.0)) * 3.0) + fi * 1.7)), 6.0);\n    vec2 d = (uv - p) * asp;\n    float cross = 0.0006 / (abs(d.x * d.y) + 0.0004) * exp(-dot(d, d) * 300.0);\n    float core = 0.0003 / (dot(d, d) + 0.0003);\n    c += vec3(1.0, 0.95, 0.85) * (cross * 0.4 + core * 0.6) * tw;\n  }\n  return vec4(min(c, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "kodak",
+"name": "Slide Film",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c = smoothstep(0.02, 0.98, c);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.35);\n  c *= vec3(1.06, 1.0, 0.9);\n  c.b += (1.0 - l) * 0.05;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "film400",
+"name": "Film 400",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  c = mix(c, c * vec3(0.92, 1.04, 1.0), 1.0 - l);\n  c = mix(c, c * vec3(1.05, 1.0, 0.94), l);\n  c = 0.04 + c * 0.92;\n  c += (rand(uv * uResolution) - 0.5) * 0.03;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "ice",
+"name": "Ice",
+"kind": "filter",
+"category": "Color",
+"params": [
+{
+"name": "amount",
+"type": "float",
+"default": [
+0.7
+],
+"min": 0.0,
+"max": 1.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  vec3 ice = mix(vec3(0.05, 0.12, 0.2), vec3(0.85, 0.95, 1.0), l);\n  return vec4(mix(c, ice, amount), 1.0);\n}"
+},
+{
+"id": "autumn",
+"name": "Autumn",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 h = rgb2hsv(getColor(uv).rgb);\n  float green = smoothstep(0.12, 0.2, h.x) * smoothstep(0.5, 0.38, h.x);\n  h.x = mix(h.x, 0.07, green * 0.8);\n  h.y = min(1.0, h.y * 1.15);\n  vec3 c = hsv2rgb(h) * vec3(1.05, 0.98, 0.88);\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "spring",
+"name": "Spring",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec3 h = rgb2hsv(c);\n  h.y = min(1.0, h.y * 1.2);\n  c = hsv2rgb(h);\n  c = c * vec3(0.98, 1.06, 0.98) + vec3(0.03, 0.04, 0.05);\n  c = mix(c, vec3(1.0, 0.85, 0.9), 0.08);\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "desert",
+"name": "Desert",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.75);\n  c *= vec3(1.12, 1.0, 0.78);\n  c = c * 0.9 + vec3(0.06, 0.04, 0.0);\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "forest",
+"name": "Forest",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  c = mix(c, c * vec3(0.85, 1.05, 0.9), 0.8);\n  c = mix(vec3(l), c, 1.1);\n  c = mix(c, vec3(0.02, 0.08, 0.05), (1.0 - l) * 0.25);\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "neonnight",
+"name": "Neon Night",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  vec3 shadow = vec3(0.12, 0.0, 0.3);\n  vec3 hi = vec3(0.1, 1.0, 0.95);\n  vec3 g = mix(shadow, mix(vec3(1.0, 0.1, 0.7), hi, smoothstep(0.45, 0.85, l)), smoothstep(0.05, 0.5, l));\n  return vec4(mix(c, g, 0.6) * 1.05, 1.0);\n}"
+},
+{
+"id": "candy",
+"name": "Candy",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 h = rgb2hsv(getColor(uv).rgb);\n  h.y = min(1.0, h.y * 1.6 + 0.08);\n  h.z = 0.25 + h.z * 0.8;\n  vec3 c = hsv2rgb(h);\n  c = mix(c, vec3(1.0, 0.6, 0.85), 0.1);\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "cyanotype",
+"name": "Cyanotype",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float l = luma(getColor(uv).rgb);\n  vec3 c = mix(vec3(0.02, 0.15, 0.35), vec3(0.92, 0.96, 1.0), smoothstep(0.05, 0.95, l));\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "selenium",
+"name": "Selenium",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float l = luma(getColor(uv).rgb);\n  l = smoothstep(0.03, 0.97, l);\n  vec3 c = mix(vec3(0.18, 0.08, 0.15), vec3(1.0, 0.97, 0.93), l);\n  c = mix(c, vec3(l), 0.35);\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "highkey",
+"name": "High Key",
+"kind": "filter",
+"category": "Color",
+"params": [
+{
+"name": "amount",
+"type": "float",
+"default": [
+0.6
+],
+"min": 0.0,
+"max": 1.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec3 b = 1.0 - (1.0 - c) * (1.0 - c);\n  b = mix(vec3(luma(b)), b, 0.8);\n  return vec4(mix(c, b, amount), 1.0);\n}"
+},
+{
+"id": "lowkey",
+"name": "Low Key",
+"kind": "filter",
+"category": "Color",
+"params": [
+{
+"name": "amount",
+"type": "float",
+"default": [
+0.7
+],
+"min": 0.0,
+"max": 1.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec3 d = c * c * 1.1;\n  float v = 1.0 - smoothstep(0.3, 0.9, length(uv - 0.5));\n  d *= 0.6 + 0.4 * v;\n  return vec4(mix(c, d, amount), 1.0);\n}"
+},
+{
+"id": "washed",
+"name": "Washed",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.55);\n  c = 0.15 + c * 0.75;\n  c *= vec3(1.0, 0.99, 0.96);\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "hdr",
+"name": "HDR",
+"kind": "filter",
+"category": "Detail",
+"params": [
+{
+"name": "strength",
+"type": "float",
+"default": [
+0.6
+],
+"min": 0.2,
+"max": 2.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 3.0 / uResolution;\n  vec3 c = getColor(uv).rgb;\n  vec3 b = vec3(0.0);\n  for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) b += getColor(uv + vec2(float(x), float(y)) * px).rgb;\n  b /= 25.0;\n  vec3 d = c + (c - b) * 1.2 * strength;\n  float l = luma(d);\n  d = mix(vec3(l), d, 1.15);\n  d = mix(d, d / (d + 0.35) * 1.35, 0.7);\n  return vec4(clamp(d, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "grit",
+"name": "Grit",
+"kind": "filter",
+"category": "Detail",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 1.0 / uResolution;\n  vec3 c = getColor(uv).rgb;\n  vec3 b = (getColor(uv + vec2(px.x, 0.0)).rgb + getColor(uv - vec2(px.x, 0.0)).rgb + getColor(uv + vec2(0.0, px.y)).rgb + getColor(uv - vec2(0.0, px.y)).rgb) * 0.25;\n  vec3 d = c + (c - b) * 3.0;\n  float l = luma(d);\n  d = mix(vec3(l), d, 0.55);\n  d = smoothstep(0.05, 0.95, d);\n  d += (rand(uv * uResolution) - 0.5) * 0.06;\n  return vec4(clamp(d, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "crisp",
+"name": "Crisp",
+"kind": "filter",
+"category": "Detail",
+"params": [
+{
+"name": "amount",
+"type": "float",
+"default": [
+1.2
+],
+"min": 0.2,
+"max": 3.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 2.0 / uResolution;\n  vec3 c = getColor(uv).rgb;\n  vec3 b = vec3(0.0);\n  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) b += getColor(uv + vec2(float(x), float(y)) * px).rgb;\n  b /= 9.0;\n  vec3 d = c + (c - b) * amount * 1.5;\n  d = mix(vec3(luma(d)), d, 1.1);\n  return vec4(clamp(d * 1.03, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "haze",
+"name": "Haze",
+"kind": "filter",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 px = 6.0 / uResolution;\n  vec3 b = vec3(0.0);\n  for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) b += getColor(uv + vec2(float(x), float(y)) * px).rgb;\n  b /= 25.0;\n  vec3 o = 1.0 - (1.0 - c) * (1.0 - b * 0.6);\n  o = mix(o, vec3(0.95, 0.93, 0.9), 0.12);\n  return vec4(o, 1.0);\n}"
+},
+{
+"id": "orton",
+"name": "Orton",
+"kind": "filter",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 px = 5.0 / uResolution;\n  vec3 b = vec3(0.0);\n  for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) b += getColor(uv + vec2(float(x), float(y)) * px).rgb;\n  b /= 25.0;\n  b = b * b * 1.3;\n  vec3 o = 1.0 - (1.0 - c * 0.85) * (1.0 - b);\n  o = mix(vec3(luma(o)), o, 1.15);\n  return vec4(clamp(o, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "portraitblur",
+"name": "Portrait Blur",
+"kind": "filter",
+"category": "Lens",
+"params": [
+{
+"name": "radius",
+"type": "float",
+"default": [
+0.18
+],
+"min": 0.05,
+"max": 0.6
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  float d = length((uv - vec2(0.5, 0.55)) * asp);\n  float k = smoothstep(radius, radius + 0.25, d);\n  vec2 px = 1.0 / uResolution * 14.0 * k;\n  vec3 acc = vec3(0.0);\n  for (int i = 0; i < 16; i++) {\n    float a = float(i) * 2.39996;\n    float r = sqrt(float(i) / 16.0);\n    acc += getColor(uv + vec2(cos(a), sin(a)) * r * px).rgb;\n  }\n  acc /= 16.0;\n  acc = mix(acc, acc * vec3(1.03, 1.0, 0.97) * (1.0 - 0.25 * k), k);\n  return vec4(acc, 1.0);\n}"
+},
+{
+"id": "fringe",
+"name": "Fringe",
+"kind": "filter",
+"category": "Lens",
+"params": [
+{
+"name": "amount",
+"type": "float",
+"default": [
+0.03
+],
+"min": 0.005,
+"max": 0.08
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 d = uv - 0.5;\n  float k = dot(d, d) * 4.0;\n  vec2 o = d * amount * k * 3.0;\n  return vec4(getColor(uv + o).r, getColor(uv).g, getColor(uv - o).b, 1.0);\n}"
+},
+{
+"id": "splitfocus",
+"name": "Split Focus",
+"kind": "filter",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = smoothstep(0.45, 0.8, uv.y);\n  vec2 px = 7.0 * k / uResolution;\n  vec3 acc = vec3(0.0);\n  for (int i = 0; i < 12; i++) {\n    float a = float(i) * 2.39996;\n    float r = sqrt(float(i) / 12.0);\n    acc += getColor(uv + vec2(cos(a), sin(a)) * r * px).rgb;\n  }\n  return vec4(acc / 12.0, 1.0);\n}"
+},
+{
+"id": "reededglass",
+"name": "Reeded Glass",
+"kind": "filter",
+"category": "Lens",
+"params": [
+{
+"name": "ribs",
+"type": "float",
+"default": [
+24.0
+],
+"min": 6.0,
+"max": 80.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  float f = fract(uv.x * ribs);\n  float off = (f - 0.5) * 1.6 / ribs;\n  vec3 c = getColor(vec2(uv.x + off, uv.y)).rgb;\n  c *= 0.9 + 0.15 * sin(f * PI);\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "whitevignette",
+"name": "White Edges",
+"kind": "filter",
+"category": "Lens",
+"params": [
+{
+"name": "size",
+"type": "float",
+"default": [
+0.55
+],
+"min": 0.2,
+"max": 0.9
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float v = smoothstep(size * 0.6, size, length((uv - 0.5) * vec2(1.0, 0.9)) * 1.3);\n  return vec4(mix(c, vec3(1.0), v), 1.0);\n}"
+},
+{
+"id": "dither",
+"name": "Dither",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "scale",
+"type": "float",
+"default": [
+2.0
+],
+"min": 1.0,
+"max": 6.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 p = floor(uv * uResolution / scale);\n  float b = 0.0;\n  // 4x4 Bayer matrix, built bit by bit.\n  vec2 q = mod(p, 4.0);\n  vec2 q1 = mod(q, 2.0);\n  vec2 q2 = floor(q / 2.0);\n  float m1 = q1.x * 2.0 + abs(q1.x - q1.y);\n  float m2 = q2.x * 2.0 + abs(q2.x - q2.y);\n  b = (m1 * 4.0 + m2 + 0.5) / 16.0;\n  float l = luma(getColor((p + 0.5) * scale / uResolution).rgb);\n  return vec4(vec3(step(b, l)), 1.0);\n}"
+},
+{
+"id": "pocket",
+"name": "Pocket",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "size",
+"type": "float",
+"default": [
+3.0
+],
+"min": 1.0,
+"max": 8.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 cells = uResolution / size;\n  vec2 q = (floor(uv * cells) + 0.5) / cells;\n  float l = luma(getColor(q).rgb);\n  float lv = floor(clamp(l, 0.0, 0.999) * 4.0);\n  vec3 c = vec3(0.06, 0.22, 0.06);\n  c = mix(c, vec3(0.19, 0.38, 0.19), step(1.0, lv));\n  c = mix(c, vec3(0.55, 0.67, 0.06), step(2.0, lv));\n  c = mix(c, vec3(0.61, 0.74, 0.06), step(3.0, lv));\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "cells",
+"name": "Cells",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "size",
+"type": "float",
+"default": [
+28.0
+],
+"min": 8.0,
+"max": 80.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 p = uv * uResolution / size;\n  vec2 ip = floor(p);\n  float best = 9.0;\n  float second = 9.0;\n  vec2 bestPt = vec2(0.0);\n  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {\n    vec2 c = ip + vec2(float(x), float(y));\n    vec2 pt = c + vec2(rand(c), rand(c + 7.1));\n    float d = length(pt - p);\n    if (d < best) { second = best; best = d; bestPt = pt; } else if (d < second) { second = d; }\n  }\n  vec3 col = getColor(bestPt * size / uResolution).rgb;\n  float edge = smoothstep(0.0, 0.08, second - best);\n  return vec4(col * (0.75 + 0.25 * edge), 1.0);\n}"
+},
+{
+"id": "inkwash",
+"name": "Ink Wash",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 2.0 / uResolution;\n  float l = 0.0;\n  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) l += luma(getColor(uv + vec2(float(x), float(y)) * px).rgb);\n  l /= 9.0;\n  float e = abs(luma(getColor(uv).rgb) - l) * 8.0;\n  float ink = smoothstep(0.15, 0.75, l);\n  ink = floor(ink * 4.0) / 4.0 * 0.85 + 0.15;\n  vec3 paper = vec3(0.96, 0.94, 0.88) - noise(uv * 90.0) * 0.05;\n  return vec4(paper * ink * (1.0 - clamp(e, 0.0, 0.7)), 1.0);\n}"
+},
+{
+"id": "engraving",
+"name": "Engraving",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "lines",
+"type": "float",
+"default": [
+90.0
+],
+"min": 30.0,
+"max": 200.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  float l = luma(getColor(uv).rgb);\n  float y = uv.y * lines + sin(uv.x * 20.0) * 0.6 + l * 1.5;\n  float w = 0.5 * (1.0 - l) + 0.05;\n  float line = smoothstep(w, w - 0.12, abs(fract(y) - 0.5));\n  vec3 ink = vec3(0.12, 0.1, 0.09);\n  return vec4(mix(vec3(0.95, 0.92, 0.85), ink, line), 1.0);\n}"
+},
+{
+"id": "triangles",
+"name": "Triangles",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "size",
+"type": "float",
+"default": [
+30.0
+],
+"min": 8.0,
+"max": 100.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 p = uv * uResolution / size;\n  vec2 cell = floor(p);\n  vec2 f = fract(p);\n  float upper = step(f.x, f.y);\n  vec2 center = cell + mix(vec2(0.667, 0.333), vec2(0.333, 0.667), upper);\n  return getColor(center * size / uResolution);\n}"
+},
+{
+"id": "weave",
+"name": "Weave",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "size",
+"type": "float",
+"default": [
+10.0
+],
+"min": 4.0,
+"max": 30.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 p = uv * uResolution / size;\n  vec2 cell = floor(p);\n  vec2 f = fract(p);\n  float horiz = mod(cell.x + cell.y, 2.0);\n  float t = mix(f.y, f.x, horiz);\n  float shade = 0.75 + 0.25 * sin(t * PI);\n  float gap = smoothstep(0.0, 0.08, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)));\n  return vec4(c * shade * (0.7 + 0.3 * gap), 1.0);\n}"
+},
+{
+"id": "mirrordiag",
+"name": "Mirror Diagonal",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 q = uv;\n  if (uv.x + uv.y > 1.0) q = vec2(1.0 - uv.y, 1.0 - uv.x);\n  return getColor(q);\n}"
+},
+{
+"id": "shredded",
+"name": "Shredded",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "strips",
+"type": "float",
+"default": [
+14.0
+],
+"min": 4.0,
+"max": 40.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  float s = floor(uv.x * strips);\n  float off = (rand(vec2(s, 1.0)) - 0.5) * 0.08;\n  float f = fract(uv.x * strips);\n  float edge = smoothstep(0.0, 0.06, f) * smoothstep(1.0, 0.94, f);\n  vec3 c = getColor(vec2(uv.x, uv.y + off)).rgb;\n  return vec4(mix(vec3(0.95), c, edge), 1.0);\n}"
+},
+{
+"id": "oilslick",
+"name": "Oil Slick",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  vec3 iri = hsv2rgb(vec3(fract(l * 1.6 + uv.x * 0.3 + uv.y * 0.2), 0.7, 1.0));\n  return vec4(mix(c, c * iri * 1.3, 0.55), 1.0);\n}"
+},
+{
+"id": "gold",
+"name": "Gold",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float l = luma(getColor(uv).rgb);\n  vec3 c = mix(vec3(0.2, 0.12, 0.02), vec3(1.0, 0.84, 0.4), smoothstep(0.05, 0.85, l));\n  c += vec3(1.0, 0.95, 0.75) * smoothstep(0.8, 1.0, l) * 0.4;\n  return vec4(min(c, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "silver",
+"name": "Silver",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float l = luma(getColor(uv).rgb);\n  l = smoothstep(0.0, 1.0, l);\n  vec3 c = mix(vec3(0.1, 0.11, 0.13), vec3(0.93, 0.95, 0.98), l);\n  c += 0.12 * sin(l * 9.0) * vec3(1.0);\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "twostrip",
+"name": "Two Strip",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float r = c.r;\n  float gb = (c.g + c.b) * 0.5;\n  vec3 o = vec3(r, gb * 0.95, gb);\n  o = mix(vec3(luma(o)), o, 1.2);\n  return vec4(clamp(o, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "ultraviolet",
+"name": "Ultraviolet",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  vec3 uvc = mix(vec3(0.08, 0.0, 0.18), vec3(0.75, 0.4, 1.0), l);\n  uvc += vec3(0.6, 1.0, 0.9) * smoothstep(0.75, 1.0, c.b + c.g * 0.3) * 0.4;\n  return vec4(min(uvc, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "moonlight",
+"name": "Moonlight",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  vec3 m = vec3(l) * vec3(0.55, 0.7, 1.0) * 0.85;\n  m = mix(m, vec3(0.0, 0.02, 0.08), (1.0 - l) * 0.3);\n  return vec4(m, 1.0);\n}"
+},
+{
+"id": "neonlines",
+"name": "Neon Lines",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "glow",
+"type": "float",
+"default": [
+3.0
+],
+"min": 1.0,
+"max": 8.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 1.0 / uResolution;\n  vec3 c = getColor(uv).rgb;\n  vec3 gx = getColor(uv + vec2(px.x, 0.0)).rgb - getColor(uv - vec2(px.x, 0.0)).rgb;\n  vec3 gy = getColor(uv + vec2(0.0, px.y)).rgb - getColor(uv - vec2(0.0, px.y)).rgb;\n  float e = clamp(length(vec2(length(gx), length(gy))) * glow, 0.0, 1.0);\n  vec3 hue = hsv2rgb(vec3(fract(uv.x * 0.6 + uv.y * 0.4), 0.8, 1.0));\n  return vec4(hue * e + c * 0.08, 1.0);\n}"
+},
+{
+"id": "overexpose",
+"name": "Overexposed",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb * 1.6 + 0.05;\n  c = c / (1.0 + c * 0.15);\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "bleachgreen",
+"name": "Matrix Bleach",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  vec3 o = mix(vec3(l), c, 0.4) * vec3(0.88, 1.08, 0.9);\n  o = smoothstep(0.04, 0.96, o);\n  return vec4(o, 1.0);\n}"
+},
+{
+"id": "sunkissed",
+"name": "Sunkissed",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  c = mix(c, c * vec3(1.12, 1.02, 0.86), 0.9);\n  c += vec3(1.0, 0.6, 0.25) * smoothstep(1.2, 0.0, length(uv - vec2(0.85, 0.9))) * 0.18;\n  c = mix(vec3(l), c, 1.1);\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "heathaze",
+"name": "Heat Haze",
+"kind": "effect",
+"category": "Weather",
+"params": [
+{
+"name": "amount",
+"type": "float",
+"default": [
+0.006
+],
+"min": 0.001,
+"max": 0.02
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  float n = noise(vec2(uv.x * 14.0, uv.y * 10.0 - uTime * 3.0)) - 0.5;\n  float m = noise(vec2(uv.x * 25.0 + 4.0, uv.y * 18.0 - uTime * 4.5)) - 0.5;\n  float k = smoothstep(0.9, 0.2, uv.y);\n  vec3 c = getColor(uv + vec2(n, m) * amount * 2.0 * k).rgb;\n  return vec4(c * vec3(1.03, 1.0, 0.95), 1.0);\n}"
+},
+{
+"id": "blizzard",
+"name": "Blizzard",
+"kind": "effect",
+"category": "Weather",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c = mix(c, vec3(0.85, 0.9, 0.95), 0.25);\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  float s = 0.0;\n  for (int l = 0; l < 3; l++) {\n    float fl = float(l);\n    float sc = 18.0 + fl * 14.0;\n    vec2 p = uv * asp * sc + vec2(uTime * (6.0 + fl * 3.0), uTime * (3.0 + fl));\n    vec2 cell = floor(p);\n    vec2 f = fract(p) - 0.5;\n    vec2 o = vec2(rand(cell), rand(cell + 3.3)) - 0.5;\n    float r = 0.05 + rand(cell + 1.7) * 0.08;\n    s += smoothstep(r, r * 0.3, length(f - o * 0.6)) * (0.6 + 0.4 * fl / 2.0);\n  }\n  return vec4(min(c + s, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "ashfall",
+"name": "Ash Fall",
+"kind": "effect",
+"category": "Weather",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c = mix(c, vec3(luma(c)) * vec3(1.0, 0.92, 0.85), 0.35);\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  float s = 0.0;\n  for (int l = 0; l < 2; l++) {\n    float sc = 12.0 + float(l) * 10.0;\n    vec2 p = uv * asp * sc + vec2(sin(uTime + float(l)) * 0.8, uTime * (0.8 + float(l) * 0.5));\n    vec2 cell = floor(p);\n    vec2 f = fract(p) - 0.5;\n    vec2 o = vec2(rand(cell + 9.0), rand(cell + 2.0)) - 0.5;\n    s += smoothstep(0.06, 0.02, length(f - o * 0.6)) * step(0.4, rand(cell + 5.0));\n  }\n  return vec4(mix(c, vec3(0.55, 0.52, 0.5), s * 0.85), 1.0);\n}"
+},
+{
+"id": "sunshower",
+"name": "Sun Shower",
+"kind": "effect",
+"category": "Weather",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb * vec3(1.08, 1.0, 0.88);\n  c += vec3(1.0, 0.75, 0.4) * smoothstep(0.9, 0.0, length(uv - vec2(0.9, 1.0))) * 0.3;\n  vec2 p = vec2(uv.x * 80.0 + uv.y * 8.0, uv.y * 3.0 + uTime * 6.0);\n  float col = floor(p.x);\n  float drop = fract(p.y + rand(vec2(col, 1.0)) * 10.0);\n  float streak = smoothstep(0.0, 0.08, drop) * smoothstep(0.25, 0.08, drop) * smoothstep(0.5, 0.4, abs(fract(p.x) - 0.5)) * step(0.6, rand(vec2(col, 3.0)));\n  return vec4(min(c + streak * 0.45, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "windstreaks",
+"name": "Wind",
+"kind": "effect",
+"category": "Weather",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 off = vec2((noise(vec2(uv.y * 8.0, uTime * 2.0)) - 0.5) * 0.01, 0.0);\n  vec3 c = getColor(uv + off).rgb;\n  float row = floor(uv.y * 60.0);\n  float x = fract(uv.x * 0.6 - uTime * (1.5 + rand(vec2(row, 2.0)) * 2.0) + rand(vec2(row, 1.0)));\n  float streak = smoothstep(0.0, 0.2, x) * smoothstep(0.35, 0.2, x) * step(0.85, rand(vec2(row, 7.0)));\n  streak *= smoothstep(0.5, 0.2, abs(fract(uv.y * 60.0) - 0.5));\n  return vec4(min(c + streak * 0.35, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "scantear",
+"name": "Scan Tear",
+"kind": "effect",
+"category": "Glitch",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float t = floor(uTime * 8.0);\n  float band = rand(vec2(t, 1.0));\n  float h = 0.04 + rand(vec2(t, 2.0)) * 0.12;\n  float inBand = step(band, uv.y) * step(uv.y, band + h);\n  float shift = (rand(vec2(t, 3.0)) - 0.5) * 0.25 * inBand;\n  vec3 c = getColor(vec2(fract(uv.x + shift), uv.y)).rgb;\n  c = mix(c, c.gbr, inBand * 0.5);\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "linejitter",
+"name": "Line Jitter",
+"kind": "effect",
+"category": "Glitch",
+"params": [
+{
+"name": "amount",
+"type": "float",
+"default": [
+0.02
+],
+"min": 0.005,
+"max": 0.08
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  float t = floor(uTime * 20.0);\n  float line = floor(uv.y * uResolution.y / 2.0);\n  float j = (rand(vec2(line, t)) - 0.5) * amount * step(0.7, rand(vec2(line * 0.1, t)));\n  return getColor(vec2(uv.x + j, uv.y));\n}"
+},
+{
+"id": "bytecrush",
+"name": "Byte Crush",
+"kind": "effect",
+"category": "Glitch",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float t = floor(uTime * 6.0);\n  vec2 block = floor(uv * vec2(16.0, 9.0));\n  float r = rand(block + t);\n  vec3 c = getColor(uv).rgb;\n  if (r > 0.88) {\n    vec2 q = (block + 0.5) / vec2(16.0, 9.0);\n    c = floor(getColor(q).rgb * 3.0) / 3.0;\n    c = mix(c, c.brg, step(0.95, r));\n  }\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "rgbjitter",
+"name": "RGB Jitter",
+"kind": "effect",
+"category": "Glitch",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float t = floor(uTime * 12.0);\n  vec2 o1 = (vec2(rand(vec2(t, 1.0)), rand(vec2(t, 2.0))) - 0.5) * 0.03;\n  vec2 o2 = (vec2(rand(vec2(t, 3.0)), rand(vec2(t, 4.0))) - 0.5) * 0.03;\n  return vec4(getColor(uv + o1).r, getColor(uv).g, getColor(uv + o2).b, 1.0);\n}"
+},
+{
+"id": "glitchpulse",
+"name": "Glitch Pulse",
+"kind": "effect",
+"category": "Glitch",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float beat = fract(uTime * 1.5);\n  float k = smoothstep(0.25, 0.0, beat);\n  float row = floor(uv.y * 24.0);\n  float shift = (rand(vec2(row, floor(uTime * 1.5))) - 0.5) * 0.15 * k;\n  vec2 q = vec2(uv.x + shift, uv.y);\n  vec3 c = vec3(getColor(q + vec2(0.02 * k, 0.0)).r, getColor(q).g, getColor(q - vec2(0.02 * k, 0.0)).b);\n  return vec4(c * (1.0 + k * 0.3), 1.0);\n}"
+},
+{
+"id": "bulgepulse",
+"name": "Bulge Pulse",
+"kind": "effect",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 0.35 + 0.35 * sin(uTime * 3.0);\n  vec2 d = uv - 0.5;\n  float r = length(d);\n  vec2 q = 0.5 + d * mix(1.0, smoothstep(0.0, 0.5, r) / max(r * 2.0, 0.001), k * smoothstep(0.5, 0.0, r));\n  return getColor(q);\n}"
+},
+{
+"id": "swirlfx",
+"name": "Swirl",
+"kind": "effect",
+"category": "Lens",
+"params": [
+{
+"name": "strength",
+"type": "float",
+"default": [
+2.5
+],
+"min": 0.5,
+"max": 8.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 d = (uv - 0.5) * asp;\n  float r = length(d);\n  float a = strength * sin(uTime * 1.2) * smoothstep(0.6, 0.0, r);\n  vec2 q = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / asp + 0.5;\n  return getColor(q);\n}"
+},
+{
+"id": "zoomburst",
+"name": "Zoom Burst",
+"kind": "effect",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = smoothstep(0.4, 0.0, fract(uTime * 0.8)) * 0.12;\n  vec3 acc = vec3(0.0);\n  for (int i = 0; i < 12; i++) {\n    float s = 1.0 - k * float(i) / 11.0;\n    acc += getColor(0.5 + (uv - 0.5) * s).rgb;\n  }\n  return vec4(acc / 12.0, 1.0);\n}"
+},
+{
+"id": "tiltshiftmove",
+"name": "Miniature",
+"kind": "effect",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float center = 0.5 + 0.2 * sin(uTime * 0.7);\n  float k = smoothstep(0.08, 0.35, abs(uv.y - center));\n  vec2 px = 7.0 * k / uResolution;\n  vec3 acc = vec3(0.0);\n  for (int i = 0; i < 12; i++) {\n    float a = float(i) * 2.39996;\n    float r = sqrt(float(i) / 12.0);\n    acc += getColor(uv + vec2(cos(a), sin(a)) * r * px).rgb;\n  }\n  vec3 c = acc / 12.0;\n  c = mix(vec3(luma(c)), c, 1.3);\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "neonborder",
+"name": "Neon Border",
+"kind": "effect",
+"category": "Light",
+"params": [
+{
+"name": "tint",
+"type": "color",
+"default": [
+1.0,
+0.1,
+0.8
+],
+"min": 0.0,
+"max": 1.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 d = min(uv, 1.0 - uv) * asp;\n  float e = min(d.x, d.y);\n  float pulse = 0.7 + 0.3 * sin(uTime * 4.0);\n  float glow = 0.004 / (abs(e - 0.04) + 0.004) * pulse;\n  float run = 0.5 + 0.5 * sin((uv.x + uv.y) * 12.0 - uTime * 6.0);\n  vec3 col = mix(tint, tint.bgr, run);\n  return vec4(min(c + col * glow * 0.6, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "edgepulse",
+"name": "Edge Pulse",
+"kind": "effect",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 1.0 / uResolution;\n  vec3 c = getColor(uv).rgb;\n  float gx = luma(getColor(uv + vec2(px.x, 0.0)).rgb) - luma(getColor(uv - vec2(px.x, 0.0)).rgb);\n  float gy = luma(getColor(uv + vec2(0.0, px.y)).rgb) - luma(getColor(uv - vec2(0.0, px.y)).rgb);\n  float e = clamp(length(vec2(gx, gy)) * 4.0, 0.0, 1.0);\n  float pulse = 0.5 + 0.5 * sin(uTime * 5.0);\n  vec3 col = hsv2rgb(vec3(fract(uTime * 0.2), 0.7, 1.0));\n  return vec4(min(c * (0.75 + 0.25 * (1.0 - pulse)) + col * e * pulse * 1.5, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "candle",
+"name": "Candlelight",
+"kind": "effect",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float f = 0.8 + 0.12 * noise(vec2(uTime * 6.0, 1.0)) + 0.08 * noise(vec2(uTime * 13.0, 4.0));\n  float v = smoothstep(1.0, 0.1, length(uv - vec2(0.5, 0.35)));\n  vec3 warm = c * vec3(1.15, 0.92, 0.65);\n  return vec4(clamp(warm * mix(0.35, 1.05, v) * f, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "sunrise",
+"name": "Sunrise",
+"kind": "effect",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float p = clamp(uTime / max(uDuration, 0.5), 0.0, 1.0);\n  vec2 sun = vec2(0.75, mix(-0.1, 0.8, p));\n  float d = length((uv - sun) * vec2(uResolution.x / uResolution.y, 1.0));\n  vec3 glow = vec3(1.0, 0.6, 0.25) * 0.08 / (d + 0.08);\n  c = c * mix(vec3(0.55, 0.5, 0.7), vec3(1.05, 0.98, 0.9), p);\n  return vec4(min(c + glow * 0.5, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "caustics",
+"name": "Caustics",
+"kind": "effect",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 p = uv * vec2(uResolution.x / uResolution.y, 1.0) * 6.0;\n  float t = uTime * 0.8;\n  vec2 i = p;\n  float s = 0.0;\n  for (int n = 0; n < 4; n++) {\n    float fn = float(n) + 1.0;\n    i = p + vec2(cos(t / fn + i.y * 1.3) + sin(t + i.x * 0.9), sin(t / fn - i.x * 1.1) + cos(t + i.y * 0.7));\n    s += 1.0 / length(vec2(sin(i.x + t) / 0.02, cos(i.y + t) / 0.02));\n  }\n  s = clamp(s / 4.0 * 3.0, 0.0, 1.0);\n  float light = sqrt(s) * 0.55;\n  return vec4(min(c * vec3(0.82, 0.96, 1.06) + vec3(0.6, 0.9, 1.0) * light * 0.9, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "spin360",
+"name": "Spin 360",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  float a = uTime * 1.6;\n  vec2 d = (uv - 0.5) * asp * 1.2;\n  vec2 q = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / asp + 0.5;\n  float inside = step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0);\n  // Outside the frame, a darker mirrored copy instead of black corners.\n  vec2 m = 1.0 - abs(1.0 - mod(q, 2.0));\n  return vec4(getColor(m).rgb * mix(0.45, 1.0, inside), 1.0);\n}"
+},
+{
+"id": "panfx",
+"name": "Pan",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float x = 0.15 * sin(uTime * 0.9);\n  return getColor(0.5 + (uv - 0.5) / 1.35 + vec2(x, 0.0));\n}"
+},
+{
+"id": "floaty",
+"name": "Float",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 o = vec2(sin(uTime * 1.3) * 0.012, sin(uTime * 2.1) * 0.02);\n  float a = sin(uTime * 1.1) * 0.02;\n  vec2 d = (uv - 0.5) / 1.08;\n  vec2 q = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) + 0.5 + o;\n  return getColor(q);\n}"
+},
+{
+"id": "squashfx",
+"name": "Squash",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float s = sin(uTime * 6.0);\n  vec2 sc = vec2(1.0 + s * 0.08, 1.0 - s * 0.08);\n  vec2 q = vec2(0.5, 0.0) + (uv - vec2(0.5, 0.0)) / sc;\n  float inside = step(0.0, q.x) * step(q.x, 1.0) * step(q.y, 1.0);\n  return vec4(getColor(q).rgb * inside, 1.0);\n}"
+},
+{
+"id": "flipfx",
+"name": "Flip",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float a = uTime * 2.2;\n  float c = cos(a);\n  float x = (uv.x - 0.5) / max(abs(c), 0.02);\n  float persp = 1.0 + sin(a) * x * 0.3;\n  vec2 q = vec2(x * sign(c) + 0.5, (uv.y - 0.5) * persp + 0.5);\n  float inside = step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0);\n  vec3 bg = getColor(0.5 + (uv - 0.5) * 0.9).rgb * 0.25;\n  return vec4(mix(bg, getColor(q).rgb * (0.6 + 0.4 * abs(c)), inside), 1.0);\n}"
+},
+{
+"id": "mirrorball",
+"name": "Mirror Ball",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb * 0.6;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 p = uv * asp * 10.0 + vec2(uTime * 1.5, 0.0);\n  vec2 cell = floor(p);\n  vec2 f = fract(p) - 0.5;\n  vec2 o = vec2(rand(cell), rand(cell + 2.0)) - 0.5;\n  float spot = smoothstep(0.18, 0.0, length(f - o * 0.5)) * step(0.45, rand(cell + 4.0));\n  vec3 col = hsv2rgb(vec3(rand(cell + 6.0), 0.3, 1.0));\n  return vec4(min(c + col * spot * 0.9, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "equalizer",
+"name": "Equalizer",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float bars = 24.0;\n  float b = floor(uv.x * bars);\n  float h = 0.08 + 0.25 * abs(sin(uTime * (3.0 + rand(vec2(b, 1.0)) * 5.0) + b));\n  float inBar = step(uv.y, h) * step(0.15, fract(uv.x * bars)) * step(fract(uv.x * bars), 0.85);\n  float seg = step(0.3, fract(uv.y * 60.0));\n  vec3 col = mix(vec3(0.1, 1.0, 0.5), vec3(1.0, 0.2, 0.3), uv.y / 0.35);\n  return vec4(mix(c, col, inBar * seg * 0.85), 1.0);\n}"
+},
+{
+"id": "neonrings",
+"name": "Neon Rings",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb * 0.8;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  float r = length((uv - 0.5) * asp);\n  float w = fract(r * 4.0 - uTime * 0.8);\n  float ring = 0.02 / (abs(w - 0.5) + 0.02) - 0.04;\n  vec3 col = hsv2rgb(vec3(fract(r - uTime * 0.2), 0.8, 1.0));\n  return vec4(min(c + col * max(ring, 0.0) * 0.5, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "rave",
+"name": "Rave",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float beat = fract(uTime * 2.0);\n  float k = smoothstep(0.3, 0.0, beat);\n  vec2 q = 0.5 + (uv - 0.5) / (1.0 + k * 0.06);\n  vec3 c = getColor(q).rgb;\n  vec3 h = rgb2hsv(c);\n  h.x = fract(h.x + floor(uTime * 2.0) * 0.25);\n  h.y = min(1.0, h.y * 1.4);\n  return vec4(hsv2rgb(h) * (1.0 + k * 0.35), 1.0);\n}"
+},
+{
+"id": "discofloor",
+"name": "Disco Floor",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 cell = floor(uv * vec2(8.0, 6.0));\n  float t = floor(uTime * 3.0);\n  vec3 col = hsv2rgb(vec3(rand(cell + t), 0.8, 1.0));\n  float on = step(0.5, rand(cell + t + 9.0));\n  vec2 f = fract(uv * vec2(8.0, 6.0));\n  float frame = smoothstep(0.0, 0.08, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)));\n  return vec4(mix(c, c * 0.5 + col * 0.5, on * frame * 0.6), 1.0);\n}"
+},
+{
+"id": "filmjump",
+"name": "Film Jump",
+"kind": "effect",
+"category": "Retro",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float t = floor(uTime * 12.0);\n  float jump = step(0.85, rand(vec2(t, 1.0))) * (rand(vec2(t, 2.0)) - 0.5) * 0.1;\n  vec2 q = vec2(uv.x, fract(uv.y + jump));\n  vec3 c = getColor(q).rgb * vec3(1.05, 0.98, 0.88);\n  float bar = smoothstep(0.012, 0.0, abs(fract(uv.y + jump) - 0.0)) + smoothstep(0.012, 0.0, abs(fract(uv.y + jump) - 1.0));\n  c *= 1.0 - bar * step(0.001, abs(jump));\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "arcadefx",
+"name": "Arcade",
+"kind": "effect",
+"category": "Retro",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 cells = uResolution / 4.0;\n  vec2 q = (floor(uv * cells) + 0.5) / cells;\n  vec3 c = floor(getColor(q).rgb * 5.0 + 0.5) / 5.0;\n  float scan = 0.75 + 0.25 * sin(uv.y * uResolution.y * 1.57);\n  float flick = 0.95 + 0.05 * sin(uTime * 50.0);\n  return vec4(c * scan * flick * 1.1, 1.0);\n}"
+},
+{
+"id": "teletext",
+"name": "Teletext",
+"kind": "effect",
+"category": "Retro",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 cells = vec2(40.0, 24.0);\n  vec2 cell = floor(uv * cells);\n  vec2 f = fract(uv * cells);\n  vec2 sub = floor(f * vec2(2.0, 3.0));\n  vec2 q = (cell + (sub + 0.5) / vec2(2.0, 3.0)) / cells;\n  vec3 c = step(0.5, getColor(q).rgb);\n  float row = cell.y;\n  float blink = step(0.5, fract(uTime * 1.2 + rand(vec2(row, 3.0))));\n  c = mix(c, c * 0.0 + step(0.5, getColor(q).rgb).brg, step(0.9, rand(vec2(row, 5.0))) * blink);\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "kinescope",
+"name": "Kinescope",
+"kind": "effect",
+"category": "Retro",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 d = uv - 0.5;\n  vec2 q = 0.5 + d * (1.0 + dot(d, d) * 0.25);\n  float inside = step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0);\n  float l = luma(getColor(q).rgb) * 0.8 + luma(getColor(q - vec2(0.012, 0.0)).rgb) * 0.2;\n  l *= 0.9 + 0.1 * sin(uTime * 9.0 + q.y * 3.0);\n  l *= 0.85 + 0.15 * sin(q.y * uResolution.y * 1.2);\n  float v = smoothstep(0.75, 0.3, length(d));\n  return vec4(vec3(l * v * inside) * vec3(0.9, 1.0, 0.95), 1.0);\n}"
+},
+{
+"id": "colorwave",
+"name": "Color Wave",
+"kind": "effect",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec3 h = rgb2hsv(c);\n  h.x = fract(h.x + 0.25 * sin(uv.x * 6.0 + uv.y * 3.0 - uTime * 3.0));\n  h.y = min(1.0, h.y * 1.2);\n  return vec4(hsv2rgb(h), 1.0);\n}"
+},
+{
+"id": "duocycle",
+"name": "Duotone Cycle",
+"kind": "effect",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float l = luma(getColor(uv).rgb);\n  vec3 a = hsv2rgb(vec3(fract(uTime * 0.15), 0.8, 0.35));\n  vec3 b = hsv2rgb(vec3(fract(uTime * 0.15 + 0.45), 0.5, 1.0));\n  return vec4(mix(a, b, smoothstep(0.05, 0.95, l)), 1.0);\n}"
+},
+{
+"id": "satpulse",
+"name": "Saturation Pulse",
+"kind": "effect",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float k = 0.5 + 0.5 * sin(uTime * 3.0);\n  float l = luma(c);\n  return vec4(clamp(mix(vec3(l), c, mix(0.0, 1.8, k)), 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "colordrain",
+"name": "Color Drain",
+"kind": "effect",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float p = clamp(uTime / max(uDuration, 0.5), 0.0, 1.0);\n  float edge = p * 1.4 - 0.2;\n  float k = smoothstep(edge - 0.15, edge + 0.15, 1.0 - uv.y);\n  return vec4(mix(vec3(luma(c)), c, k), 1.0);\n}"
+},
+{
+"id": "colorbloom",
+"name": "Color Bloom",
+"kind": "effect",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float p = clamp(uTime / max(uDuration, 0.5), 0.0, 1.0);\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  float d = length((uv - 0.5) * asp);\n  float k = smoothstep(p * 1.1 + 0.05, p * 1.1 - 0.05, d);\n  return vec4(mix(vec3(luma(c)), c, k), 1.0);\n}"
+},
+{
+"id": "anim_curtain",
+"name": "Curtain",
+"kind": "anim",
+"category": "Shape",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float open = uProgress * 0.5;\n  float show = step(0.5 - open, uv.x) * step(uv.x, 0.5 + open);\n  float fold = 0.85 + 0.15 * sin(uv.x * 80.0);\n  vec3 curtain = vec3(0.45, 0.04, 0.06) * fold;\n  return vec4(mix(curtain * (1.0 - uProgress), getColor(uv).rgb, show), 1.0);\n}"
+},
+{
+"id": "anim_doors",
+"name": "Doors",
+"kind": "anim",
+"category": "Shape",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float p = 1.0 - uProgress;\n  float left = step(uv.x, 0.5);\n  vec2 q = uv;\n  q.x = left > 0.5 ? uv.x + p * 0.5 : uv.x - p * 0.5;\n  float inside = left > 0.5 ? step(q.x, 0.5) : step(0.5, q.x);\n  return vec4(getColor(clamp(q, 0.0, 1.0)).rgb * inside * mix(0.5, 1.0, uProgress), 1.0);\n}"
+},
+{
+"id": "anim_square",
+"name": "Square",
+"kind": "anim",
+"category": "Shape",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 d = abs(uv - 0.5) * asp;\n  float s = uProgress * 0.5 * max(asp.x, 1.0) * 1.05;\n  float inside = step(max(d.x, d.y), s);\n  if (uProgress >= 1.0) inside = 1.0;\n  return vec4(getColor(uv).rgb * inside, 1.0);\n}"
+},
+{
+"id": "anim_triangle",
+"name": "Triangle",
+"kind": "anim",
+"category": "Shape",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 p = (uv - vec2(0.5, 0.4)) * asp;\n  float s = uProgress * 2.2;\n  float d = max(abs(p.x) * 0.866 + p.y * 0.5, -p.y);\n  float inside = step(d, s * 0.5);\n  if (uProgress >= 1.0) inside = 1.0;\n  return vec4(getColor(uv).rgb * inside, 1.0);\n}"
+},
+{
+"id": "anim_cross",
+"name": "Cross",
+"kind": "anim",
+"category": "Shape",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 d = abs(uv - 0.5);\n  float w = uProgress * 0.5;\n  float inside = max(step(d.x, w * 0.5 + uProgress * uProgress * 0.5), step(d.y, w * 0.5 + uProgress * uProgress * 0.5));\n  inside *= step(min(d.x, d.y), w * 1.02);\n  if (uProgress >= 1.0) inside = 1.0;\n  return vec4(getColor(uv).rgb * inside, 1.0);\n}"
+},
+{
+"id": "anim_sweep",
+"name": "Light Sweep",
+"kind": "anim",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float edge = uProgress * 1.4 - 0.2;\n  float x = uv.x + uv.y * 0.2;\n  float shown = smoothstep(edge + 0.02, edge - 0.02, x);\n  float bar = exp(-pow(abs(x - edge) * 14.0, 2.0)) * (1.0 - uProgress);\n  vec3 c = getColor(uv).rgb * shown + vec3(1.0, 0.97, 0.9) * bar;\n  if (uProgress >= 1.0) c = getColor(uv).rgb;\n  return vec4(min(c, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "anim_flare",
+"name": "Flare In",
+"kind": "anim",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float k = 1.0 - uProgress;\n  vec2 d = (uv - 0.5) * vec2(uResolution.x / uResolution.y, 1.0);\n  float glow = 0.05 / (length(d) + 0.05) * k;\n  float streak = 0.01 / (abs(d.y) + 0.01) * k * smoothstep(0.8, 0.0, abs(d.x));\n  c = c * uProgress + vec3(1.0, 0.85, 0.6) * (glow + streak * 0.5) + k * 0.3;\n  return vec4(min(c, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "anim_overexpose",
+"name": "Overexpose",
+"kind": "anim",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float k = 1.0 - uProgress;\n  vec3 b = c * (1.0 + k * 4.0) + k * 0.6;\n  return vec4(min(b, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "anim_burn",
+"name": "Burn In",
+"kind": "anim",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float n = noise(uv * 6.0) * 0.6 + noise(uv * 14.0) * 0.4;\n  float t = uProgress * 1.3 - 0.15;\n  float shown = smoothstep(t + 0.02, t - 0.02, n);\n  float rim = smoothstep(0.08, 0.0, abs(n - t)) * (1.0 - uProgress);\n  vec3 dark = c * vec3(0.35, 0.18, 0.08);\n  vec3 o = mix(dark, c, shown) + vec3(1.0, 0.5, 0.1) * rim * 1.5;\n  if (uProgress >= 1.0) o = c;\n  return vec4(min(o, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "anim_slidediag",
+"name": "Slide diagonal",
+"kind": "anim",
+"category": "Slide",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  k = k * k;\n  vec2 q = uv + vec2(k, k);\n  float inside = step(q.x, 1.0) * step(q.y, 1.0);\n  return vec4(getColor(q).rgb * inside, 1.0);\n}"
+},
+{
+"id": "anim_whip",
+"name": "Whip",
+"kind": "anim",
+"category": "Slide",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  float off = k * k * k;\n  vec3 acc = vec3(0.0);\n  float n = 0.0;\n  for (int i = 0; i < 10; i++) {\n    vec2 q = uv + vec2(off + k * 0.15 * float(i) / 9.0, 0.0);\n    float inside = step(q.x, 1.0);\n    acc += getColor(q).rgb * inside;\n    n += 1.0;\n  }\n  return vec4(acc / n, 1.0);\n}"
+},
+{
+"id": "anim_tilt",
+"name": "Tilt in",
+"kind": "anim",
+"category": "Basic",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  float a = k * k * 0.6;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 d = (uv - vec2(0.0, 0.0)) * asp;\n  vec2 q = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / asp;\n  float inside = step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0);\n  return vec4(getColor(q).rgb * inside * min(1.0, uProgress * 2.0), 1.0);\n}"
+},
+{
+"id": "anim_tiles",
+"name": "Tiles",
+"kind": "anim",
+"category": "Basic",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 cell = floor(uv * vec2(8.0, 6.0));\n  float order = rand(cell);\n  float shown = step(order, uProgress * 1.05);\n  if (uProgress >= 1.0) shown = 1.0;\n  return vec4(getColor(uv).rgb * shown, 1.0);\n}"
+},
+{
+"id": "anim_focus",
+"name": "Focus in",
+"kind": "anim",
+"category": "Basic",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  vec2 px = 14.0 * k / uResolution;\n  vec3 acc = vec3(0.0);\n  for (int i = 0; i < 16; i++) {\n    float a = float(i) * 2.39996;\n    float r = sqrt(float(i) / 16.0);\n    acc += getColor(0.5 + (uv - 0.5) / (1.0 + k * 0.15) + vec2(cos(a), sin(a)) * r * px).rgb;\n  }\n  return vec4(acc / 16.0 * min(1.0, uProgress * 1.5 + 0.2), 1.0);\n}"
+},
+{
+"id": "anim_vhsin",
+"name": "VHS in",
+"kind": "anim",
+"category": "Basic",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  float row = floor(uv.y * 90.0);\n  float j = (rand(vec2(row, floor(uProgress * 20.0))) - 0.5) * 0.2 * k;\n  vec2 q = vec2(uv.x + j, uv.y);\n  vec3 c = vec3(getColor(q + vec2(0.03 * k, 0.0)).r, getColor(q).g, getColor(q - vec2(0.03 * k, 0.0)).b);\n  float roll = step(abs(fract(uv.y + k * 2.0) - 0.5), 0.04) * k;\n  c = c * min(1.0, uProgress * 1.6 + 0.1) + roll * 0.5 + (rand(uv * uResolution + uProgress) - 0.5) * 0.4 * k;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "ascii2",
+"name": "Terminal",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "size",
+"type": "float",
+"default": [
+8.0
+],
+"min": 4.0,
+"max": 20.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 cells = uResolution / size;\n  vec2 cell = floor(uv * cells);\n  vec2 f = fract(uv * cells);\n  float l = luma(getColor((cell + 0.5) / cells).rgb);\n  // Glyph density from simple shapes: dot, dash, plus, box.\n  float d = 0.0;\n  if (l > 0.2) d = step(length(f - 0.5), 0.15);\n  if (l > 0.4) d = max(d, step(abs(f.y - 0.5), 0.08) * step(abs(f.x - 0.5), 0.35));\n  if (l > 0.6) d = max(d, step(abs(f.x - 0.5), 0.08) * step(abs(f.y - 0.5), 0.35));\n  if (l > 0.8) d = max(d, 1.0 - step(0.12, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y))));\n  return vec4(vec3(0.2, 1.0, 0.4) * d, 1.0);\n}"
+},
+{
+"id": "mosaicround",
+"name": "Round Tiles",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "size",
+"type": "float",
+"default": [
+16.0
+],
+"min": 6.0,
+"max": 50.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 cells = uResolution / size;\n  vec2 cell = floor(uv * cells);\n  vec2 f = fract(uv * cells) - 0.5;\n  vec3 c = getColor((cell + 0.5) / cells).rgb;\n  float m = smoothstep(0.48, 0.42, length(f));\n  return vec4(c * m * (1.05 - length(f) * 0.4) + vec3(0.06) * (1.0 - m), 1.0);\n}"
+},
+{
+"id": "legobricks",
+"name": "Brick Toy",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "size",
+"type": "float",
+"default": [
+18.0
+],
+"min": 8.0,
+"max": 50.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 cells = uResolution / size;\n  vec2 cell = floor(uv * cells);\n  vec2 f = fract(uv * cells) - 0.5;\n  vec3 c = floor(getColor((cell + 0.5) / cells).rgb * 6.0 + 0.5) / 6.0;\n  float stud = smoothstep(0.3, 0.26, length(f));\n  float rim = smoothstep(0.3, 0.26, length(f + vec2(0.04, -0.04)));\n  float edge = smoothstep(0.5, 0.44, max(abs(f.x), abs(f.y)));\n  vec3 o = c * (0.85 + 0.15 * edge);\n  o = mix(o, c * 1.2, stud * (1.0 - rim) + rim * 0.0);\n  o = mix(o, c * 0.75, (1.0 - stud) * step(length(f), 0.33));\n  return vec4(clamp(o, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "pencilhatch",
+"name": "Pencil Hatch",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 p = uv * uResolution;\n  float l = luma(getColor(uv).rgb);\n  float h1 = step(0.5, fract((p.x + p.y) / 6.0)) * step(l, 0.75);\n  float h2 = step(0.5, fract((p.x - p.y) / 6.0)) * step(l, 0.5);\n  float h3 = step(0.5, fract(p.y / 4.0)) * step(l, 0.25);\n  float ink = max(max(h1, h2), h3) * 0.7;\n  vec3 paper = vec3(0.97, 0.96, 0.92);\n  return vec4(paper * (1.0 - ink), 1.0);\n}"
+},
+{
+"id": "marker",
+"name": "Marker",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 1.5 / uResolution;\n  vec3 c = vec3(0.0);\n  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) c += getColor(uv + vec2(float(x), float(y)) * px).rgb;\n  c /= 9.0;\n  vec3 h = rgb2hsv(c);\n  h.y = min(1.0, h.y * 1.5);\n  h.z = floor(h.z * 4.0 + 0.5) / 4.0;\n  vec3 o = hsv2rgb(h);\n  float gx = luma(getColor(uv + vec2(px.x, 0.0)).rgb) - luma(getColor(uv - vec2(px.x, 0.0)).rgb);\n  float gy = luma(getColor(uv + vec2(0.0, px.y)).rgb) - luma(getColor(uv - vec2(0.0, px.y)).rgb);\n  o *= 1.0 - smoothstep(0.08, 0.2, length(vec2(gx, gy)));\n  return vec4(o, 1.0);\n}"
+},
+{
+"id": "pastelchalk",
+"name": "Chalk Pastel",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float grain = noise(uv * uResolution * 0.35) * 0.6 + noise(uv * uResolution * 0.9) * 0.4;\n  vec3 h = rgb2hsv(c);\n  h.y *= 0.7;\n  h.z = 0.35 + h.z * 0.7;\n  vec3 o = hsv2rgb(h) * (0.8 + 0.3 * grain);\n  return vec4(mix(vec3(0.15, 0.15, 0.18), o, smoothstep(0.2, 0.5, grain + luma(c) * 0.5)), 1.0);\n}"
+},
+{
+"id": "chalkboard",
+"name": "Chalkboard",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 1.0 / uResolution;\n  float gx = luma(getColor(uv + vec2(px.x, 0.0)).rgb) - luma(getColor(uv - vec2(px.x, 0.0)).rgb);\n  float gy = luma(getColor(uv + vec2(0.0, px.y)).rgb) - luma(getColor(uv - vec2(0.0, px.y)).rgb);\n  float e = clamp(length(vec2(gx, gy)) * 5.0, 0.0, 1.0);\n  e *= 0.6 + 0.4 * noise(uv * uResolution * 0.5);\n  vec3 board = vec3(0.12, 0.2, 0.16) + noise(uv * 30.0) * 0.03;\n  return vec4(mix(board, vec3(0.92, 0.94, 0.9), e), 1.0);\n}"
+},
+{
+"id": "thermal2",
+"name": "Heat Map",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float l = luma(getColor(uv).rgb);\n  vec3 c = mix(vec3(0.0, 0.0, 0.3), vec3(0.0, 0.8, 1.0), smoothstep(0.0, 0.3, l));\n  c = mix(c, vec3(0.2, 1.0, 0.2), smoothstep(0.3, 0.5, l));\n  c = mix(c, vec3(1.0, 1.0, 0.0), smoothstep(0.5, 0.7, l));\n  c = mix(c, vec3(1.0, 0.1, 0.0), smoothstep(0.7, 0.95, l));\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "sobelcolor",
+"name": "Outline Color",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 1.0 / uResolution;\n  vec3 c = getColor(uv).rgb;\n  float gx = luma(getColor(uv + vec2(px.x, 0.0)).rgb) - luma(getColor(uv - vec2(px.x, 0.0)).rgb);\n  float gy = luma(getColor(uv + vec2(0.0, px.y)).rgb) - luma(getColor(uv - vec2(0.0, px.y)).rgb);\n  float e = smoothstep(0.05, 0.18, length(vec2(gx, gy)));\n  vec3 flat_ = floor(c * 5.0 + 0.5) / 5.0;\n  return vec4(mix(mix(vec3(1.0), flat_, 0.6), vec3(0.05), e), 1.0);\n}"
+},
+{
+"id": "sticker",
+"name": "Sticker",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec3 h = rgb2hsv(c);\n  h.y = min(1.0, h.y * 1.4 + 0.1);\n  h.z = floor(h.z * 3.0 + 0.7) / 3.0;\n  vec3 o = hsv2rgb(h);\n  vec2 px = 2.0 / uResolution;\n  float gx = luma(getColor(uv + vec2(px.x, 0.0)).rgb) - luma(getColor(uv - vec2(px.x, 0.0)).rgb);\n  float gy = luma(getColor(uv + vec2(0.0, px.y)).rgb) - luma(getColor(uv - vec2(0.0, px.y)).rgb);\n  float e = smoothstep(0.1, 0.25, length(vec2(gx, gy)));\n  return vec4(mix(o, vec3(1.0), e), 1.0);\n}"
+},
+{
+"id": "knit",
+"name": "Knit",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "size",
+"type": "float",
+"default": [
+12.0
+],
+"min": 6.0,
+"max": 30.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 p = uv * uResolution / size;\n  vec2 cell = floor(p);\n  vec2 f = fract(p);\n  vec3 c = getColor((cell + 0.5) * size / uResolution).rgb;\n  float x = f.x - 0.5;\n  float v = abs(x) * 2.0 - (f.y - 0.5) * sign(x) * 1.2;\n  float stitch = smoothstep(0.9, 0.3, abs(v - 0.3));\n  return vec4(c * (0.55 + 0.6 * stitch), 1.0);\n}"
+},
+{
+"id": "tvwall",
+"name": "TV Wall",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 g = uv * vec2(4.0, 3.0);\n  vec2 f = fract(g);\n  vec2 cell = floor(g);\n  vec3 c = getColor(f).rgb;\n  vec3 h = rgb2hsv(c);\n  h.x = fract(h.x + rand(cell) * 0.4);\n  c = hsv2rgb(h) * (0.75 + 0.35 * rand(cell + 2.0));\n  float frame = smoothstep(0.0, 0.04, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)));\n  return vec4(c * frame, 1.0);\n}"
+},
+{
+"id": "puzzle",
+"name": "Puzzle",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "pieces",
+"type": "float",
+"default": [
+6.0
+],
+"min": 3.0,
+"max": 14.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 p = uv * asp * pieces;\n  vec2 f = fract(p) - 0.5;\n  vec2 cell = floor(p);\n  float knobX = length(vec2(abs(f.x) - 0.5, f.y)) - 0.14;\n  float knobY = length(vec2(f.x, abs(f.y) - 0.5)) - 0.14;\n  float edge = min(0.5 - max(abs(f.x), abs(f.y)), min(abs(knobX), abs(knobY)));\n  vec3 c = getColor(uv).rgb;\n  float line = smoothstep(0.02, 0.0, edge);\n  float shade = 0.92 + 0.08 * rand(cell);\n  return vec4(c * shade * (1.0 - line * 0.6) + line * 0.15, 1.0);\n}"
+},
+{
+"id": "oldphoto",
+"name": "Old Photo",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float l = luma(getColor(uv).rgb);\n  vec3 c = mix(vec3(0.2, 0.14, 0.08), vec3(0.95, 0.88, 0.72), smoothstep(0.0, 1.0, l));\n  float stain = noise(uv * 4.0) * 0.12 + noise(uv * 40.0) * 0.05;\n  float v = smoothstep(0.8, 0.3, length(uv - 0.5));\n  float crease = smoothstep(0.004, 0.0, abs(uv.x - 0.62 - uv.y * 0.05)) * 0.3;\n  return vec4(c * (0.75 + 0.25 * v) - stain + crease, 1.0);\n}"
+},
+{
+"id": "newsprint2",
+"name": "Comic Print",
+"kind": "filter",
+"category": "Art",
+"params": [
+{
+"name": "size",
+"type": "float",
+"default": [
+5.0
+],
+"min": 3.0,
+"max": 12.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 p = uv * uResolution / size;\n  vec3 k = 1.0 - c;\n  float ink = min(min(k.r, k.g), k.b);\n  vec3 cmy = (k - ink) / max(1.0 - ink, 0.001);\n  vec3 dots;\n  float a = 0.26;\n  for (int i = 0; i < 3; i++) {\n    float ang = a + float(i) * 0.52;\n    vec2 q = vec2(cos(ang) * p.x - sin(ang) * p.y, sin(ang) * p.x + cos(ang) * p.y);\n    float d = length(fract(q) - 0.5);\n    float v = i == 0 ? cmy.r : (i == 1 ? cmy.g : cmy.b);\n    float dt = smoothstep(0.05, 0.0, d - sqrt(v) * 0.5);\n    if (i == 0) dots.r = dt; else if (i == 1) dots.g = dt; else dots.b = dt;\n  }\n  vec3 o = vec3(1.0) - dots;\n  o *= 1.0 - smoothstep(0.55, 0.85, ink);\n  return vec4(o * vec3(1.0, 0.98, 0.93), 1.0);\n}"
+},
+{
+"id": "glass3d",
+"name": "Anaglyph",
+"kind": "filter",
+"category": "Lens",
+"params": [
+{
+"name": "depth",
+"type": "float",
+"default": [
+0.012
+],
+"min": 0.002,
+"max": 0.04
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  float l = luma(getColor(uv - vec2(depth, 0.0)).rgb);\n  float r = luma(getColor(uv + vec2(depth, 0.0)).rgb);\n  return vec4(l, r * 0.85, r, 1.0);\n}"
+},
+{
+"id": "macro",
+"name": "Macro",
+"kind": "filter",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  float d = length((uv - 0.5) * asp);\n  float k = smoothstep(0.12, 0.45, d);\n  vec2 px = 16.0 * k / uResolution;\n  vec3 acc = vec3(0.0);\n  for (int i = 0; i < 16; i++) {\n    float a = float(i) * 2.39996;\n    float r = sqrt(float(i) / 16.0);\n    acc += getColor(0.5 + (uv - 0.5) * 0.85 + vec2(cos(a), sin(a)) * r * px).rgb;\n  }\n  acc /= 16.0;\n  return vec4(mix(vec3(luma(acc)), acc, 1.2) * (1.0 - k * 0.15), 1.0);\n}"
+},
+{
+"id": "lensbubble",
+"name": "Bubble Lens",
+"kind": "filter",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 d = (uv - 0.5) * asp;\n  float r = length(d);\n  float R = 0.42;\n  vec3 c;\n  if (r < R) {\n    float z = sqrt(R * R - r * r);\n    vec2 q = 0.5 + d / asp * (0.55 + 0.45 * (1.0 - z / R));\n    c = getColor(q).rgb * (0.85 + 0.25 * z / R);\n    c += smoothstep(0.08, 0.0, length(d - vec2(-0.13, 0.15))) * 0.5;\n  } else {\n    c = getColor(uv).rgb * 0.45;\n  }\n  return vec4(min(c, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "wideangle",
+"name": "Wide Angle",
+"kind": "filter",
+"category": "Lens",
+"params": [
+{
+"name": "amount",
+"type": "float",
+"default": [
+0.35
+],
+"min": 0.05,
+"max": 0.8
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec2 d = uv - 0.5;\n  float r2 = dot(d, d);\n  vec2 q = 0.5 + d * (1.0 - amount * 0.5 + amount * r2 * 1.4) ;\n  float v = 1.0 - smoothstep(0.35, 0.75, sqrt(r2)) * 0.4;\n  return vec4(getColor(q).rgb * v, 1.0);\n}"
+},
+{
+"id": "lensdirt2",
+"name": "Smudged Lens",
+"kind": "filter",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 px = 10.0 / uResolution;\n  vec3 b = vec3(0.0);\n  for (int i = 0; i < 12; i++) {\n    float a = float(i) * 2.39996;\n    float r = sqrt(float(i) / 12.0);\n    b += getColor(uv + vec2(cos(a), sin(a)) * r * px).rgb;\n  }\n  b /= 12.0;\n  float smudge = smoothstep(0.35, 0.75, noise(uv * 3.0) * 0.7 + noise(uv * 9.0) * 0.3);\n  vec3 o = mix(c, b, smudge);\n  o += b * smudge * 0.25;\n  return vec4(min(o, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "vignettecolor",
+"name": "Color Vignette",
+"kind": "filter",
+"category": "Lens",
+"params": [
+{
+"name": "tint",
+"type": "color",
+"default": [
+0.4,
+0.0,
+0.6
+],
+"min": 0.0,
+"max": 1.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float v = smoothstep(0.3, 0.85, length((uv - 0.5) * vec2(1.0, 0.9)) * 1.25);\n  return vec4(mix(c, c * 0.3 + tint * 0.6, v), 1.0);\n}"
+},
+{
+"id": "microcontrast",
+"name": "Micro Contrast",
+"kind": "filter",
+"category": "Detail",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 1.0 / uResolution;\n  vec3 c = getColor(uv).rgb;\n  vec3 b = vec3(0.0);\n  for (int y = -2; y <= 2; y++) for (int x = -2; x <= 2; x++) b += getColor(uv + vec2(float(x), float(y)) * px * 1.5).rgb;\n  b /= 25.0;\n  vec3 d = c + (c - b) * 2.4;\n  return vec4(clamp(d, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "dehaze",
+"name": "Dehaze",
+"kind": "filter",
+"category": "Detail",
+"params": [
+{
+"name": "amount",
+"type": "float",
+"default": [
+0.6
+],
+"min": 0.1,
+"max": 1.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float dark = min(min(c.r, c.g), c.b);\n  vec3 air = vec3(0.92);\n  float t = max(1.0 - dark * 0.95 * amount, 0.25);\n  vec3 o = (c - air) / t + air;\n  o = mix(vec3(luma(o)), o, 1.1);\n  return vec4(clamp(o, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "shadowlift",
+"name": "Shadow Lift",
+"kind": "filter",
+"category": "Detail",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  float lift = (1.0 - smoothstep(0.0, 0.5, l)) * 0.25;\n  vec3 o = c + lift * (0.6 + c);\n  return vec4(clamp(o, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "highlightsave",
+"name": "Highlight Save",
+"kind": "filter",
+"category": "Detail",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  float k = smoothstep(0.55, 1.0, l);\n  vec3 o = mix(c, c * 0.78 + 0.1, k);\n  o = mix(vec3(luma(o)), o, 1.12);\n  return vec4(clamp(o, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "texturepop",
+"name": "Texture",
+"kind": "filter",
+"category": "Detail",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 2.0 / uResolution;\n  vec3 c = getColor(uv).rgb;\n  vec3 b = (getColor(uv + vec2(px.x, px.y)).rgb + getColor(uv - vec2(px.x, px.y)).rgb + getColor(uv + vec2(px.x, -px.y)).rgb + getColor(uv - vec2(px.x, -px.y)).rgb) * 0.25;\n  float l = luma(c);\n  vec3 d = c + (c - b) * 3.0 * smoothstep(0.1, 0.4, l) * smoothstep(0.95, 0.6, l);\n  return vec4(clamp(d, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "sharpenedge",
+"name": "Edge Sharpen",
+"kind": "filter",
+"category": "Detail",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 1.0 / uResolution;\n  vec3 c = getColor(uv).rgb;\n  vec3 n = getColor(uv + vec2(0.0, px.y)).rgb + getColor(uv - vec2(0.0, px.y)).rgb + getColor(uv + vec2(px.x, 0.0)).rgb + getColor(uv - vec2(px.x, 0.0)).rgb;\n  vec3 d = c * 5.0 - n;\n  return vec4(clamp(mix(c, d, 0.9), 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "rgbshift",
+"name": "RGB Shift",
+"kind": "filter",
+"category": "Lens",
+"params": [
+{
+"name": "amount",
+"type": "float",
+"default": [
+0.008
+],
+"min": 0.002,
+"max": 0.03
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  return vec4(getColor(uv + vec2(amount, 0.0)).r, getColor(uv + vec2(0.0, amount * 0.5)).g, getColor(uv - vec2(amount, 0.0)).b, 1.0);\n}"
+},
+{
+"id": "mirrorquad",
+"name": "Mirror Four",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  // Each quarter holds the whole picture, mirrored so the four copies meet in the middle.\n  vec2 q = 1.0 - abs(uv * 2.0 - 1.0);\n  return getColor(q);\n}"
+},
+{
+"id": "hexmirror",
+"name": "Hex Kaleido",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 d = (uv - 0.5) * asp;\n  float a = atan(d.y, d.x);\n  float r = length(d);\n  float seg = PI / 3.0;\n  a = mod(a, seg);\n  a = abs(a - seg * 0.5);\n  vec2 q = vec2(cos(a), sin(a)) * r / asp + 0.5;\n  return getColor(q);\n}"
+},
+{
+"id": "droste",
+"name": "Picture in Picture",
+"kind": "filter",
+"category": "Art",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 d = uv - 0.5;\n  float m = max(abs(d.x), abs(d.y));\n  float level = floor(log2(0.5 / max(m, 0.01)));\n  level = min(level, 4.0);\n  vec2 q = 0.5 + d * pow(2.0, level);\n  vec3 c = getColor(q).rgb;\n  vec2 f = abs(q - 0.5);\n  float frame = step(0.485, max(f.x, f.y)) * step(0.5, level + 0.5);\n  return vec4(mix(c, vec3(1.0), frame), 1.0);\n}"
+},
+{
+"id": "splitcolor",
+"name": "Split Color",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  vec3 o = uv.x < 0.5 ? c : vec3(l);\n  float line = smoothstep(0.003, 0.0, abs(uv.x - 0.5));\n  return vec4(mix(o, vec3(1.0), line), 1.0);\n}"
+},
+{
+"id": "redonly",
+"name": "Keep Red",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec3 h = rgb2hsv(c);\n  float red = smoothstep(0.1, 0.02, min(h.x, 1.0 - h.x)) * smoothstep(0.2, 0.4, h.y);\n  return vec4(mix(vec3(luma(c)), c, red), 1.0);\n}"
+},
+{
+"id": "blueonly",
+"name": "Keep Blue",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec3 h = rgb2hsv(c);\n  float blue = smoothstep(0.12, 0.04, abs(h.x - 0.6)) * smoothstep(0.15, 0.35, h.y);\n  return vec4(mix(vec3(luma(c)), c, blue), 1.0);\n}"
+},
+{
+"id": "greenonly",
+"name": "Keep Green",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec3 h = rgb2hsv(c);\n  float g = smoothstep(0.12, 0.04, abs(h.x - 0.33)) * smoothstep(0.15, 0.35, h.y);\n  return vec4(mix(vec3(luma(c)), c, g), 1.0);\n}"
+},
+{
+"id": "yellowonly",
+"name": "Keep Yellow",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec3 h = rgb2hsv(c);\n  float y = smoothstep(0.08, 0.03, abs(h.x - 0.14)) * smoothstep(0.2, 0.4, h.y);\n  return vec4(mix(vec3(luma(c)), c, y), 1.0);\n}"
+},
+{
+"id": "hueinvert",
+"name": "Hue Flip",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 h = rgb2hsv(getColor(uv).rgb);\n  h.x = fract(h.x + 0.5);\n  return vec4(hsv2rgb(h), 1.0);\n}"
+},
+{
+"id": "channelswap",
+"name": "Channel Swap",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  return vec4(getColor(uv).brg, 1.0);\n}"
+},
+{
+"id": "lavender",
+"name": "Lavender",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  vec3 o = mix(c, vec3(l) * vec3(0.95, 0.85, 1.1), 0.55) + vec3(0.04, 0.02, 0.07);\n  return vec4(clamp(o, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "emerald",
+"name": "Emerald",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  vec3 o = mix(vec3(0.0, 0.12, 0.08), vec3(0.75, 1.0, 0.85), smoothstep(0.0, 1.0, l));\n  return vec4(mix(c, o, 0.6), 1.0);\n}"
+},
+{
+"id": "crimson",
+"name": "Crimson",
+"kind": "filter",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  vec3 o = mix(vec3(0.15, 0.0, 0.03), vec3(1.0, 0.75, 0.7), smoothstep(0.0, 1.0, l));\n  return vec4(mix(c, o, 0.6), 1.0);\n}"
+},
+{
+"id": "hearts2",
+"name": "Floating Hearts",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 10; i++) {\n    float fi = float(i);\n    float sp = 0.12 + rand(vec2(fi, 1.0)) * 0.15;\n    vec2 p = vec2(rand(vec2(fi, 2.0)) + sin(uTime * 1.3 + fi) * 0.03, fract(rand(vec2(fi, 3.0)) + uTime * sp) * 1.3 - 0.15);\n    if (abs(uv.x - p.x) > 0.12 || abs(uv.y - p.y) > 0.14) continue;\n    vec2 d = (uv - p) * asp / (0.07 + rand(vec2(fi, 4.0)) * 0.06);\n    d.y = -d.y + 0.3;\n    float a = atan(d.x, d.y) / PI;\n    float r = length(d);\n    float h = abs(a);\n    float shape = (13.0 * h - 22.0 * h * h + 10.0 * h * h * h) / (6.0 - 5.0 * h);\n    float m = smoothstep(0.05, 0.0, r - shape * 0.5);\n    c = mix(c, vec3(1.0, 0.25 + 0.2 * rand(vec2(fi, 5.0)), 0.45), m * 0.9);\n  }\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "sparkletrail",
+"name": "Sparkle Trail",
+"kind": "effect",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 14; i++) {\n    float fi = float(i);\n    float t = uTime * 0.8 - fi * 0.04;\n    vec2 p = vec2(0.5 + 0.38 * sin(t * 1.7), 0.5 + 0.32 * sin(t * 2.3 + 1.0));\n    float d = length((uv - p) * asp);\n    float s = (1.0 - fi / 14.0);\n    c += vec3(1.0, 0.9, 0.6) * 0.0009 / (d * d + 0.0009) * s * 0.6;\n  }\n  return vec4(min(c, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "lensflare2",
+"name": "Sun Flare",
+"kind": "effect",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 sun = vec2(0.5 + 0.35 * sin(uTime * 0.5), 0.8);\n  vec2 d = (uv - sun) * asp;\n  float core = 0.02 / (length(d) + 0.02);\n  vec3 f = vec3(1.0, 0.85, 0.6) * core * 0.7;\n  vec2 axis = (vec2(0.5) - sun);\n  for (int i = 1; i < 6; i++) {\n    float fi = float(i);\n    vec2 g = sun + axis * fi * 0.4;\n    float r = 0.02 + fi * 0.012;\n    float ring = smoothstep(r, r * 0.6, length((uv - g) * asp));\n    f += hsv2rgb(vec3(0.08 * fi, 0.6, 1.0)) * ring * 0.18;\n  }\n  return vec4(min(c + f, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "discoball2",
+"name": "Spotlights",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb * 0.45;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 4; i++) {\n    float fi = float(i);\n    vec2 p = vec2(0.5 + 0.4 * sin(uTime * (0.7 + fi * 0.2) + fi * 2.0), 0.5 + 0.35 * cos(uTime * (0.9 + fi * 0.15) + fi));\n    float d = length((uv - p) * asp);\n    vec3 col = hsv2rgb(vec3(fi * 0.25 + uTime * 0.05, 0.6, 1.0));\n    c += getColor(uv).rgb * col * smoothstep(0.22, 0.1, d) * 0.8;\n  }\n  return vec4(min(c, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "glitchwave",
+"name": "Glitch Wave",
+"kind": "effect",
+"category": "Glitch",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float w = sin(uv.y * 30.0 + uTime * 8.0) * 0.008 + sin(uv.y * 7.0 - uTime * 3.0) * 0.012;\n  float burst = step(0.8, rand(vec2(floor(uTime * 6.0), 1.0)));\n  w *= 1.0 + burst * 3.0;\n  return vec4(getColor(uv + vec2(w * 1.3, 0.0)).r, getColor(uv + vec2(w, 0.0)).g, getColor(uv + vec2(w * 0.7, 0.0)).b, 1.0);\n}"
+},
+{
+"id": "pixeldrift",
+"name": "Pixel Drift",
+"kind": "effect",
+"category": "Glitch",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float size = 4.0 + 20.0 * (0.5 + 0.5 * sin(uTime * 2.0));\n  vec2 cells = uResolution / size;\n  vec2 q = (floor(uv * cells) + 0.5) / cells;\n  float drift = (rand(vec2(floor(uv.y * cells.y), floor(uTime * 4.0))) - 0.5) * 0.03;\n  return getColor(q + vec2(drift, 0.0));\n}"
+},
+{
+"id": "corrupt",
+"name": "Corrupt",
+"kind": "effect",
+"category": "Glitch",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float t = floor(uTime * 10.0);\n  vec2 block = floor(uv * vec2(8.0, 20.0));\n  float r = rand(block + t * 0.37);\n  vec2 q = uv;\n  if (r > 0.92) q.x = fract(q.x + (rand(block + t) - 0.5) * 0.4);\n  vec3 c = getColor(q).rgb;\n  if (r > 0.97) c = vec3(step(0.5, c.r), step(0.5, c.g), step(0.5, c.b));\n  if (r < 0.02) c = 1.0 - c;\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "tvstatic",
+"name": "TV Static",
+"kind": "effect",
+"category": "Glitch",
+"params": [
+{
+"name": "amount",
+"type": "float",
+"default": [
+0.35
+],
+"min": 0.05,
+"max": 1.0
+}
+],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float n = rand(uv * uResolution + fract(uTime * 37.0) * 100.0);\n  float band = smoothstep(0.1, 0.0, abs(fract(uv.y - uTime * 0.3) - 0.5)) * 0.4;\n  return vec4(mix(c, vec3(n), amount + band), 1.0);\n}"
+},
+{
+"id": "hologlitch",
+"name": "Holo Glitch",
+"kind": "effect",
+"category": "Glitch",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float line = sin(uv.y * uResolution.y * 0.8 + uTime * 20.0) * 0.5 + 0.5;\n  float j = step(0.9, rand(vec2(floor(uTime * 15.0), floor(uv.y * 30.0)))) * 0.03;\n  vec3 c = getColor(uv + vec2(j, 0.0)).rgb;\n  float l = luma(c);\n  vec3 holo = vec3(0.2, 0.9, 1.0) * (l * 1.2 + 0.1) * (0.75 + 0.25 * line);\n  return vec4(mix(c, holo, 0.7), 1.0);\n}"
+},
+{
+"id": "framedrop",
+"name": "Frame Drop",
+"kind": "effect",
+"category": "Glitch",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float t = floor(uTime * 5.0);\n  float frozen = step(0.6, rand(vec2(t, 2.0)));\n  vec2 q = uv + vec2((rand(vec2(t, 4.0)) - 0.5) * 0.02, 0.0) * frozen;\n  vec3 c = getColor(q).rgb;\n  c = mix(c, floor(c * 8.0) / 8.0, frozen);\n  return vec4(c * (1.0 - 0.15 * frozen), 1.0);\n}"
+},
+{
+"id": "zoomwobble",
+"name": "Zoom Wobble",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float z = 1.08 + 0.06 * sin(uTime * 2.5);\n  float a = 0.03 * sin(uTime * 1.7);\n  vec2 d = (uv - 0.5) / z;\n  vec2 q = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) + 0.5;\n  return getColor(q);\n}"
+},
+{
+"id": "punchzoom",
+"name": "Punch Zoom",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float beat = fract(uTime * 1.2);\n  float z = 1.0 + 0.15 * exp(-beat * 8.0);\n  return getColor(0.5 + (uv - 0.5) / z);\n}"
+},
+{
+"id": "slowzoomout",
+"name": "Slow Zoom Out",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float p = clamp(uTime / max(uDuration, 0.5), 0.0, 1.0);\n  float z = mix(1.25, 1.0, p);\n  return getColor(0.5 + (uv - 0.5) / z);\n}"
+},
+{
+"id": "slowzoomin",
+"name": "Slow Zoom In",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float p = clamp(uTime / max(uDuration, 0.5), 0.0, 1.0);\n  float z = mix(1.0, 1.25, p * p * (3.0 - 2.0 * p));\n  return getColor(0.5 + (uv - 0.5) / z);\n}"
+},
+{
+"id": "vertpan",
+"name": "Tilt Pan",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float y = 0.12 * sin(uTime * 0.8);\n  return getColor(0.5 + (uv - 0.5) / 1.3 + vec2(0.0, y));\n}"
+},
+{
+"id": "rockfx",
+"name": "Rock",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  float a = 0.06 * sin(uTime * 3.0);\n  vec2 d = (uv - vec2(0.5, 0.0)) * asp / 1.12;\n  vec2 q = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / asp + vec2(0.5, 0.04);\n  return getColor(q);\n}"
+},
+{
+"id": "tremble",
+"name": "Tremble",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 o = (vec2(noise(vec2(uTime * 30.0, 1.0)), noise(vec2(uTime * 30.0, 5.0))) - 0.5) * 0.012;\n  return getColor(0.5 + (uv - 0.5) / 1.03 + o);\n}"
+},
+{
+"id": "bassdrop",
+"name": "Bass Drop",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float beat = fract(uTime * 2.0);\n  float k = exp(-beat * 10.0);\n  vec2 q = 0.5 + (uv - 0.5) / (1.0 + k * 0.1);\n  q += vec2(0.0, k * 0.02 * sin(uTime * 60.0));\n  vec3 c = vec3(getColor(q + vec2(k * 0.01, 0.0)).r, getColor(q).g, getColor(q - vec2(k * 0.01, 0.0)).b);\n  return vec4(c * (1.0 + k * 0.2), 1.0);\n}"
+},
+{
+"id": "rotatebeat",
+"name": "Beat Tilt",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float b = floor(uTime * 2.0);\n  float a = (mod(b, 2.0) * 2.0 - 1.0) * 0.06 * exp(-fract(uTime * 2.0) * 5.0);\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 d = (uv - 0.5) * asp / 1.1;\n  vec2 q = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / asp + 0.5;\n  return getColor(q);\n}"
+},
+{
+"id": "motionecho",
+"name": "Motion Echo",
+"kind": "effect",
+"category": "Motion",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 acc = vec3(0.0);\n  float w = 0.0;\n  for (int i = 0; i < 6; i++) {\n    float fi = float(i);\n    vec2 o = vec2(sin(uTime * 2.0 - fi * 0.15), cos(uTime * 1.5 - fi * 0.15)) * 0.02;\n    float k = 1.0 - fi / 6.0;\n    acc += getColor(uv + o).rgb * k;\n    w += k;\n  }\n  return vec4(acc / w, 1.0);\n}"
+},
+{
+"id": "rainheavy",
+"name": "Downpour",
+"kind": "effect",
+"category": "Weather",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb * vec3(0.8, 0.85, 0.92);\n  float s = 0.0;\n  for (int l = 0; l < 3; l++) {\n    float fl = float(l);\n    vec2 p = vec2(uv.x * (120.0 + fl * 60.0) + uv.y * 10.0, uv.y * (2.0 + fl) + uTime * (8.0 + fl * 3.0));\n    float col = floor(p.x);\n    float d = fract(p.y + rand(vec2(col, fl)) * 10.0);\n    s += smoothstep(0.0, 0.05, d) * smoothstep(0.2, 0.05, d) * step(0.55, rand(vec2(col, fl + 4.0))) * smoothstep(0.5, 0.3, abs(fract(p.x) - 0.5));\n  }\n  return vec4(min(c + s * 0.3, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "hail",
+"name": "Hail",
+"kind": "effect",
+"category": "Weather",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 p = uv * asp * 20.0 + vec2(0.0, uTime * 18.0);\n  vec2 cell = floor(p);\n  vec2 f = fract(p) - 0.5;\n  vec2 o = vec2(rand(cell), rand(cell + 1.0)) - 0.5;\n  float h = smoothstep(0.1, 0.05, length(f - o * 0.6)) * step(0.7, rand(cell + 3.0));\n  return vec4(mix(c * 0.9, vec3(0.95, 0.97, 1.0), h), 1.0);\n}"
+},
+{
+"id": "sunbeams",
+"name": "Sunbeams",
+"kind": "effect",
+"category": "Weather",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 src = vec2(0.2, 1.1);\n  vec2 d = uv - src;\n  float a = atan(d.x, -d.y);\n  float rays = noise(vec2(a * 12.0, uTime * 0.4)) * noise(vec2(a * 30.0, uTime * 0.2 + 3.0));\n  float fall = smoothstep(1.4, 0.2, length(d));\n  return vec4(min(c + vec3(1.0, 0.9, 0.7) * rays * fall * 0.6, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "fogroll",
+"name": "Rolling Fog",
+"kind": "effect",
+"category": "Weather",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 q = uv * vec2(3.0, 2.0) + vec2(uTime * 0.12, 0.0);\n  float f = noise(q) * 0.5 + noise(q * 2.1 + uTime * 0.05) * 0.3 + noise(q * 4.3) * 0.2;\n  float k = smoothstep(0.3, 0.8, f) * smoothstep(1.0, 0.2, uv.y);\n  return vec4(mix(c, vec3(0.85, 0.87, 0.9), k * 0.75), 1.0);\n}"
+},
+{
+"id": "snowlight",
+"name": "Light Snow",
+"kind": "effect",
+"category": "Weather",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  float s = 0.0;\n  for (int l = 0; l < 2; l++) {\n    float sc = 10.0 + float(l) * 8.0;\n    vec2 p = uv * asp * sc + vec2(sin(uTime * 0.6 + float(l)) * 0.5, uTime * (0.6 + float(l) * 0.3));\n    vec2 cell = floor(p);\n    vec2 f = fract(p) - 0.5;\n    vec2 o = vec2(rand(cell + 4.0), rand(cell + 8.0)) - 0.5;\n    s += smoothstep(0.06, 0.0, length(f - o * 0.6)) * step(0.5, rand(cell + 11.0));\n  }\n  return vec4(min(c + s * 0.9, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "thunder",
+"name": "Thunder",
+"kind": "effect",
+"category": "Weather",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb * vec3(0.6, 0.65, 0.8);\n  float t = uTime * 0.7;\n  float flash = step(0.85, rand(vec2(floor(t * 3.0), 1.0))) * (1.0 - fract(t * 3.0));\n  float x = 0.3 + rand(vec2(floor(t * 3.0), 2.0)) * 0.4 + (noise(vec2(uv.y * 20.0, floor(t * 3.0))) - 0.5) * 0.1;\n  float bolt = 0.002 / (abs(uv.x - x) + 0.002) * step(0.45, uv.y) * flash;\n  return vec4(min(c + flash * 0.5 + vec3(0.8, 0.85, 1.0) * bolt, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "confetti2",
+"name": "Streamers",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 18; i++) {\n    float fi = float(i);\n    float x = rand(vec2(fi, 1.0));\n    float y = fract(1.0 - (uTime * (0.15 + rand(vec2(fi, 2.0)) * 0.2) + rand(vec2(fi, 3.0))));\n    if (abs(uv.x - x) > 0.03 || uv.y - y < 0.0 || uv.y - y > 0.12) continue;\n    float wx = x + sin(uTime * 3.0 + fi + uv.y * 20.0) * 0.015;\n    float d = abs((uv.x - wx) * asp.x);\n    float len = smoothstep(0.0, 0.02, uv.y - y) * smoothstep(0.12, 0.08, uv.y - y);\n    float m = smoothstep(0.006, 0.002, d) * len;\n    c = mix(c, hsv2rgb(vec3(rand(vec2(fi, 4.0)), 0.75, 1.0)), m);\n  }\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "popcorn",
+"name": "Pop",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 8; i++) {\n    float fi = float(i);\n    float t = fract(uTime * 0.8 + rand(vec2(fi, 1.0)));\n    vec2 p = vec2(rand(vec2(fi, floor(uTime * 0.8 + rand(vec2(fi, 1.0))))), rand(vec2(fi + 9.0, floor(uTime * 0.8 + rand(vec2(fi, 1.0))))));\n    float r = t * 0.15;\n    float ring = smoothstep(0.012, 0.0, abs(length((uv - p) * asp) - r)) * (1.0 - t);\n    c += hsv2rgb(vec3(rand(vec2(fi, 7.0)), 0.6, 1.0)) * ring;\n  }\n  return vec4(min(c, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "rainbowspin",
+"name": "Rainbow Swirl",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 d = (uv - 0.5) * vec2(uResolution.x / uResolution.y, 1.0);\n  float a = atan(d.y, d.x) / (2.0 * PI) + uTime * 0.2 + length(d);\n  vec3 rb = hsv2rgb(vec3(fract(a), 0.7, 1.0));\n  return vec4(mix(c, c * rb * 1.5, 0.5), 1.0);\n}"
+},
+{
+"id": "smiley",
+"name": "Glow Rings",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  for (int i = 0; i < 5; i++) {\n    float fi = float(i);\n    vec2 p = vec2(0.15 + fi * 0.18, 0.5 + 0.3 * sin(uTime * 2.0 + fi));\n    float d = length((uv - p) * asp);\n    c += hsv2rgb(vec3(fi * 0.2, 0.7, 1.0)) * smoothstep(0.012, 0.0, abs(d - 0.06)) * 0.9;\n  }\n  return vec4(min(c, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "vhsplay",
+"name": "VHS Play",
+"kind": "effect",
+"category": "Retro",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float row = floor(uv.y * 240.0);\n  float j = (noise(vec2(row * 0.1, uTime * 5.0)) - 0.5) * 0.006;\n  vec2 q = uv + vec2(j, 0.0);\n  vec3 c = vec3(getColor(q + vec2(0.004, 0.0)).r, getColor(q).g, getColor(q - vec2(0.004, 0.0)).b);\n  c = mix(vec3(luma(c)), c, 0.8) * vec3(1.02, 0.98, 1.04);\n  float track = smoothstep(0.02, 0.0, abs(fract(uv.y * 0.5 + uTime * 0.07) - 0.95)) * 0.4;\n  c += (rand(uv * uResolution + uTime) - 0.5) * 0.08 + track * rand(vec2(uv.x * 100.0, uTime));\n  float play = step(0.04, uv.x) * step(uv.x, 0.12) * step(0.86, uv.y) * step(uv.y, 0.94) * step(0.5, fract(uTime * 0.7));\n  return vec4(clamp(c + play * 0.6, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "oldtv2",
+"name": "Tube TV",
+"kind": "effect",
+"category": "Retro",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 d = uv - 0.5;\n  vec2 q = 0.5 + d * (1.0 + dot(d, d) * 0.35);\n  float inside = step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0);\n  vec3 c = getColor(q).rgb;\n  float scan = 0.8 + 0.2 * sin(q.y * uResolution.y * 1.4);\n  float mask = 0.85 + 0.15 * sin(q.x * uResolution.x * 2.1);\n  float roll = 0.95 + 0.05 * sin((q.y - uTime * 0.3) * 6.0);\n  float v = smoothstep(0.75, 0.35, length(d));\n  return vec4(c * scan * mask * roll * v * inside * 1.15, 1.0);\n}"
+},
+{
+"id": "projector2",
+"name": "Home Movie",
+"kind": "effect",
+"category": "Retro",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float t = floor(uTime * 18.0);\n  vec2 q = uv + vec2(rand(vec2(t, 1.0)) - 0.5, rand(vec2(t, 2.0)) - 0.5) * 0.004;\n  vec3 c = getColor(q).rgb;\n  c = mix(vec3(luma(c)), c, 0.75) * vec3(1.08, 1.0, 0.85);\n  c *= 0.9 + 0.1 * rand(vec2(t, 3.0));\n  float v = smoothstep(0.9, 0.3, length((uv - 0.5) * vec2(1.2, 1.0)));\n  float hair = smoothstep(0.003, 0.0, abs(uv.x - 0.7 - sin(uv.y * 8.0) * 0.02)) * step(0.7, rand(vec2(floor(uTime * 2.0), 9.0)));\n  c += (rand(uv * uResolution + t) - 0.5) * 0.1;\n  return vec4(clamp(c * v - hair * 0.5, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "gameboy2",
+"name": "Pixel Game",
+"kind": "effect",
+"category": "Retro",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 cells = vec2(160.0, 144.0);\n  vec2 q = (floor(uv * cells) + 0.5) / cells;\n  float l = luma(getColor(q).rgb);\n  l += (rand(floor(uv * cells)) - 0.5) * 0.08;\n  float lv = floor(clamp(l, 0.0, 0.999) * 4.0);\n  vec3 c = vec3(0.06, 0.22, 0.06);\n  c = mix(c, vec3(0.19, 0.38, 0.19), step(1.0, lv));\n  c = mix(c, vec3(0.55, 0.67, 0.06), step(2.0, lv));\n  c = mix(c, vec3(0.61, 0.74, 0.06), step(3.0, lv));\n  c *= 0.95 + 0.05 * sin(uTime * 12.0);\n  return vec4(c, 1.0);\n}"
+},
+{
+"id": "dvd",
+"name": "Bouncing Logo",
+"kind": "effect",
+"category": "Retro",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb * 0.85;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 sz = vec2(0.18, 0.1);\n  vec2 room = 1.0 - sz;\n  vec2 tt = uTime * vec2(0.23, 0.17);\n  vec2 p = abs(mod(tt, 2.0 * room) - room) + sz * 0.5;\n  vec2 d = abs(uv - p) / sz;\n  float box = step(max(d.x, d.y), 0.5);\n  float hit = floor(tt.x / room.x) + floor(tt.y / room.y);\n  vec3 col = hsv2rgb(vec3(fract(hit * 0.27), 0.8, 1.0));\n  float ellipse = smoothstep(0.52, 0.46, length((uv - p) / sz * vec2(1.0, 1.6)));\n  return vec4(mix(c, col, box * ellipse), 1.0);\n}"
+},
+{
+"id": "lomopulse",
+"name": "Lomo Pulse",
+"kind": "effect",
+"category": "Retro",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c = mix(vec3(luma(c)), c, 1.3);\n  float v = smoothstep(0.75 + 0.1 * sin(uTime * 2.0), 0.25, length(uv - 0.5));\n  c = c * mix(0.35, 1.08, v);\n  c = c * vec3(1.05, 1.0, 0.92);\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "lightbars",
+"name": "Light Bars",
+"kind": "effect",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float bars = 0.0;\n  for (int i = 0; i < 3; i++) {\n    float fi = float(i);\n    float x = fract(uTime * (0.15 + fi * 0.07) + fi * 0.33) * 1.6 - 0.3;\n    bars += exp(-pow(abs(uv.x + uv.y * 0.3 - x) * 18.0, 2.0)) * (0.6 - fi * 0.15);\n  }\n  return vec4(min(c + bars * vec3(1.0, 0.95, 0.85) * 0.6, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "rimlight",
+"name": "Rim Light",
+"kind": "effect",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 2.0 / uResolution;\n  vec3 c = getColor(uv).rgb;\n  vec2 dir = vec2(cos(uTime), sin(uTime));\n  float l0 = luma(c);\n  float l1 = luma(getColor(uv - dir * px * 3.0).rgb);\n  float rim = clamp((l0 - l1) * 6.0, 0.0, 1.0);\n  return vec4(min(c + vec3(1.0, 0.85, 0.6) * rim * 0.8, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "glowbreath",
+"name": "Soft Glow Pulse",
+"kind": "effect",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 px = 6.0 / uResolution;\n  vec3 b = vec3(0.0);\n  for (int i = 0; i < 12; i++) {\n    float a = float(i) * 2.39996;\n    float r = sqrt(float(i) / 12.0);\n    b += getColor(uv + vec2(cos(a), sin(a)) * r * px).rgb;\n  }\n  b /= 12.0;\n  float k = 0.5 + 0.5 * sin(uTime * 2.0);\n  return vec4(1.0 - (1.0 - c) * (1.0 - b * b * k * 0.9), 1.0);\n}"
+},
+{
+"id": "prismrain",
+"name": "Prism Light",
+"kind": "effect",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float x = uv.x * 1.5 + uv.y * 0.5 - uTime * 0.2;\n  float band = smoothstep(0.15, 0.0, abs(fract(x) - 0.5) - 0.2);\n  vec3 rb = hsv2rgb(vec3(fract(x * 2.0), 0.6, 1.0));\n  return vec4(min(c + rb * band * 0.25, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "flashlight",
+"name": "Flashlight",
+"kind": "effect",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 p = vec2(0.5 + 0.3 * sin(uTime * 0.9), 0.5 + 0.25 * sin(uTime * 1.3));\n  float d = length((uv - p) * asp);\n  float lit = smoothstep(0.32, 0.12, d);\n  return vec4(c * (0.12 + lit * 1.0), 1.0);\n}"
+},
+{
+"id": "club",
+"name": "Club Lights",
+"kind": "effect",
+"category": "Party",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float t = floor(uTime * 4.0);\n  vec3 col = hsv2rgb(vec3(rand(vec2(t, 1.0)), 0.8, 1.0));\n  vec2 d = uv - vec2(rand(vec2(t, 2.0)), 1.1);\n  float a = atan(d.x, -d.y);\n  float beam = smoothstep(0.08, 0.0, abs(a - sin(uTime * 2.0) * 0.6));\n  return vec4(min(c * 0.6 + c * col * 0.4 + col * beam * 0.5, vec3(1.0)), 1.0);\n}"
+},
+{
+"id": "glitchcolor",
+"name": "Color Glitch",
+"kind": "effect",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float t = floor(uTime * 8.0);\n  float band = step(rand(vec2(t, 1.0)), uv.y) * step(uv.y, rand(vec2(t, 1.0)) + 0.2);\n  vec3 h = rgb2hsv(c);\n  h.x = fract(h.x + band * rand(vec2(t, 3.0)));\n  return vec4(hsv2rgb(h), 1.0);\n}"
+},
+{
+"id": "tonecycle",
+"name": "Tone Cycle",
+"kind": "effect",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float l = luma(c);\n  vec3 tone = 0.5 + 0.5 * cos(6.2831 * (l + uTime * 0.2 + vec3(0.0, 0.33, 0.67)));\n  return vec4(mix(c, tone * (0.3 + l), 0.55), 1.0);\n}"
+},
+{
+"id": "warmcool",
+"name": "Warm to Cool",
+"kind": "effect",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float k = 0.5 + 0.5 * sin(uTime * 1.2);\n  vec3 o = c * mix(vec3(1.15, 1.0, 0.82), vec3(0.85, 1.0, 1.18), k);\n  return vec4(clamp(o, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "posterpulse",
+"name": "Poster Pulse",
+"kind": "effect",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float lv = 2.0 + floor(4.0 * (0.5 + 0.5 * sin(uTime * 3.0)));\n  return vec4(floor(c * lv + 0.5) / lv, 1.0);\n}"
+},
+{
+"id": "invertflash",
+"name": "Invert Flash",
+"kind": "effect",
+"category": "Color",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float on = step(0.75, fract(uTime * 1.5));\n  return vec4(mix(c, 1.0 - c, on), 1.0);\n}"
+},
+{
+"id": "lenswipe",
+"name": "Lens Wipe",
+"kind": "effect",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float x = fract(uTime * 0.35) * 1.6 - 0.3;\n  float k = smoothstep(0.25, 0.0, abs(uv.x - x));\n  vec2 px = 12.0 * k / uResolution;\n  vec3 acc = vec3(0.0);\n  for (int i = 0; i < 12; i++) {\n    float a = float(i) * 2.39996;\n    float r = sqrt(float(i) / 12.0);\n    acc += getColor(uv + vec2(cos(a), sin(a)) * r * px).rgb;\n  }\n  return vec4(acc / 12.0, 1.0);\n}"
+},
+{
+"id": "fisheyepulse",
+"name": "Fisheye Pulse",
+"kind": "effect",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 d = uv - 0.5;\n  float r = length(d);\n  float k = 0.5 + 0.5 * sin(uTime * 2.5);\n  vec2 q = 0.5 + d * mix(1.0, 0.6 + r * 0.9, k);\n  return getColor(q);\n}"
+},
+{
+"id": "depthblur",
+"name": "Depth Breathe",
+"kind": "effect",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 0.5 + 0.5 * sin(uTime * 1.5);\n  float edge = smoothstep(0.15, 0.55, length(uv - 0.5));\n  vec2 px = 10.0 * edge * k / uResolution;\n  vec3 acc = vec3(0.0);\n  for (int i = 0; i < 12; i++) {\n    float a = float(i) * 2.39996;\n    float r = sqrt(float(i) / 12.0);\n    acc += getColor(uv + vec2(cos(a), sin(a)) * r * px).rgb;\n  }\n  return vec4(acc / 12.0, 1.0);\n}"
+},
+{
+"id": "chromawobble",
+"name": "Chroma Wobble",
+"kind": "effect",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 d = uv - 0.5;\n  float k = 0.012 * sin(uTime * 3.0);\n  return vec4(getColor(0.5 + d * (1.0 + k)).r, getColor(uv).g, getColor(0.5 + d * (1.0 - k)).b, 1.0);\n}"
+},
+{
+"id": "mirrorwave",
+"name": "Mirror Wave",
+"kind": "effect",
+"category": "Lens",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 q = uv;\n  q.x = 0.5 - abs(uv.x - 0.5);\n  q.y += sin(q.x * 12.0 + uTime * 3.0) * 0.02;\n  return getColor(q);\n}"
+},
+{
+"id": "digitalrain2",
+"name": "Glyph Rain",
+"kind": "effect",
+"category": "Glitch",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb * 0.35;\n  vec2 cells = vec2(48.0, 30.0);\n  vec2 cell = floor(uv * cells);\n  float speed = 0.5 + rand(vec2(cell.x, 1.0)) * 1.5;\n  float head = fract(-uTime * speed * 0.3 + rand(vec2(cell.x, 2.0)));\n  float y = 1.0 - cell.y / cells.y;\n  float tail = fract(y - head);\n  float glyph = step(0.4, rand(cell + floor(uTime * 8.0)));\n  vec2 f = fract(uv * cells);\n  float px = step(0.15, f.x) * step(f.x, 0.85) * step(0.1, f.y) * step(f.y, 0.9);\n  float b = smoothstep(0.4, 0.0, tail) * glyph * px;\n  return vec4(c + vec3(0.2, 1.0, 0.35) * b + vec3(0.8) * step(tail, 0.02) * px, 1.0);\n}"
+},
+{
+"id": "anim_zoomblur",
+"name": "Zoom blur in",
+"kind": "anim",
+"category": "Basic",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  vec3 acc = vec3(0.0);\n  for (int i = 0; i < 10; i++) {\n    float s = 1.0 + k * 0.6 * float(i) / 9.0;\n    acc += getColor(0.5 + (uv - 0.5) / s).rgb;\n  }\n  return vec4(acc / 10.0 * min(1.0, uProgress * 1.6 + 0.1), 1.0);\n}"
+},
+{
+"id": "anim_spinin",
+"name": "Spin in",
+"kind": "anim",
+"category": "Basic",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  float e = k * k;\n  float a = e * 6.2831;\n  float s = max(1.0 - e, 0.001);\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 d = (uv - 0.5) * asp / s;\n  vec2 q = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / asp + 0.5;\n  float inside = step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0);\n  return vec4(getColor(q).rgb * inside, 1.0);\n}"
+},
+{
+"id": "anim_fall",
+"name": "Fall in",
+"kind": "anim",
+"category": "Slide",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float p = uProgress;\n  float b = 1.0 - abs(cos(p * PI * 1.5)) * (1.0 - p);\n  vec2 q = uv - vec2(0.0, (1.0 - b) * 0.9);\n  float inside = step(0.0, q.y);\n  return vec4(getColor(q).rgb * inside, 1.0);\n}"
+},
+{
+"id": "anim_peek",
+"name": "Peek",
+"kind": "anim",
+"category": "Slide",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  k = k * k * k;\n  vec2 q = uv + vec2(0.0, -k);\n  float inside = step(0.0, q.y);\n  return vec4(getColor(q).rgb * inside, 1.0);\n}"
+},
+{
+"id": "anim_slidebounce",
+"name": "Slide bounce",
+"kind": "anim",
+"category": "Slide",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float p = uProgress;\n  float e = 1.0 - pow(2.0, -8.0 * p) * cos(p * 10.0);\n  if (p >= 1.0) e = 1.0;\n  vec2 q = uv + vec2(1.0 - e, 0.0);\n  float inside = step(q.x, 1.0) * step(0.0, q.x);\n  return vec4(getColor(clamp(q, 0.0, 1.0)).rgb * inside, 1.0);\n}"
+},
+{
+"id": "anim_rgbsplit",
+"name": "RGB split in",
+"kind": "anim",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  vec2 o = vec2(0.08 * k, 0.0);\n  vec3 c = vec3(getColor(uv + o).r, getColor(uv).g, getColor(uv - o).b);\n  return vec4(c * min(1.0, uProgress * 2.0), 1.0);\n}"
+},
+{
+"id": "anim_neon",
+"name": "Neon in",
+"kind": "anim",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 px = 1.0 / uResolution;\n  vec3 c = getColor(uv).rgb;\n  float gx = luma(getColor(uv + vec2(px.x, 0.0)).rgb) - luma(getColor(uv - vec2(px.x, 0.0)).rgb);\n  float gy = luma(getColor(uv + vec2(0.0, px.y)).rgb) - luma(getColor(uv - vec2(0.0, px.y)).rgb);\n  float e = clamp(length(vec2(gx, gy)) * 6.0, 0.0, 1.0);\n  float k = smoothstep(0.0, 0.6, uProgress);\n  float fill = smoothstep(0.5, 1.0, uProgress);\n  vec3 neon = vec3(0.2, 0.9, 1.0) * e * k;\n  return vec4(mix(neon + c * 0.1 * k, c, fill), 1.0);\n}"
+},
+{
+"id": "anim_sunrise",
+"name": "Sunrise in",
+"kind": "anim",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  float edge = 1.0 - uProgress * 1.3;\n  float shown = smoothstep(edge + 0.15, edge - 0.15, 1.0 - uv.y);\n  vec3 warm = c * vec3(1.2, 0.9, 0.6);\n  vec3 o = mix(warm * 0.15, mix(warm, c, uProgress), shown);\n  if (uProgress >= 1.0) o = c;\n  return vec4(o, 1.0);\n}"
+},
+{
+"id": "anim_shutter",
+"name": "Shutter",
+"kind": "anim",
+"category": "Shape",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float open = uProgress * 0.5;\n  float shown = step(abs(uv.y - 0.5), open);\n  if (uProgress >= 1.0) shown = 1.0;\n  return vec4(getColor(uv).rgb * shown, 1.0);\n}"
+},
+{
+"id": "anim_circles",
+"name": "Circles",
+"kind": "anim",
+"category": "Shape",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 g = uv * asp * 6.0;\n  vec2 f = fract(g) - 0.5;\n  float delay = rand(floor(g)) * 0.5;\n  float r = clamp((uProgress - delay) / 0.5, 0.0, 1.0) * 0.75;\n  float shown = step(length(f), r);\n  if (uProgress >= 1.0) shown = 1.0;\n  return vec4(getColor(uv).rgb * shown, 1.0);\n}"
+},
+{
+"id": "anim_stripesin",
+"name": "Stripes",
+"kind": "anim",
+"category": "Shape",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float i = floor(uv.y * 12.0);\n  float dir = mod(i, 2.0) * 2.0 - 1.0;\n  float k = 1.0 - uProgress;\n  vec2 q = uv + vec2(dir * k * k, 0.0);\n  float inside = step(0.0, q.x) * step(q.x, 1.0);\n  return vec4(getColor(clamp(q, 0.0, 1.0)).rgb * inside, 1.0);\n}"
+},
+{
+"id": "anim_corner",
+"name": "Corner",
+"kind": "anim",
+"category": "Shape",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float r = uProgress * 1.45;\n  float shown = step(length(uv), r);\n  if (uProgress >= 1.0) shown = 1.0;\n  return vec4(getColor(uv).rgb * shown, 1.0);\n}"
+},
+{
+"id": "anim_typewriter",
+"name": "Scan in",
+"kind": "anim",
+"category": "Basic",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float rows = 12.0;\n  float row = floor((1.0 - uv.y) * rows);\n  float pos = uProgress * rows;\n  float shown = step(row + 1.0, pos) + step(row, pos) * step(pos, row + 1.0) * step(uv.x, fract(pos));\n  if (uProgress >= 1.0) shown = 1.0;\n  return vec4(getColor(uv).rgb * min(shown, 1.0), 1.0);\n}"
+},
+{
+"id": "anim_mosaic",
+"name": "Mosaic in",
+"kind": "anim",
+"category": "Basic",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  float size = 1.0 + k * k * 60.0;\n  vec2 cells = uResolution / size;\n  vec2 q = (floor(uv * cells) + 0.5) / cells;\n  if (uProgress >= 1.0) q = uv;\n  return vec4(getColor(q).rgb * min(1.0, uProgress * 3.0), 1.0);\n}"
+},
+{
+"id": "anim_jelly",
+"name": "Jelly",
+"kind": "anim",
+"category": "Basic",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float p = uProgress;\n  float w = pow(2.0, -8.0 * p) * sin(p * 25.0) * 0.25;\n  vec2 sc = vec2(max(p * 0.5 + 0.5 + w, 0.001), max(p * 0.5 + 0.5 - w, 0.001));\n  if (p >= 1.0) sc = vec2(1.0);\n  vec2 q = 0.5 + (uv - 0.5) / sc;\n  float inside = step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0);\n  return vec4(getColor(q).rgb * inside, 1.0);\n}"
+},
+{
+"id": "anim_3dturn",
+"name": "Turn in",
+"kind": "anim",
+"category": "Basic",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  float a = k * 1.4;\n  float c = cos(a);\n  float x = (uv.x - 0.5) / max(c, 0.05);\n  float persp = 1.0 + sin(a) * x * 0.4;\n  vec2 q = vec2(x + 0.5, (uv.y - 0.5) * persp + 0.5);\n  float inside = step(0.0, q.x) * step(q.x, 1.0) * step(0.0, q.y) * step(q.y, 1.0);\n  return vec4(getColor(q).rgb * inside * (0.5 + 0.5 * c), 1.0);\n}"
+},
+{
+"id": "anim_swirlin",
+"name": "Swirl in",
+"kind": "anim",
+"category": "Basic",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  vec2 asp = vec2(uResolution.x / uResolution.y, 1.0);\n  vec2 d = (uv - 0.5) * asp;\n  float a = k * k * 8.0 * smoothstep(0.7, 0.0, length(d));\n  vec2 q = vec2(cos(a) * d.x - sin(a) * d.y, sin(a) * d.x + cos(a) * d.y) / asp + 0.5;\n  return vec4(getColor(q).rgb * min(1.0, uProgress * 2.0), 1.0);\n}"
+},
+{
+"id": "anim_glitchblock",
+"name": "Block glitch in",
+"kind": "anim",
+"category": "Light",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  float k = 1.0 - uProgress;\n  vec2 block = floor(uv * vec2(10.0, 14.0));\n  float r = rand(block + floor(uProgress * 12.0));\n  float shown = step(r, uProgress * 1.2);\n  vec2 off = vec2((rand(block + 5.0) - 0.5) * 0.2 * k, 0.0);\n  vec3 c = getColor(uv + off * step(0.6, r)).rgb;\n  if (uProgress >= 1.0) { shown = 1.0; c = getColor(uv).rgb; }\n  return vec4(c * shown, 1.0);\n}\n"
+},
+{
+"id": "g_portra",
+"name": "Portrait 160",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0300 * vec3(1.0300, 0.9970, 0.9700);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.9000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.2500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0100, 0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0300, 0.0100, -0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0400 + c * 0.9600;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_ektar",
+"name": "Vivid 100",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0180, 1.0000, 0.9820);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.3500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.5000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0400, 0.0200, -0.0300) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_gold200",
+"name": "Gold 200",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0400 * vec3(1.0540, 0.9970, 0.9460);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.1000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(0.0200, 0.0000, -0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0600, 0.0300, -0.0500) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_superia",
+"name": "Green 400",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(0.9940, 1.0150, 1.0060);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.0500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(-0.0100, 0.0300, 0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0200, 0.0200, -0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_velvia",
+"name": "Velvet 50",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9800 * vec3(1.0060, 0.9940, 0.9940);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.5500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.6000);\n  l = luma(c);\n  c += vec3(0.0000, -0.0100, 0.0400) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0300, 0.0000, -0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_provia",
+"name": "Pro 100",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.1500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0100, 0.0100, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_cinestill",
+"name": "Tungsten 800",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0200 * vec3(0.9460, 0.9940, 1.0540);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.1000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0200, 0.0600) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0600, 0.0000, -0.0300) * smoothstep(0.45, 1.0, l);\n  c = 0.0400 + c * 0.9600;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_expired",
+"name": "Expired",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0500 * vec3(1.0360, 0.9820, 0.9640);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.7500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.1000);\n  l = luma(c);\n  c += vec3(0.0500, 0.0000, 0.0600) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0400, -0.0600) * smoothstep(0.45, 1.0, l);\n  c = 0.1000 + c * 0.9000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_xpro",
+"name": "Cross Film",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0200 * vec3(1.0000, 1.0120, 1.0000);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.3000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.5500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.1000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0800, 0.0600, -0.1000) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_instant",
+"name": "Instant Print",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0600 * vec3(1.0240, 0.9970, 0.9760);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.8000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.1500);\n  l = luma(c);\n  c += vec3(0.0200, 0.0300, 0.0500) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0300, -0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.1200 + c * 0.8800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_disposable",
+"name": "Disposable",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0800 * vec3(1.0360, 1.0060, 0.9640);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.2000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0200, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0300, -0.0400) * smoothstep(0.45, 1.0, l);\n  c = 0.0500 + c * 0.9500;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_slide",
+"name": "Slide",
+"kind": "filter",
+"category": "Film",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9600 * vec3(1.0000, 0.9970, 1.0000);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.3000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.6500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0400) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0200, 0.0100, -0.0100) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_blockbuster",
+"name": "Blockbuster",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.1500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.5000);\n  l = luma(c);\n  c += vec3(-0.0400, 0.0300, 0.0700) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0700, 0.0300, -0.0500) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_noircolor",
+"name": "Neo Noir",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9200 * vec3(0.9760, 0.9940, 1.0240);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.6000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.6000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0200, 0.0600) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0000, 0.0300) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_bleachcine",
+"name": "Silver Retain",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.4500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.6000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0100) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0200, 0.0200, 0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_westworld",
+"name": "Frontier",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0300 * vec3(1.0660, 1.0000, 0.9340);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.8500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4000);\n  l = luma(c);\n  c += vec3(0.0300, 0.0100, -0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0600, 0.0300, -0.0600) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_matrixcine",
+"name": "Code Green",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9700 * vec3(1.0000, 1.0330, 1.0000);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.8500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4500);\n  l = luma(c);\n  c += vec3(-0.0200, 0.0400, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0500, -0.0100) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_dune",
+"name": "Dune",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0200 * vec3(1.0720, 0.9970, 0.9280);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.8000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4500);\n  l = luma(c);\n  c += vec3(0.0400, 0.0100, -0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0800, 0.0400, -0.0700) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_arctic",
+"name": "Arctic",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0300 * vec3(0.9280, 1.0000, 1.0720);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.7000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(-0.0200, 0.0100, 0.0600) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0300, 0.0600) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_nightdrive",
+"name": "Night Drive",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9400 * vec3(0.9640, 0.9820, 1.0360);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.2000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.5000);\n  l = luma(c);\n  c += vec3(0.0200, -0.0200, 0.1000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0800, 0.0000, 0.0500) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_amelie",
+"name": "Paris Caf\u00e9",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0200 * vec3(1.0420, 1.0090, 0.9580);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.2500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3500);\n  l = luma(c);\n  c += vec3(-0.0100, 0.0400, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0600, 0.0300, -0.0400) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_spaghetti",
+"name": "Spaghetti West",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0840, 1.0000, 0.9160);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.7000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.6000);\n  l = luma(c);\n  c += vec3(0.0300, 0.0000, -0.0400) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0700, 0.0400, -0.0700) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_thriller",
+"name": "Thriller",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9300 * vec3(0.9820, 1.0120, 1.0180);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.7000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.5500);\n  l = luma(c);\n  c += vec3(-0.0200, 0.0300, 0.0400) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0200, 0.0300, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_romcom",
+"name": "Romance",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0600 * vec3(1.0360, 0.9880, 0.9640);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.0500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.2000);\n  l = luma(c);\n  c += vec3(0.0300, 0.0000, 0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0200, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0400 + c * 0.9600;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_scifi",
+"name": "Sci-Fi",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9800 * vec3(0.9460, 1.0000, 1.0540);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.9500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.5000);\n  l = luma(c);\n  c += vec3(-0.0300, 0.0300, 0.0800) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0400, 0.0600) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_documentary",
+"name": "Documentary",
+"kind": "filter",
+"category": "Cinema",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0060, 1.0000, 0.9940);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.8500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.2500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0100) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0100, 0.0100, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_dreamy",
+"name": "Dreamy",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0800 * vec3(1.0180, 0.9880, 0.9820);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.8000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), -0.2000);\n  l = luma(c);\n  c += vec3(0.0400, 0.0200, 0.0600) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0300, 0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.1000 + c * 0.9000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_melancholy",
+"name": "Melancholy",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9500 * vec3(0.9580, 1.0000, 1.0420);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.5500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.1500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0200, 0.0500) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0200, 0.0200, 0.0300) * smoothstep(0.45, 1.0, l);\n  c = 0.0600 + c * 0.9400;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_warmglow",
+"name": "Warm Glow",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0700 * vec3(1.0720, 0.9940, 0.9280);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.0500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.1500);\n  l = luma(c);\n  c += vec3(0.0400, 0.0100, -0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0800, 0.0400, -0.0300) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_gloomy",
+"name": "Gloomy",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.8800 * vec3(0.9760, 1.0060, 1.0240);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.6000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3500);\n  l = luma(c);\n  c += vec3(-0.0100, 0.0100, 0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0000, 0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_cozy",
+"name": "Cozy",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0300 * vec3(1.0600, 0.9940, 0.9400);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.9000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.2000);\n  l = luma(c);\n  c += vec3(0.0500, 0.0200, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0600, 0.0300, -0.0400) * smoothstep(0.45, 1.0, l);\n  c = 0.0600 + c * 0.9400;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_energetic",
+"name": "Energetic",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0400 * vec3(1.0120, 1.0000, 0.9880);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.4500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.5000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0400, 0.0200, -0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_calm",
+"name": "Calm",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0400 * vec3(0.9760, 1.0000, 1.0240);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.8000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.0000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0200, 0.0400) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0200, 0.0300, 0.0300) * smoothstep(0.45, 1.0, l);\n  c = 0.0700 + c * 0.9300;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_nostalgic",
+"name": "Nostalgic",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0300 * vec3(1.0480, 0.9940, 0.9520);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.7000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.1000);\n  l = luma(c);\n  c += vec3(0.0500, 0.0300, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0400, -0.0500) * smoothstep(0.45, 1.0, l);\n  c = 0.1200 + c * 0.8800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mysterious",
+"name": "Mysterious",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9000 * vec3(0.9880, 0.9790, 1.0120);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.8000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4500);\n  l = luma(c);\n  c += vec3(0.0200, -0.0100, 0.0700) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0300, 0.0000, 0.0400) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_hopeful",
+"name": "Hopeful",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0800 * vec3(1.0300, 1.0000, 0.9700);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.1000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.1000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0200, 0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0600, 0.0500, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0400 + c * 0.9600;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_lonely",
+"name": "Lonely",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9700 * vec3(0.9400, 1.0000, 1.0600);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.4500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.2000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0100, 0.0500) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0100, 0.0200, 0.0400) * smoothstep(0.45, 1.0, l);\n  c = 0.0800 + c * 0.9200;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_euphoric",
+"name": "Euphoric",
+"kind": "filter",
+"category": "Mood",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0600 * vec3(1.0000, 0.9820, 1.0000);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.5000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(0.0400, 0.0000, 0.0800) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0600, 0.0200, 0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_summer",
+"name": "Summer",
+"kind": "filter",
+"category": "Season",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0600 * vec3(1.0480, 1.0000, 0.9520);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.2500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0200, 0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0600, 0.0400, -0.0300) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_winter",
+"name": "Winter",
+"kind": "filter",
+"category": "Season",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0500 * vec3(0.9340, 0.9970, 1.0660);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.7000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.2000);\n  l = luma(c);\n  c += vec3(-0.0100, 0.0200, 0.0600) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0200, 0.0400, 0.0600) * smoothstep(0.45, 1.0, l);\n  c = 0.0500 + c * 0.9500;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_fall",
+"name": "Fall",
+"kind": "filter",
+"category": "Season",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0660, 1.0030, 0.9340);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.1500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3500);\n  l = luma(c);\n  c += vec3(0.0300, 0.0100, -0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0800, 0.0300, -0.0600) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_springbloom",
+"name": "Bloom",
+"kind": "filter",
+"category": "Season",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0600 * vec3(1.0120, 0.9910, 0.9880);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.1500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.1000);\n  l = luma(c);\n  c += vec3(0.0200, 0.0300, 0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0400, 0.0200, 0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0500 + c * 0.9500;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_overcast",
+"name": "Overcast",
+"kind": "filter",
+"category": "Season",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9800 * vec3(0.9700, 1.0000, 1.0300);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.7500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), -0.1000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0100, 0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0200, 0.0200, 0.0300) * smoothstep(0.45, 1.0, l);\n  c = 0.0600 + c * 0.9400;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_goldenhr",
+"name": "Golden Light",
+"kind": "filter",
+"category": "Season",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0500 * vec3(1.0900, 0.9940, 0.9100);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.1500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(0.0400, 0.0000, -0.0400) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.1000, 0.0500, -0.0600) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_bluehour",
+"name": "Blue Hour",
+"kind": "filter",
+"category": "Season",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9700 * vec3(0.9160, 0.9910, 1.0840);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.0000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(-0.0200, 0.0000, 0.1000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0400, 0.0200, 0.0600) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_rainy",
+"name": "Rainy Day",
+"kind": "filter",
+"category": "Season",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9500 * vec3(0.9580, 1.0060, 1.0420);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.6500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.2000);\n  l = luma(c);\n  c += vec3(-0.0100, 0.0200, 0.0500) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0200, 0.0300) * smoothstep(0.45, 1.0, l);\n  c = 0.0500 + c * 0.9500;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_tropical",
+"name": "Tropical",
+"kind": "filter",
+"category": "Season",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0400 * vec3(1.0240, 1.0090, 0.9760);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.4500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3500);\n  l = luma(c);\n  c += vec3(-0.0200, 0.0400, 0.0500) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0400, -0.0300) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_harvest",
+"name": "Harvest",
+"kind": "filter",
+"category": "Season",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0200 * vec3(1.0600, 0.9940, 0.9400);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.9500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(0.0500, 0.0200, -0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0700, 0.0400, -0.0600) * smoothstep(0.45, 1.0, l);\n  c = 0.0400 + c * 0.9600;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_softskin",
+"name": "Soft Skin",
+"kind": "filter",
+"category": "Portrait",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0600 * vec3(1.0240, 0.9952, 0.9760);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.9200);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), -0.1000);\n  l = luma(c);\n  c += vec3(0.0200, 0.0100, 0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0400, 0.0200, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0400 + c * 0.9600;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_glowskin",
+"name": "Skin Glow",
+"kind": "filter",
+"category": "Portrait",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.1000 * vec3(1.0300, 0.9940, 0.9700);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.0000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.0000);\n  l = luma(c);\n  c += vec3(0.0200, 0.0100, 0.0100) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0600, 0.0300, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_bronze",
+"name": "Bronze",
+"kind": "filter",
+"category": "Portrait",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0660, 0.9970, 0.9340);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.1000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4000);\n  l = luma(c);\n  c += vec3(0.0300, 0.0000, -0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0800, 0.0300, -0.0500) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_porcelain",
+"name": "Porcelain",
+"kind": "filter",
+"category": "Portrait",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0800 * vec3(0.9820, 0.9970, 1.0180);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.7500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.0500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0100, 0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0300, 0.0300, 0.0400) * smoothstep(0.45, 1.0, l);\n  c = 0.0500 + c * 0.9500;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_editorial",
+"name": "Editorial",
+"kind": "filter",
+"category": "Portrait",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0000, 0.9970, 1.0000);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.8000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.5500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0300, 0.0200, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_peach",
+"name": "Peach",
+"kind": "filter",
+"category": "Portrait",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0600 * vec3(1.0420, 0.9880, 0.9580);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.0000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.1500);\n  l = luma(c);\n  c += vec3(0.0500, 0.0200, 0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0700, 0.0300, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0400 + c * 0.9600;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_rosy",
+"name": "Rosy",
+"kind": "filter",
+"category": "Portrait",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0400 * vec3(1.0120, 0.9790, 0.9880);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.0500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.1500);\n  l = luma(c);\n  c += vec3(0.0400, 0.0000, 0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0100, 0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_honey",
+"name": "Honey",
+"kind": "filter",
+"category": "Portrait",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0400 * vec3(1.0600, 1.0000, 0.9400);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.0500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.2000);\n  l = luma(c);\n  c += vec3(0.0400, 0.0200, -0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0700, 0.0500, -0.0500) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_food",
+"name": "Delicious",
+"kind": "filter",
+"category": "Food",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0500 * vec3(1.0360, 0.9970, 0.9640);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.3500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3500);\n  l = luma(c);\n  c += vec3(0.0200, 0.0100, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0300, -0.0300) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_brunch",
+"name": "Brunch",
+"kind": "filter",
+"category": "Food",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0900 * vec3(1.0240, 1.0000, 0.9760);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.1000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.1000);\n  l = luma(c);\n  c += vec3(0.0200, 0.0200, 0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0400, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0400 + c * 0.9600;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_coffee",
+"name": "Coffee",
+"kind": "filter",
+"category": "Food",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9800 * vec3(1.0540, 0.9970, 0.9460);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.8500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4500);\n  l = luma(c);\n  c += vec3(0.0400, 0.0200, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0600, 0.0300, -0.0400) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_fresh",
+"name": "Fresh",
+"kind": "filter",
+"category": "Food",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0600 * vec3(0.9940, 1.0090, 1.0060);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.3000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.2500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0300, 0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0200, 0.0400, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_city",
+"name": "City",
+"kind": "filter",
+"category": "Travel",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(0.9760, 1.0000, 1.0240);\n  float l = luma(c);\n  c = mix(vec3(l), c, 0.9000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.5000);\n  l = luma(c);\n  c += vec3(-0.0100, 0.0200, 0.0500) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0400, 0.0200, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_beach",
+"name": "Beach",
+"kind": "filter",
+"category": "Travel",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0700 * vec3(1.0180, 1.0030, 0.9820);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.2500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.2000);\n  l = luma(c);\n  c += vec3(-0.0200, 0.0400, 0.0600) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0400, -0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mountain",
+"name": "Mountain",
+"kind": "filter",
+"category": "Travel",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0200 * vec3(0.9700, 1.0030, 1.0300);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.1000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4500);\n  l = luma(c);\n  c += vec3(-0.0100, 0.0200, 0.0500) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0200, 0.0300, 0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_desertroad",
+"name": "Road Trip",
+"kind": "filter",
+"category": "Travel",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0300 * vec3(1.0600, 1.0000, 0.9400);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.0500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4000);\n  l = luma(c);\n  c += vec3(0.0300, 0.0200, -0.0200) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0700, 0.0400, -0.0500) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_jungle",
+"name": "Jungle",
+"kind": "filter",
+"category": "Travel",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9800 * vec3(1.0000, 1.0210, 1.0000);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.2000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4000);\n  l = luma(c);\n  c += vec3(-0.0200, 0.0400, 0.0100) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0300, 0.0500, -0.0200) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_tokyo",
+"name": "Neon City",
+"kind": "filter",
+"category": "Travel",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 0.9600 * vec3(0.9640, 0.9760, 1.0360);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.3000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4500);\n  l = luma(c);\n  c += vec3(0.0200, -0.0100, 0.1000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0700, 0.0000, 0.0600) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mediterranean",
+"name": "Seaside",
+"kind": "filter",
+"category": "Travel",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0600 * vec3(1.0180, 1.0000, 0.9820);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.2000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.2500);\n  l = luma(c);\n  c += vec3(-0.0200, 0.0300, 0.0700) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0500, 0.0400, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_safari",
+"name": "Safari",
+"kind": "filter",
+"category": "Travel",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0200 * vec3(1.0660, 1.0060, 0.9340);\n  float l = luma(c);\n  c = mix(vec3(l), c, 1.0000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.4500);\n  l = luma(c);\n  c += vec3(0.0300, 0.0200, -0.0300) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0600, 0.0500, -0.0600) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mono_soft",
+"name": "Soft Mono",
+"kind": "filter",
+"category": "Mono",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0400 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = vec3(l) * vec3(1.0000, 1.0000, 1.0000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.0000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0000, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0800 + c * 0.9200;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mono_hard",
+"name": "Hard Mono",
+"kind": "filter",
+"category": "Mono",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = vec3(l) * vec3(1.0000, 1.0000, 1.0000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.8500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0000, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0000 + c * 1.0000;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mono_warm",
+"name": "Warm Mono",
+"kind": "filter",
+"category": "Mono",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0200 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = vec3(l) * vec3(1.0600, 1.0000, 0.8600);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0000, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0400 + c * 0.9600;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mono_cool",
+"name": "Cool Mono",
+"kind": "filter",
+"category": "Mono",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0200 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = vec3(l) * vec3(0.8800, 0.9700, 1.0800);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0000, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0400 + c * 0.9600;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mono_green",
+"name": "Green Mono",
+"kind": "filter",
+"category": "Mono",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = vec3(l) * vec3(0.8500, 1.0500, 0.9000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0000, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mono_faded",
+"name": "Faded Mono",
+"kind": "filter",
+"category": "Mono",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0500 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = vec3(l) * vec3(1.0000, 0.9900, 0.9700);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), -0.2000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0000, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.1800 + c * 0.8200;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mono_film",
+"name": "Film Mono",
+"kind": "filter",
+"category": "Mono",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = vec3(l) * vec3(1.0200, 1.0000, 0.9600);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.5000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0000, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mono_purple",
+"name": "Violet Mono",
+"kind": "filter",
+"category": "Mono",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = vec3(l) * vec3(1.0000, 0.8600, 1.1000);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3000);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0000, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0300 + c * 0.9700;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mono_red",
+"name": "Red Mono",
+"kind": "filter",
+"category": "Mono",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = vec3(l) * vec3(1.1200, 0.8600, 0.8400);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0000, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
+},
+{
+"id": "g_mono_blue",
+"name": "Blue Mono",
+"kind": "filter",
+"category": "Mono",
+"params": [],
+"code": "vec4 effect(vec2 uv) {\n  vec3 c = getColor(uv).rgb;\n  c *= 1.0000 * vec3(1.0000, 1.0000, 1.0000);\n  float l = luma(c);\n  c = vec3(l) * vec3(0.8000, 0.9200, 1.1500);\n  c = clamp(c, 0.0, 1.0);\n  c = mix(c, c * c * (3.0 - 2.0 * c), 0.3500);\n  l = luma(c);\n  c += vec3(0.0000, 0.0000, 0.0000) * (1.0 - smoothstep(0.0, 0.55, l)) + vec3(0.0000, 0.0000, 0.0000) * smoothstep(0.45, 1.0, l);\n  c = 0.0200 + c * 0.9800;\n  return vec4(clamp(c, 0.0, 1.0), 1.0);\n}"
 }
 ]

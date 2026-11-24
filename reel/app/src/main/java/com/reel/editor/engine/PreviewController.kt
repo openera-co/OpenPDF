@@ -162,6 +162,7 @@ class PreviewController(context: Context) {
     }
 
     private val rebuild = Runnable {
+        if (exporting) return@Runnable
         val p = pending ?: return@Runnable
         pending = null
         val built = CompositionFactory.build(app, p, CompositionFactory.PREVIEW_HEIGHT, live = live)
@@ -300,6 +301,29 @@ class PreviewController(context: Context) {
     fun setScrubbing(on: Boolean) {
         if (on) pause()
         player?.setScrubbingModeEnabled(on)
+    }
+
+    private var exporting = false
+
+    /**
+     * Frees the preview's decoders while an export runs. Phones allow only a few codec instances
+     * at once; with the preview holding its video and audio decoders, the export's own decoders
+     * could fail to start or die mid-way (ERROR_CODE_DECODING_FAILED, seen on the emulator).
+     */
+    fun suspendForExport() {
+        pause()
+        exporting = true
+        player?.stop()
+    }
+
+    /** Brings the preview back after an export ended, at the same position. */
+    fun resumeAfterExport() {
+        if (!exporting) return
+        exporting = false
+        val p = latest ?: return
+        pending = p
+        structure = null
+        main.post(rebuild)
     }
 
     fun release() {

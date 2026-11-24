@@ -53,8 +53,18 @@ class FormatsDeviceTest {
         throw AssertionError("export timed out")
     }
 
+    /** Exports land in the phone's gallery and music: remove them so test runs leave nothing behind. */
+    private fun cleanUp(d: ExportState.Done) {
+        runCatching { ctx.contentResolver.delete(d.uri, null, null) }
+        d.file.delete()
+    }
+
     @Test fun exportsAGif() {
         val d = export(project(), ExportSettings(format = ExportFormat.GIF))
+        try { checkGif(d) } finally { cleanUp(d) }
+    }
+
+    private fun checkGif(d: ExportState.Done) {
         val head = d.file.inputStream().use { s -> ByteArray(6).also { s.read(it) } }.decodeToString()
         val bmp = android.graphics.BitmapFactory.decodeFile(d.file.absolutePath)
         Log.i(TAG, "gif ${d.file.length()} bytes ${bmp?.width}x${bmp?.height} uri=${d.uri}")
@@ -65,6 +75,10 @@ class FormatsDeviceTest {
 
     @Test fun exportsSoundOnly() {
         val d = export(project(), ExportSettings(format = ExportFormat.AUDIO))
+        try { checkSound(d) } finally { cleanUp(d) }
+    }
+
+    private fun checkSound(d: ExportState.Done) {
         val r = MediaMetadataRetriever().apply { setDataSource(d.file.absolutePath) }
         val hasVideo = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO)
         val hasAudio = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO)

@@ -40,19 +40,30 @@ vec2 contentSize(bool fill) {
   return wide ? vec2(a, a / ca) : vec2(ca, 1.0);
 }
 
+// Wide blur of the frame. Taps on a golden-angle spiral, turned by a fixed per-pixel angle: a
+// square grid of taps this far apart showed as a lattice of sharp ghost copies of the picture.
+vec3 softBlur(vec2 uv, float radius) {
+  float rot = rand(gl_FragCoord.xy) * 6.2831853;
+  vec3 acc = vec3(0.0);
+  float wsum = 0.0;
+  for (int i = 0; i < 40; i++) {
+    float fi = float(i) + 0.5;
+    float rr = sqrt(fi / 40.0);
+    float a = fi * 2.39996323 + rot;
+    float w = exp(-rr * rr * 2.0);
+    acc += texture2D(uTex, clamp(uv + vec2(cos(a), sin(a)) * rr * radius, 0.0, 1.0)).rgb * w;
+    wsum += w;
+  }
+  return acc / wsum;
+}
+
 vec3 background(vec2 p) {
   if (uBgMode < 0.5) return uBgColor;
   vec2 size = contentSize(true);
   vec2 P = vec2(p.x * uCanvasAspect, p.y);
   vec2 uv = (P - vec2(uCanvasAspect * 0.5, 0.5)) / size + 0.5;
   float r = 0.01 + uBlur * 0.05;
-  vec3 acc = vec3(0.0);
-  for (int i = -2; i <= 2; i++) {
-    for (int j = -2; j <= 2; j++) {
-      acc += texture2D(uTex, clamp(uv + vec2(float(i), float(j)) * r, 0.0, 1.0)).rgb;
-    }
-  }
-  return acc / 25.0 * 0.82;
+  return softBlur(uv, r * 2.6) * 0.82;
 }
 
 // What shows where the cutout removed the background.
@@ -62,13 +73,7 @@ vec3 cutBackground(vec2 p, vec2 uv, vec3 canvasBg, float inside) {
     if (inside < 0.5) return canvasBg;
     // A wide, soft blur of the frame itself, like a portrait-mode photo.
     float r = 0.004 + uCutBlur * 0.022;
-    vec3 acc = vec3(0.0);
-    for (int i = -3; i <= 3; i++) {
-      for (int j = -3; j <= 3; j++) {
-        acc += texture2D(uTex, clamp(uv + vec2(float(i), float(j)) * r, 0.0, 1.0)).rgb;
-      }
-    }
-    return acc / 49.0;
+    return softBlur(uv, r * 3.9);
   }
   // Picture, filling the canvas.
   float a = uCanvasAspect, ia = max(uCutImageAspect, 0.01);

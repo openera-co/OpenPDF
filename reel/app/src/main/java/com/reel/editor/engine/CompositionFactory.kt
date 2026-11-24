@@ -13,6 +13,7 @@ import androidx.media3.transformer.Effects
 import com.reel.editor.fx.ClipRenderEffect
 import com.reel.editor.fx.FxCatalog
 import com.reel.editor.fx.RenderPlans
+import com.reel.editor.media.MediaProbe
 import com.reel.editor.model.ClipKind
 import com.reel.editor.model.Project
 import com.reel.editor.model.SpeedMath
@@ -34,6 +35,11 @@ object CompositionFactory {
         val plans = RenderPlans.build(project, catalog, w, h)
         live?.set(plans)
         val placed = TimelineMath.place(project.clips)
+        // Media3 mixes at the first input's sample rate: a 22 kHz voice clip would pull 44.1 kHz
+        // music down to 22 kHz in the export. Every source is brought to one rate first.
+        val exporting = exportFps != null || premixInto != null
+        fun mixRate(chain: List<AudioProcessor>): List<AudioProcessor> =
+            if (!exporting) chain else chain + androidx.media3.common.audio.SonicAudioProcessor().apply { setOutputSampleRateHz(AudioPremix.RATE) }
 
         val items = project.clips.mapIndexed { i, clip ->
             val plan = plans[i]
@@ -57,7 +63,7 @@ object CompositionFactory {
                 SpeedMath.mediaToTimeline(clip.speed, clip.trimmedDurationUs, media)
             }, extraGain = if (keyed) { off -> com.reel.editor.model.interpolateValue(clip.volume, clip.volumeKeys, off) } else null)
             val b = EditedMediaItem.Builder(item)
-                .setEffects(Effects(audio, listOf(ClipRenderEffect(context, plan, live))))
+                .setEffects(Effects(mixRate(audio), listOf(ClipRenderEffect(context, plan, live))))
             if (clip.kind == ClipKind.PHOTO) {
                 b.setDurationUs(clip.trimmedDurationUs).setFrameRate(30)
             } else {
@@ -139,7 +145,7 @@ object CompositionFactory {
                     val mi = MediaItem.Builder().setUri(a.uri).setClippingConfiguration(
                         MediaItem.ClippingConfiguration.Builder().setStartPositionUs(a.trimStartUs).setEndPositionUs(a.trimEndUs).build(),
                     ).build()
-                    sb.addItem(EditedMediaItem.Builder(mi).setRemoveVideo(true).setDurationUs(a.sourceDurationUs).setEffects(Effects(a.fx, emptyList())).build())
+                    sb.addItem(EditedMediaItem.Builder(mi).setRemoveVideo(true).setDurationUs(a.sourceDurationUs).setEffects(Effects(mixRate(a.fx), emptyList())).build())
                     t = a.startUs + (a.trimEndUs - a.trimStartUs)
                 }
                 sequences += sb.build()
@@ -148,11 +154,20 @@ object CompositionFactory {
 
         val cb = Composition.Builder(sequences)
             .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)
-        if (exportFps != null) {
+        // Frame dropping only when some clip runs faster than the export. Media3's dropper restarts
+        // at every clip and lost the frames right after each start (a ~150 ms freeze at the start
+        // and at every cut, PacingDeviceTest); at or below the export rate nothing needs dropping.
+        if (exportFps != null && needsFrameDrop(context, project, exportFps)) {
             cb.setEffects(Effects(emptyList(), listOf(FrameDropEffect.createDefaultFrameDropEffect(exportFps.toFloat()))))
         }
         return Built(cb.build(), w, h, total)
     }
+
+    /** Whether any video clip's frame rate is clearly above [fps] (unknown rates count as 30). */
+    private fun needsFrameDrop(context: Context, project: Project, fps: Int): Boolean =
+        project.clips.any { c ->
+            c.kind == ClipKind.VIDEO && ((MediaProbe.frameRate(context, android.net.Uri.parse(c.uri)) ?: 30) * maxOf(c.speed.constant, c.speed.curve?.maxOrNull() ?: 0f)) > fps * 1.05f
+        }
 
     /**
      * Sounds playing at the same moment, each on its own sequence. Sound effects stack up quickly,

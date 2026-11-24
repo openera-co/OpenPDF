@@ -1,6 +1,8 @@
 // Host check of the caption core: resampler accuracy and a real transcription.
 // Usage: captions_test <ggml-model.bin> <16-bit PCM wav>
 #include <atomic>
+#include <chrono>
+#include <thread>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -87,7 +89,10 @@ int main(int argc, char** argv) {
         std::string lang;
         int lastPct = -1;
         std::atomic<bool> cancel{false};
+        auto t0 = std::chrono::steady_clock::now();
         bool ok = t.transcribe(s16, {}, [&](int p) { lastPct = p; }, &cancel, words, lang);
+        double took = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+        std::printf("transcribed %.1f s of audio in %.1f s\n", s16.size() / 16000.0, took);
         CHECK(ok);
         std::string joined;
         for (auto& w : words) {
@@ -97,12 +102,24 @@ int main(int argc, char** argv) {
         std::printf("language=%s progress=%d words=%zu\n", lang.c_str(), lastPct, words.size());
         CHECK(lang == "en");
         CHECK(words.size() >= 15);
-        CHECK(joined.find("country") != std::string::npos);
+        // speech.wav says "country"; talk.wav (NASA interview) says "San Diego".
+        CHECK(joined.find("country") != std::string::npos || joined.find("San Diego") != std::string::npos);
         for (size_t i = 1; i < words.size(); ++i) CHECK(words[i].startMs >= words[i - 1].startMs);
-        CHECK(!words.empty() && words.back().endMs <= static_cast<int64_t>(s16.size() / 16 + 200));
+        CHECK(!words.empty() && words.back().endMs <= static_cast<int64_t>(s16.size() / 16));
         // Cancelling stops the run.
         cancel = true;
         CHECK(!t.transcribe(s16, {}, nullptr, &cancel, words, lang));
+        // Cancelling mid-run stops it promptly: the encoder checks between graph nodes, not only
+        // after a whole 30 s window (on a slow phone that window takes many seconds).
+        cancel = false;
+        std::thread stopper([&] { std::this_thread::sleep_for(std::chrono::milliseconds(300)); cancel = true; });
+        auto c0 = std::chrono::steady_clock::now();
+        bool finished = t.transcribe(s16, {}, nullptr, &cancel, words, lang);
+        double stopAfter = std::chrono::duration<double>(std::chrono::steady_clock::now() - c0).count();
+        stopper.join();
+        std::printf("cancel 0.3 s into a run returned after %.2f s (full run %.1f s)\n", stopAfter, took);
+        CHECK(!finished);
+        CHECK(stopAfter < 0.3 + std::max(0.5, took * 0.1));
     }
     std::printf(failures ? "FAILED %d\n" : "ALL PASSED\n", failures);
     return failures ? 1 : 0;

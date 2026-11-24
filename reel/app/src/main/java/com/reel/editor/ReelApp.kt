@@ -21,5 +21,8 @@ class ReelApp : Application() {
         store = ProjectStore(this)
         thumbnails = Thumbnails(this)
         audio = AudioAnalyzer(this)
+        // The shader catalog is about 1 MB of JSON. Load it now, off the main thread, so opening the
+        // editor (the timeline asks for it while composing) does not stall the UI.
+        Thread({ runCatching { com.reel.editor.fx.FxCatalog.get(this) } }, "fx-catalog").apply { priority = Thread.NORM_PRIORITY - 1 }.start()
     }
 }
